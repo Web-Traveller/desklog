@@ -29,4 +29,8 @@ export default defineConfig(() => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  build: {
+    // Generate sourcemaps for readable stack traces in Sentry
+    sourcemap: true,
+  },
 }));
