@@ -34,5 +34,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFEOEEwNEQyNzE2MjUxMDEKUldRQlVXSngwZ1NLclIyeFNvbkJRdkMycHI4azAwUnFoVGs4TytGRTh6aEw4VzlsKytSQVhPSVQK",
+      "endpoints": [
+        "https://github.com/Web-Traveller/desklog/releases/latest/download/latest.json"
+      ]
+    }
   }
 }
