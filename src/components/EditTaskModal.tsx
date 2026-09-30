@@ -3,28 +3,28 @@ import { useDesk } from '../context/DeskContext';
 import { TaskStatus } from '../types';
 
 export const EditTaskModal: React.FC = () => {
-  const { isEditTaskOpen, setIsEditTaskOpen, selectedTaskToEdit, updateTask } = useDesk();
+  const { isEditTaskOpen, setIsEditTaskOpen, selectedTaskToEdit, updateTask, payments, addPayment } = useDesk();
   const [title, setTitle] = useState('');
-  const [status, setStatus] = useState<TaskStatus>('pending');
+  const [status, setStatus] = useState<TaskStatus>('PENDING');
   const [targetDate, setTargetDate] = useState('');
-  const [subStatus, setSubStatus] = useState('');
   const [notes, setNotes] = useState('');
   const [billingAmount, setBillingAmount] = useState('');
-  const [amountPaid, setAmountPaid] = useState('');
-  const [billingStatus, setBillingStatus] = useState<'paid' | 'unpaid' | 'pending' | 'partial'>('pending');
   const [scheduleDate, setScheduleDate] = useState('');
+  const [newPaymentAmount, setNewPaymentAmount] = useState('');
+  
+  // Computed derived state
+  const taskPayments = selectedTaskToEdit ? payments.filter(p => p.task_id === selectedTaskToEdit.id) : [];
+  const totalPaid = taskPayments.reduce((acc, curr) => acc + curr.amount, 0);
 
   useEffect(() => {
     if (selectedTaskToEdit) {
       setTitle(selectedTaskToEdit.title || '');
-      setStatus(selectedTaskToEdit.status || 'pending');
-      setTargetDate(selectedTaskToEdit.targetDate || '');
-      setSubStatus(selectedTaskToEdit.subStatus || '');
+      setStatus(selectedTaskToEdit.status || 'PENDING');
+      setTargetDate(selectedTaskToEdit.target_date || '');
       setNotes(selectedTaskToEdit.notes || '');
-      setBillingAmount(selectedTaskToEdit.billingAmount ? selectedTaskToEdit.billingAmount.toString() : '');
-      setAmountPaid(selectedTaskToEdit.amountPaid ? selectedTaskToEdit.amountPaid.toString() : '');
-      setBillingStatus(selectedTaskToEdit.billingStatus || 'pending');
-      setScheduleDate(selectedTaskToEdit.scheduleDate || '');
+      setBillingAmount(selectedTaskToEdit.billing_amount ? selectedTaskToEdit.billing_amount.toString() : '');
+      setScheduleDate(selectedTaskToEdit.scheduled_date || '');
+      setNewPaymentAmount('');
     }
   }, [selectedTaskToEdit]);
 
@@ -37,16 +37,26 @@ export const EditTaskModal: React.FC = () => {
     updateTask(selectedTaskToEdit.id, {
       title: title.trim(),
       status,
-      targetDate: targetDate || undefined,
-      subStatus: subStatus || undefined,
+      target_date: targetDate || undefined,
       notes: notes.trim(),
-      billingAmount: billingAmount ? Number(billingAmount) : undefined,
-      amountPaid: amountPaid ? Number(amountPaid) : undefined,
-      billingStatus,
-      scheduleDate: scheduleDate || undefined,
+      billing_amount: billingAmount ? Number(billingAmount) : undefined,
+      scheduled_date: scheduleDate || undefined,
     });
 
     setIsEditTaskOpen(false);
+  };
+
+  const handleAddPayment = async () => {
+    if (!newPaymentAmount) return;
+    const amount = Number(newPaymentAmount);
+    if (amount <= 0) return;
+    
+    await addPayment({
+      task_id: selectedTaskToEdit.id,
+      amount,
+    });
+    
+    setNewPaymentAmount('');
   };
 
   return (
@@ -56,7 +66,7 @@ export const EditTaskModal: React.FC = () => {
           <div className="flex items-center gap-space-xs">
             <span className="material-symbols-outlined text-primary text-xl">edit</span>
             <h3 className="font-tagline text-tagline font-semibold text-on-surface">
-              Edit Desk Task
+              Edit Task & Payments
             </h3>
           </div>
           <button
@@ -70,11 +80,10 @@ export const EditTaskModal: React.FC = () => {
 
         <form className="flex flex-col gap-space-sm" onSubmit={handleSubmit}>
           <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant">
-            Task / Service Title *
+            Task Title *
             <input
               required
               className="px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility"
-              placeholder="e.g. Caste Certificate, PAN Renewal, Gazette..."
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -89,9 +98,11 @@ export const EditTaskModal: React.FC = () => {
                 value={status}
                 onChange={(e) => setStatus(e.target.value as TaskStatus)}
               >
-                <option value="pending">Pending</option>
-                <option value="processing">Processing</option>
-                <option value="done">Done / Ready</option>
+                <option value="PENDING">Pending</option>
+                <option value="PROCESSING">Processing</option>
+                <option value="READY">Ready</option>
+                <option value="DELIVERED">Delivered</option>
+                <option value="CANCELLED">Cancelled</option>
               </select>
             </label>
 
@@ -107,66 +118,24 @@ export const EditTaskModal: React.FC = () => {
           </div>
 
           <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant">
-            Status Remark / Note
+            Notes / Remarks
             <input
               className="px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility"
-              placeholder="e.g. Awaiting customer photo copy"
               type="text"
-              value={subStatus}
-              onChange={(e) => setSubStatus(e.target.value)}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
             />
           </label>
 
           <div className="grid grid-cols-2 gap-space-xs">
             <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant">
-              Total Amount (₹)
+              Billing Amount (₹)
               <input
                 className="px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility"
-                placeholder="e.g. 500"
                 type="number"
                 value={billingAmount}
                 onChange={(e) => setBillingAmount(e.target.value)}
               />
-            </label>
-
-            <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant">
-              Amount Paid (₹)
-              <input
-                className="px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility"
-                placeholder="e.g. 200"
-                type="number"
-                value={amountPaid}
-                onChange={(e) => setAmountPaid(e.target.value)}
-              />
-            </label>
-          </div>
-
-          {billingAmount ? (
-            <div className="p-2.5 rounded-xl bg-surface-container-low border border-surface-container-high/60 flex items-center justify-between text-xs font-medium">
-              <span className="text-on-surface-variant">Calculated Due Balance:</span>
-              <span className={`font-bold font-mono ${
-                (Number(billingAmount) - (Number(amountPaid) || 0)) > 0
-                  ? 'text-tertiary'
-                  : 'text-secondary'
-              }`}>
-                ₹{Math.max(0, (Number(billingAmount) || 0) - (Number(amountPaid) || 0))}
-              </span>
-            </div>
-          ) : null}
-
-          <div className="grid grid-cols-2 gap-space-xs">
-            <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant">
-              Billing Status
-              <select
-                className="px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility cursor-pointer"
-                value={billingStatus}
-                onChange={(e) => setBillingStatus(e.target.value as any)}
-              >
-                <option value="pending">Pending</option>
-                <option value="unpaid">Unpaid</option>
-                <option value="partial">Partial</option>
-                <option value="paid">Paid</option>
-              </select>
             </label>
 
             <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant">
@@ -178,6 +147,41 @@ export const EditTaskModal: React.FC = () => {
                 onChange={(e) => setScheduleDate(e.target.value)}
               />
             </label>
+          </div>
+          
+          <div className="mt-space-sm p-space-md rounded-xl bg-surface-container-low border border-surface-container flex flex-col gap-space-xs">
+            <h4 className="font-semibold text-on-surface text-sm">Payments Activity</h4>
+            <div className="flex justify-between text-xs mb-2">
+              <span className="text-on-surface-variant">Total Billed: ₹{billingAmount || 0}</span>
+              <span className="text-secondary font-bold">Total Paid: ₹{totalPaid.toFixed(2)}</span>
+              <span className="text-tertiary font-bold">
+                Due: ₹{Math.max(0, (Number(billingAmount) || 0) - totalPaid).toFixed(2)}
+              </span>
+            </div>
+            
+            {taskPayments.map(p => (
+              <div key={p.id} className="flex justify-between items-center text-xs py-1 border-t border-surface-container-high/40 text-on-surface-variant">
+                <span>Payment</span>
+                <span>₹{p.amount.toFixed(2)}</span>
+              </div>
+            ))}
+
+            <div className="flex items-center gap-2 mt-2">
+              <input 
+                type="number"
+                placeholder="Amount (₹)"
+                className="flex-1 px-space-md py-2 rounded-lg bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-xs"
+                value={newPaymentAmount}
+                onChange={(e) => setNewPaymentAmount(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={handleAddPayment}
+                className="px-space-md py-2 rounded-lg bg-primary text-on-primary font-button-utility text-xs transition-all active:scale-95 shadow-sm"
+              >
+                Add Payment
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center justify-end gap-space-sm mt-space-xs pt-space-xs border-t border-surface-container">

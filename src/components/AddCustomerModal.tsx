@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { useDesk } from '../context/DeskContext';
+import React, { useState } from "react";
+import { useDesk } from "../context/DeskContext";
+import { findCustomersByMobile } from "../services/customerService";
 
 export const AddCustomerModal: React.FC = () => {
   const {
@@ -11,44 +12,44 @@ export const AddCustomerModal: React.FC = () => {
     setIsAddTaskOpen,
   } = useDesk();
 
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [notes, setNotes] = useState('');
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [notes, setNotes] = useState("");
 
   if (!isAddCustomerOpen) return null;
 
-  // Check for duplicate phone number
-  const cleanPhone = phone.trim().replace(/\s+/g, '');
-  const existingCustomer = cleanPhone.length >= 7
-    ? customers.find((c) => c.id !== 'cust-general' && c.phone.replace(/\s+/g, '').includes(cleanPhone))
-    : null;
+  // Check for shared phone numbers across existing profiles
+  const matchingCustomers =
+    phone.trim().length >= 5
+      ? findCustomersByMobile(customers, phone.trim()).filter(
+          (c) => c.id !== "cust-general",
+        )
+      : [];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !phone.trim()) return;
 
-    addCustomer({
+    await addCustomer({
       name: name.trim(),
-      phone: phone.trim(),
-      isVerified: true,
-      notes: notes.trim(),
+      mobile: phone.trim(),
+      is_verified: true,
+      note: notes.trim(),
     });
 
-    setName('');
-    setPhone('');
-    setNotes('');
+    setName("");
+    setPhone("");
+    setNotes("");
     setIsAddCustomerOpen(false);
   };
 
-  const handleRedirectExisting = () => {
-    if (existingCustomer) {
-      setIsAddCustomerOpen(false);
-      setName('');
-      setPhone('');
-      setNotes('');
-      navigateToCustomerProfile(existingCustomer.id);
-      setIsAddTaskOpen(true);
-    }
+  const handleSelectExisting = (id: string) => {
+    setIsAddCustomerOpen(false);
+    setName("");
+    setPhone("");
+    setNotes("");
+    navigateToCustomerProfile(id);
+    setIsAddTaskOpen(true);
   };
 
   return (
@@ -56,7 +57,9 @@ export const AddCustomerModal: React.FC = () => {
       <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-2xl max-w-xl w-full border border-surface-container/60 flex flex-col gap-space-md max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between pb-space-xs border-b border-surface-container">
           <div className="flex items-center gap-space-xs">
-            <span className="material-symbols-outlined text-primary text-xl">person_add</span>
+            <span className="material-symbols-outlined text-primary text-xl">
+              person_add
+            </span>
             <h3 className="font-tagline text-tagline font-semibold text-on-surface">
               Add New Customer
             </h3>
@@ -70,24 +73,43 @@ export const AddCustomerModal: React.FC = () => {
           </button>
         </div>
 
-        {/* Duplicate Phone Banner Warning */}
-        {existingCustomer && (
-          <div className="p-3 rounded-xl bg-tertiary-fixed text-on-tertiary-fixed flex flex-col gap-2 border border-tertiary/20">
+        {/* Shared Mobile Banner Warning  */}
+        {matchingCustomers.length > 0 && (
+          <div className="p-3 rounded-xl bg-tertiary-fixed text-on-tertiary-fixed flex flex-col gap-2 border border-tertiary/20 animate-fadeIn">
             <div className="flex items-center gap-2 font-caption-strong text-caption-strong">
-              <span className="material-symbols-outlined text-tertiary text-lg">warning</span>
-              <span>Customer already exists!</span>
+              <span className="material-symbols-outlined text-tertiary text-lg">
+                info
+              </span>
+              <span>Shared Mobile Number Detected</span>
             </div>
             <p className="font-fine-print text-fine-print">
-              Mobile number <strong className="font-mono">{existingCustomer.phone}</strong> is enrolled under{' '}
-              <strong>{existingCustomer.name}</strong>.
+              This mobile number is already used by{" "}
+              <strong>{matchingCustomers.length} existing customer(s)</strong>:
             </p>
-            <button
-              className="mt-1 px-3 py-1.5 rounded-lg bg-tertiary text-on-tertiary font-button-utility text-button-utility font-semibold flex items-center justify-center gap-1 transition-all active:scale-95"
-              onClick={handleRedirectExisting}
-              type="button"
-            >
-              <span>View {existingCustomer.name}&apos;s Profile & Add Task →</span>
-            </button>
+            <div className="flex flex-col gap-1 my-1">
+              {matchingCustomers.map((cust) => (
+                <div
+                  key={cust.id}
+                  className="flex items-center justify-between bg-surface-container-lowest/80 p-2 rounded-lg text-xs"
+                >
+                  <span className="font-semibold text-on-surface">
+                    {cust.name} ({cust.mobile})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectExisting(cust.id)}
+                    className="px-2 py-1 rounded bg-tertiary text-on-tertiary font-bold hover:bg-tertiary/90 text-[11px]"
+                  >
+                    Select {cust.name.split(" ")[0]} →
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="font-fine-print text-fine-print italic text-outline">
+              You can still create <strong>{name || "this new person"}</strong>{" "}
+              as a separate, independent customer profile with this same mobile
+              number.
+            </p>
           </div>
         )}
 
@@ -108,8 +130,8 @@ export const AddCustomerModal: React.FC = () => {
             Mobile Number *
             <input
               required
-              className="px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility"
-              placeholder="e.g. +91 98200 12345"
+              className="px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility font-mono"
+              placeholder="e.g. 9820012345"
               type="text"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
@@ -120,16 +142,10 @@ export const AddCustomerModal: React.FC = () => {
             Desk Notes / Remarks
             <textarea
               className="px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility resize-none"
-              placeholder="e.g. Regular customer for document filings"
+              placeholder="e.g. Son of Rajesh Sharma"
               rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmit(e);
-                }
-              }}
             />
           </label>
 
@@ -145,7 +161,7 @@ export const AddCustomerModal: React.FC = () => {
               className="px-space-md py-2 rounded-full bg-primary-container hover:bg-primary transition-all active:scale-95 text-on-primary font-button-utility text-button-utility font-medium shadow-sm"
               type="submit"
             >
-              Save Customer
+              Create New Person
             </button>
           </div>
         </form>

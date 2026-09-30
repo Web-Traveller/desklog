@@ -38,7 +38,7 @@ export const CustomerSearchPicker: React.FC<CustomerSearchPickerProps> = ({
   const filteredCustomers = customers.filter((c) => {
     if (!searchTerm.trim()) return true;
     const q = searchTerm.toLowerCase();
-    return c.name.toLowerCase().includes(q) || c.phone.toLowerCase().includes(q);
+    return c.name.toLowerCase().includes(q) || c.mobile?.toLowerCase().includes(q);
   });
 
   return (
@@ -58,7 +58,7 @@ export const CustomerSearchPicker: React.FC<CustomerSearchPickerProps> = ({
           <span className="material-symbols-outlined text-base text-primary">person</span>
           <span className="font-medium truncate">{selectedCustomer?.name || 'Select Customer'}</span>
           <span className="font-mono text-fine-print text-outline">
-            ({selectedCustomer?.phone || 'N/A'})
+            ({selectedCustomer?.mobile || 'N/A'})
           </span>
         </div>
         <span className="material-symbols-outlined text-outline text-lg pointer-events-none">
@@ -122,7 +122,7 @@ export const CustomerSearchPicker: React.FC<CustomerSearchPickerProps> = ({
                         {cust.name}
                       </span>
                       <span className="font-mono text-fine-print text-outline">
-                        {cust.phone}
+                        {cust.mobile}
                       </span>
                     </div>
 

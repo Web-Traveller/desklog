@@ -9,14 +9,14 @@ export const CustomersPage: React.FC = () => {
   const filteredCustomers = customers.filter((cust) => {
     if (!customerSearch.trim()) return true;
     const q = customerSearch.toLowerCase();
-    return cust.name.toLowerCase().includes(q) || cust.phone.includes(q);
+    return cust.name.toLowerCase().includes(q) || (cust.mobile || "").includes(q);
   });
 
   const startIndex = customerPage * ITEMS_PER_PAGE;
   const paginatedCustomers = filteredCustomers.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   return (
-    <div className="w-full max-w-[1380px] mx-auto px-gutter py-space-lg flex flex-col gap-space-lg">
+    <div className="w-full max-w-[1380px] mx-auto px-gutter py-space-lg flex flex-col gap-space-lg animate-slideUp">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-space-lg pb-space-xs border-b border-surface-container">
         <div className="flex flex-col gap-space-xxs">
           <h1 className="font-display-md text-display-md text-on-surface font-semibold tracking-tight">
@@ -87,9 +87,9 @@ export const CustomersPage: React.FC = () => {
       ) : (
         <div className="flex flex-col gap-space-md">
           {paginatedCustomers.map((customer) => {
-            const custTasks = tasks.filter((t) => t.customerId === customer.id);
-            const activeTasks = custTasks.filter((t) => t.status !== 'done');
-            const completedTasks = custTasks.filter((t) => t.status === 'done');
+            const custTasks = tasks.filter((t) => t.customer_id === customer.id);
+            const activeTasks = custTasks.filter((t) => t.status !== 'DELIVERED');
+            const completedTasks = custTasks.filter((t) => t.status === 'DELIVERED');
             const ongoingTask = activeTasks[0]?.title;
 
             return (

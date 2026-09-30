@@ -21,8 +21,8 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
   useEffect(() => {
     if (customer) {
       setName(customer.name);
-      setPhone(customer.phone);
-      setNotes(customer.notes || '');
+      setPhone(customer.mobile || '');
+      setNotes(customer.note || '');
     }
   }, [customer]);
 
@@ -34,8 +34,8 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
 
     editCustomer(customer.id, {
       name: name.trim(),
-      phone: phone.trim(),
-      notes: notes.trim(),
+      mobile: phone.trim(),
+      note: notes.trim(),
     });
 
     onClose();

@@ -2,61 +2,94 @@ use rusqlite::{params, Connection, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use chrono;
 
 #[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Customer {
     pub id: String,
     pub name: String,
-    pub phone: String,
-    pub registeredDate: String,
-    pub isVerified: Option<bool>,
-    pub notes: Option<String>,
-    pub avatarInitials: Option<String>,
-    pub avatarColor: Option<String>,
+    pub mobile: Option<String>,
+    pub note: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub is_active: Option<bool>,
+    pub is_verified: Option<bool>,
+    pub avatar_initials: Option<String>,
+    pub avatar_color: Option<String>,
+}
+
+#[allow(non_snake_case)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CustomerRelationship {
+    pub id: String,
+    pub customer_id: String,
+    pub related_customer_id: String,
+    pub relationship_type: String,
+    pub created_at: String,
+}
+
+#[allow(non_snake_case)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Service {
+    pub id: String,
+    pub name: String,
+    pub default_price: Option<i64>,
+    pub is_active: bool,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 #[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Task {
     pub id: String,
-    pub customerId: String,
-    pub customerName: String,
-    pub customerPhone: String,
+    pub customer_id: String,
+    pub service_id: Option<String>,
     pub title: String,
-    pub status: String, // 'pending' | 'processing' | 'done'
-    pub createdDate: String,
-    pub updatedDate: Option<String>,
-    pub targetDate: Option<String>,
-    pub subStatus: Option<String>,
+    pub status: String,
+    pub scheduled_date: Option<String>,
+    pub scheduled_time: Option<String>,
+    pub target_date: Option<String>,
     pub notes: Option<String>,
-    pub billingAmount: Option<i64>,
-    pub amountPaid: Option<i64>,
-    pub billingStatus: Option<String>,
-    pub billingDate: Option<String>,
-    pub scheduleDate: Option<String>,
+    pub billing_amount: Option<i64>,
+    pub cancellation_reason: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub completed_at: Option<String>,
+}
+
+#[allow(non_snake_case)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Payment {
+    pub id: String,
+    pub task_id: String,
+    pub amount: i64,
+    pub created_at: String,
 }
 
 #[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ActivityEvent {
     pub id: String,
-    pub time: String,
-    pub timePeriod: String,
-    #[serde(rename = "type")]
     pub activity_type: String,
     pub title: String,
-    pub customerName: String,
-    pub customerPhone: String,
     pub description: String,
-    pub badgeText: String,
-    pub status: String,
-    pub taskId: Option<String>,
-    pub date: Option<String>,
+    pub task_id: Option<String>,
+    pub customer_id: Option<String>,
+    pub created_at: String,
+}
+
+#[allow(non_snake_case)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Setting {
+    pub key: String,
+    pub value: String,
 }
 
 pub struct Database {
-    db_path: PathBuf,
+    pub app_dir: PathBuf,
+    pub db_path: PathBuf,
 }
 
 impl Database {
@@ -64,8 +97,13 @@ impl Database {
         if !app_dir.exists() {
             fs::create_dir_all(&app_dir).map_err(|e| format!("Failed to create app data directory: {}", e))?;
         }
+        let backup_dir = app_dir.join("backups");
+        if !backup_dir.exists() {
+            let _ = fs::create_dir_all(&backup_dir);
+        }
+
         let db_path = app_dir.join("desklog.db");
-        let db = Database { db_path };
+        let db = Database { app_dir, db_path };
         db.init_tables().map_err(|e| format!("Failed to initialize database tables: {}", e))?;
         Ok(db)
     }
@@ -76,19 +114,69 @@ impl Database {
 
     pub fn init_tables(&self) -> Result<()> {
         let conn = self.get_connection()?;
-
         conn.execute("PRAGMA foreign_keys = ON;", [])?;
+
+        // MIGRATION: Check if old customers table exists and needs migration
+        let mut old_customers_exist = false;
+        if let Ok(mut stmt) = conn.prepare("PRAGMA table_info(customers)") {
+            if let Ok(rows) = stmt.query_map([], |row| {
+                let name: String = row.get(1)?;
+                Ok(name)
+            }) {
+                for col in rows.flatten() {
+                    if col == "phone" {
+                        old_customers_exist = true;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        if old_customers_exist {
+            conn.execute_batch(
+                "ALTER TABLE customers RENAME TO old_customers;
+                 ALTER TABLE tasks RENAME TO old_tasks;
+                 ALTER TABLE activities RENAME TO old_activities;"
+            )?;
+        }
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS customers (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
-                phone TEXT NOT NULL,
-                registered_date TEXT NOT NULL,
-                is_verified INTEGER,
-                notes TEXT,
+                mobile TEXT,
+                note TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                is_verified INTEGER DEFAULT 0,
                 avatar_initials TEXT,
                 avatar_color TEXT
+            );",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS customer_relationships (
+                id TEXT PRIMARY KEY,
+                customer_id TEXT NOT NULL,
+                related_customer_id TEXT NOT NULL,
+                relationship_type TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+                FOREIGN KEY(related_customer_id) REFERENCES customers(id) ON DELETE CASCADE
+            );",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS services (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                default_price INTEGER,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
             );",
             [],
         )?;
@@ -97,20 +185,31 @@ impl Database {
             "CREATE TABLE IF NOT EXISTS tasks (
                 id TEXT PRIMARY KEY,
                 customer_id TEXT NOT NULL,
-                customer_name TEXT NOT NULL,
-                customer_phone TEXT NOT NULL,
+                service_id TEXT,
                 title TEXT NOT NULL,
                 status TEXT NOT NULL,
-                created_date TEXT NOT NULL,
-                updated_date TEXT,
+                scheduled_date TEXT,
+                scheduled_time TEXT,
                 target_date TEXT,
-                sub_status TEXT,
                 notes TEXT,
                 billing_amount INTEGER,
-                amount_paid INTEGER,
-                billing_status TEXT,
-                billing_date TEXT,
-                schedule_date TEXT
+                cancellation_reason TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                completed_at TEXT,
+                FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+                FOREIGN KEY(service_id) REFERENCES services(id) ON DELETE SET NULL
+            );",
+            [],
+        )?;
+
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS payments (
+                id TEXT PRIMARY KEY,
+                task_id TEXT NOT NULL,
+                amount INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
             );",
             [],
         )?;
@@ -118,23 +217,59 @@ impl Database {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS activities (
                 id TEXT PRIMARY KEY,
-                time TEXT NOT NULL,
-                time_period TEXT NOT NULL,
                 activity_type TEXT NOT NULL,
                 title TEXT NOT NULL,
-                customer_name TEXT NOT NULL,
-                customer_phone TEXT NOT NULL,
                 description TEXT NOT NULL,
-                badge_text TEXT NOT NULL,
-                status TEXT NOT NULL,
                 task_id TEXT,
-                date TEXT
+                customer_id TEXT,
+                created_at TEXT NOT NULL
             );",
             [],
         )?;
 
-        // Always ensure General / Walk-in Customer exists in database
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );",
+            [],
+        )?;
+
+        // Ensure new columns exist on existing tables if upgraded
+        let _ = conn.execute("ALTER TABLE customers ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1;", []);
+        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN cancellation_reason TEXT;", []);
+
+        // MANDATORY DATABASE INDEXES 
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_customers_mobile ON customers(mobile);", [])?;
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name);", [])?;
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_customer_id ON tasks(customer_id);", [])?;
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);", [])?;
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_scheduled_date ON tasks(scheduled_date);", [])?;
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_target_date ON tasks(target_date);", [])?;
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_payments_task_id ON payments(task_id);", [])?;
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_activities_created_at ON activities(created_at);", [])?;
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_cust_rel_customer_id ON customer_relationships(customer_id);", [])?;
+
+        if old_customers_exist {
+            conn.execute(
+                "INSERT INTO customers (id, name, mobile, note, created_at, updated_at, is_active, is_verified, avatar_initials, avatar_color)
+                 SELECT id, name, phone, notes, registered_date, registered_date, 1, is_verified, avatar_initials, avatar_color FROM old_customers",
+                []
+            )?;
+            conn.execute(
+                "INSERT INTO tasks (id, customer_id, title, status, scheduled_date, target_date, notes, billing_amount, created_at, updated_at)
+                 SELECT id, customer_id, title, UPPER(status), schedule_date, target_date, notes, billing_amount, created_date, COALESCE(updated_date, created_date) FROM old_tasks",
+                []
+            )?;
+            conn.execute(
+                "INSERT INTO payments (id, task_id, amount, created_at)
+                 SELECT id || '-pay', id, amount_paid, COALESCE(billing_date, created_date) FROM old_tasks WHERE amount_paid IS NOT NULL AND amount_paid > 0",
+                []
+            )?;
+        }
+
         self.ensure_general_customer(&conn)?;
+        self.ensure_default_services(&conn)?;
 
         Ok(())
     }
@@ -149,17 +284,39 @@ impl Database {
 
         if count == 0 {
             let gen_name = "General / Walk-in Client";
-            let gen_phone = "N/A";
-            let gen_date = "System Default";
+            let gen_date = chrono::Local::now().to_rfc3339();
             let gen_notes = "Default profile for one-off walk-in customers and quick desk services.";
             let gen_initials = "GW";
             let gen_color = "bg-surface-container text-on-surface-variant";
 
             conn.execute(
-                "INSERT INTO customers (id, name, phone, registered_date, is_verified, notes, avatar_initials, avatar_color)
-                 VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6, ?7);",
-                params![general_id, gen_name, gen_phone, gen_date, gen_notes, gen_initials, gen_color],
+                "INSERT INTO customers (id, name, mobile, note, created_at, updated_at, is_active, is_verified, avatar_initials, avatar_color)
+                 VALUES (?1, ?2, NULL, ?3, ?4, ?4, 1, 0, ?5, ?6);",
+                params![general_id, gen_name, gen_notes, gen_date, gen_initials, gen_color],
             )?;
+        }
+        Ok(())
+    }
+
+    fn ensure_default_services(&self, conn: &Connection) -> Result<()> {
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM services;", [], |row| row.get(0))?;
+        if count == 0 {
+            let now = chrono::Local::now().to_rfc3339();
+            let default_services = vec![
+                ("svc-pan", "PAN Card Application / Correction", 15000), // ₹150
+                ("svc-aadhaar", "Aadhaar Update / Linkage", 10000),        // ₹100
+                ("svc-bank", "Bank Account Linking / KYC", 10000),        // ₹100
+                ("svc-exam", "Online Exam / Form Fillup", 20000),         // ₹200
+                ("svc-result", "Result / Admit Card Download", 3000),     // ₹30
+            ];
+
+            for (id, name, price) in default_services {
+                conn.execute(
+                    "INSERT INTO services (id, name, default_price, is_active, created_at, updated_at)
+                     VALUES (?1, ?2, ?3, 1, ?4, ?4);",
+                    params![id, name, price, now],
+                )?;
+            }
         }
         Ok(())
     }
@@ -167,45 +324,22 @@ impl Database {
     pub fn fetch_customers(&self) -> Result<Vec<Customer>> {
         let conn = self.get_connection()?;
         let general_id = "cust-general";
-        let mut stmt = conn.prepare("SELECT id, name, phone, registered_date, is_verified, notes, avatar_initials, avatar_color FROM customers ORDER BY CASE WHEN id = ?1 THEN 1 ELSE 0 END, name ASC;")?;
+        let mut stmt = conn.prepare("SELECT id, name, mobile, note, created_at, updated_at, is_active, is_verified, avatar_initials, avatar_color FROM customers WHERE is_active = 1 ORDER BY CASE WHEN id = ?1 THEN 1 ELSE 0 END, name ASC;")?;
 
         let customer_iter = stmt.query_map(params![general_id], |row| {
-            let is_verified_int: Option<i32> = row.get(4)?;
+            let is_active_int: Option<i32> = row.get(6)?;
+            let is_verified_int: Option<i32> = row.get(7)?;
             Ok(Customer {
                 id: row.get(0)?,
                 name: row.get(1)?,
-                phone: row.get(2)?,
-                registeredDate: row.get(3)?,
-                isVerified: is_verified_int.map(|v| v != 0),
-                notes: row.get(5)?,
-                avatarInitials: row.get(6)?,
-                avatarColor: row.get(7)?,
-            })
-        })?;
-
-        let mut customers = Vec::new();
-        for c in customer_iter {
-            customers.push(c?);
-        }
-        Ok(customers)
-    }
-
-    pub fn fetch_customers_paginated(&self, limit: u32, offset: u32) -> Result<Vec<Customer>> {
-        let conn = self.get_connection()?;
-        let general_id = "cust-general";
-        let mut stmt = conn.prepare("SELECT id, name, phone, registered_date, is_verified, notes, avatar_initials, avatar_color FROM customers ORDER BY CASE WHEN id = ?1 THEN 1 ELSE 0 END, name ASC LIMIT ?2 OFFSET ?3;")?;
-
-        let customer_iter = stmt.query_map(params![general_id, limit, offset], |row| {
-            let is_verified_int: Option<i32> = row.get(4)?;
-            Ok(Customer {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                phone: row.get(2)?,
-                registeredDate: row.get(3)?,
-                isVerified: is_verified_int.map(|v| v != 0),
-                notes: row.get(5)?,
-                avatarInitials: row.get(6)?,
-                avatarColor: row.get(7)?,
+                mobile: row.get(2)?,
+                note: row.get(3)?,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
+                is_active: is_active_int.map(|v| v != 0),
+                is_verified: is_verified_int.map(|v| v != 0),
+                avatar_initials: row.get(8)?,
+                avatar_color: row.get(9)?,
             })
         })?;
 
@@ -218,71 +352,104 @@ impl Database {
 
     pub fn insert_customer(&self, customer: &Customer) -> Result<()> {
         let conn = self.get_connection()?;
-        let is_verified_int = customer.isVerified.map(|v| if v { 1 } else { 0 });
-
+        let is_active_int = if customer.is_active.unwrap_or(true) { 1 } else { 0 };
+        let is_verified_int = customer.is_verified.map(|v| if v { 1 } else { 0 });
         conn.execute(
-            "INSERT INTO customers (id, name, phone, registered_date, is_verified, notes, avatar_initials, avatar_color)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);",
+            "INSERT INTO customers (id, name, mobile, note, created_at, updated_at, is_active, is_verified, avatar_initials, avatar_color)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10);",
             params![
                 customer.id,
                 customer.name,
-                customer.phone,
-                customer.registeredDate,
+                customer.mobile,
+                customer.note,
+                customer.created_at,
+                customer.updated_at,
+                is_active_int,
                 is_verified_int,
-                customer.notes,
-                customer.avatarInitials,
-                customer.avatarColor
+                customer.avatar_initials,
+                customer.avatar_color
             ],
         )?;
         Ok(())
     }
 
-    pub fn update_customer(&self, id: &str, name: &str, phone: &str, notes: Option<&str>) -> Result<()> {
+    pub fn update_customer(&self, id: &str, name: &str, mobile: Option<&str>, note: Option<&str>) -> Result<()> {
         let conn = self.get_connection()?;
+        let updated_at = chrono::Local::now().to_rfc3339();
         conn.execute(
-            "UPDATE customers SET name = ?1, phone = ?2, notes = ?3 WHERE id = ?4;",
-            params![name, phone, notes, id],
-        )?;
-        conn.execute(
-            "UPDATE tasks SET customer_name = ?1, customer_phone = ?2 WHERE customer_id = ?3;",
-            params![name, phone, id],
+            "UPDATE customers SET name = ?1, mobile = ?2, note = ?3, updated_at = ?4 WHERE id = ?5;",
+            params![name, mobile, note, updated_at, id],
         )?;
         Ok(())
     }
 
     pub fn delete_customer(&self, id: &str) -> Result<()> {
         let conn = self.get_connection()?;
-        conn.execute("DELETE FROM activities WHERE task_id IN (SELECT id FROM tasks WHERE customer_id = ?1);", params![id])?;
-        conn.execute("DELETE FROM tasks WHERE customer_id = ?1;", params![id])?;
-        conn.execute("DELETE FROM customers WHERE id = ?1;", params![id])?;
+        // Soft delete customer to preserve task history
+        conn.execute("UPDATE customers SET is_active = 0 WHERE id = ?1;", params![id])?;
+        Ok(())
+    }
+
+    pub fn fetch_customer_relationships(&self, customer_id: &str) -> Result<Vec<CustomerRelationship>> {
+        let conn = self.get_connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, customer_id, related_customer_id, relationship_type, created_at
+             FROM customer_relationships WHERE customer_id = ?1 OR related_customer_id = ?1
+             ORDER BY created_at DESC;"
+        )?;
+        let iter = stmt.query_map(params![customer_id], |row| {
+            Ok(CustomerRelationship {
+                id: row.get(0)?,
+                customer_id: row.get(1)?,
+                related_customer_id: row.get(2)?,
+                relationship_type: row.get(3)?,
+                created_at: row.get(4)?,
+            })
+        })?;
+        let mut rels = Vec::new();
+        for r in iter {
+            rels.push(r?);
+        }
+        Ok(rels)
+    }
+
+    pub fn insert_customer_relationship(&self, rel: &CustomerRelationship) -> Result<()> {
+        let conn = self.get_connection()?;
+        conn.execute(
+            "INSERT INTO customer_relationships (id, customer_id, related_customer_id, relationship_type, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5);",
+            params![rel.id, rel.customer_id, rel.related_customer_id, rel.relationship_type, rel.created_at],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_customer_relationship(&self, id: &str) -> Result<()> {
+        let conn = self.get_connection()?;
+        conn.execute("DELETE FROM customer_relationships WHERE id = ?1;", params![id])?;
         Ok(())
     }
 
     pub fn fetch_tasks(&self) -> Result<Vec<Task>> {
         let conn = self.get_connection()?;
-        let mut stmt = conn.prepare("SELECT id, customer_id, customer_name, customer_phone, title, status, created_date, updated_date, target_date, sub_status, notes, billing_amount, amount_paid, billing_status, billing_date, schedule_date FROM tasks ORDER BY rowid DESC;")?;
-
+        let mut stmt = conn.prepare("SELECT id, customer_id, service_id, title, status, scheduled_date, scheduled_time, target_date, notes, billing_amount, cancellation_reason, created_at, updated_at, completed_at FROM tasks ORDER BY rowid DESC;")?;
         let task_iter = stmt.query_map([], |row| {
             Ok(Task {
                 id: row.get(0)?,
-                customerId: row.get(1)?,
-                customerName: row.get(2)?,
-                customerPhone: row.get(3)?,
-                title: row.get(4)?,
-                status: row.get(5)?,
-                createdDate: row.get(6)?,
-                updatedDate: row.get(7)?,
-                targetDate: row.get(8)?,
-                subStatus: row.get(9)?,
-                notes: row.get(10)?,
-                billingAmount: row.get(11)?,
-                amountPaid: row.get(12)?,
-                billingStatus: row.get(13)?,
-                billingDate: row.get(14)?,
-                scheduleDate: row.get(15)?,
+                customer_id: row.get(1)?,
+                service_id: row.get(2)?,
+                title: row.get(3)?,
+                status: row.get(4)?,
+                scheduled_date: row.get(5)?,
+                scheduled_time: row.get(6)?,
+                target_date: row.get(7)?,
+                notes: row.get(8)?,
+                billing_amount: row.get(9)?,
+                cancellation_reason: row.get(10)?,
+                created_at: row.get(11)?,
+                updated_at: row.get(12)?,
+                completed_at: row.get(13)?,
             })
         })?;
-
         let mut tasks = Vec::new();
         for t in task_iter {
             tasks.push(t?);
@@ -290,60 +457,54 @@ impl Database {
         Ok(tasks)
     }
 
-    pub fn fetch_tasks_paginated(&self, limit: u32, offset: u32) -> Result<Vec<Task>> {
+    pub fn fetch_task_by_id(&self, id: &str) -> Result<Option<Task>> {
         let conn = self.get_connection()?;
-        let mut stmt = conn.prepare("SELECT id, customer_id, customer_name, customer_phone, title, status, created_date, updated_date, target_date, sub_status, notes, billing_amount, amount_paid, billing_status, billing_date, schedule_date FROM tasks ORDER BY rowid DESC LIMIT ?1 OFFSET ?2;")?;
-
-        let task_iter = stmt.query_map(params![limit, offset], |row| {
+        let mut stmt = conn.prepare("SELECT id, customer_id, service_id, title, status, scheduled_date, scheduled_time, target_date, notes, billing_amount, cancellation_reason, created_at, updated_at, completed_at FROM tasks WHERE id = ?1;")?;
+        let mut task_iter = stmt.query_map(params![id], |row| {
             Ok(Task {
                 id: row.get(0)?,
-                customerId: row.get(1)?,
-                customerName: row.get(2)?,
-                customerPhone: row.get(3)?,
-                title: row.get(4)?,
-                status: row.get(5)?,
-                createdDate: row.get(6)?,
-                updatedDate: row.get(7)?,
-                targetDate: row.get(8)?,
-                subStatus: row.get(9)?,
-                notes: row.get(10)?,
-                billingAmount: row.get(11)?,
-                amountPaid: row.get(12)?,
-                billingStatus: row.get(13)?,
-                billingDate: row.get(14)?,
-                scheduleDate: row.get(15)?,
+                customer_id: row.get(1)?,
+                service_id: row.get(2)?,
+                title: row.get(3)?,
+                status: row.get(4)?,
+                scheduled_date: row.get(5)?,
+                scheduled_time: row.get(6)?,
+                target_date: row.get(7)?,
+                notes: row.get(8)?,
+                billing_amount: row.get(9)?,
+                cancellation_reason: row.get(10)?,
+                created_at: row.get(11)?,
+                updated_at: row.get(12)?,
+                completed_at: row.get(13)?,
             })
         })?;
-
-        let mut tasks = Vec::new();
-        for t in task_iter {
-            tasks.push(t?);
+        if let Some(result) = task_iter.next() {
+            Ok(Some(result?))
+        } else {
+            Ok(None)
         }
-        Ok(tasks)
     }
 
     pub fn insert_task(&self, task: &Task) -> Result<()> {
         let conn = self.get_connection()?;
         conn.execute(
-            "INSERT INTO tasks (id, customer_id, customer_name, customer_phone, title, status, created_date, updated_date, target_date, sub_status, notes, billing_amount, amount_paid, billing_status, billing_date, schedule_date)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16);",
+            "INSERT INTO tasks (id, customer_id, service_id, title, status, scheduled_date, scheduled_time, target_date, notes, billing_amount, cancellation_reason, created_at, updated_at, completed_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14);",
             params![
                 task.id,
-                task.customerId,
-                task.customerName,
-                task.customerPhone,
+                task.customer_id,
+                task.service_id,
                 task.title,
                 task.status,
-                task.createdDate,
-                task.updatedDate,
-                task.targetDate,
-                task.subStatus,
+                task.scheduled_date,
+                task.scheduled_time,
+                task.target_date,
                 task.notes,
-                task.billingAmount,
-                task.amountPaid,
-                task.billingStatus,
-                task.billingDate,
-                task.scheduleDate
+                task.billing_amount,
+                task.cancellation_reason,
+                task.created_at,
+                task.updated_at,
+                task.completed_at
             ],
         )?;
         Ok(())
@@ -351,62 +512,119 @@ impl Database {
 
     pub fn update_task(&self, task: &Task) -> Result<()> {
         let conn = self.get_connection()?;
+        let updated_at = chrono::Local::now().to_rfc3339();
         conn.execute(
-            "UPDATE tasks SET title = ?1, status = ?2, updated_date = ?3, target_date = ?4, sub_status = ?5, notes = ?6, billing_amount = ?7, amount_paid = ?8, billing_status = ?9, schedule_date = ?10 WHERE id = ?11;",
+            "UPDATE tasks SET service_id = ?1, title = ?2, status = ?3, scheduled_date = ?4, scheduled_time = ?5, target_date = ?6, notes = ?7, billing_amount = ?8, cancellation_reason = ?9, updated_at = ?10, completed_at = ?11 WHERE id = ?12;",
             params![
+                task.service_id,
                 task.title,
                 task.status,
-                task.updatedDate,
-                task.targetDate,
-                task.subStatus,
+                task.scheduled_date,
+                task.scheduled_time,
+                task.target_date,
                 task.notes,
-                task.billingAmount,
-                task.amountPaid,
-                task.billingStatus,
-                task.scheduleDate,
+                task.billing_amount,
+                task.cancellation_reason,
+                updated_at,
+                task.completed_at,
                 task.id
             ],
         )?;
         Ok(())
     }
 
-    pub fn update_task_status(&self, id: &str, status: &str, updated_date: &str, sub_status: Option<&str>) -> Result<()> {
+    pub fn delete_task(&self, id: &str) -> Result<()> {
+        let conn = self.get_connection()?;
+        conn.execute("DELETE FROM tasks WHERE id = ?1;", params![id])?;
+        Ok(())
+    }
+
+    pub fn fetch_services(&self) -> Result<Vec<Service>> {
+        let conn = self.get_connection()?;
+        let mut stmt = conn.prepare("SELECT id, name, default_price, is_active, created_at, updated_at FROM services ORDER BY is_active DESC, name ASC;")?;
+        let service_iter = stmt.query_map([], |row| {
+            Ok(Service {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                default_price: row.get(2)?,
+                is_active: row.get::<_, i32>(3)? != 0,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
+            })
+        })?;
+        let mut services = Vec::new();
+        for s in service_iter {
+            services.push(s?);
+        }
+        Ok(services)
+    }
+
+    pub fn insert_service(&self, service: &Service) -> Result<()> {
         let conn = self.get_connection()?;
         conn.execute(
-            "UPDATE tasks SET status = ?1, updated_date = ?2, sub_status = ?3 WHERE id = ?4;",
-            params![status, updated_date, sub_status, id],
+            "INSERT INTO services (id, name, default_price, is_active, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6);",
+            params![service.id, service.name, service.default_price, if service.is_active {1} else {0}, service.created_at, service.updated_at],
         )?;
         Ok(())
     }
 
-    pub fn delete_task(&self, id: &str) -> Result<()> {
+    pub fn update_service(&self, service: &Service) -> Result<()> {
         let conn = self.get_connection()?;
-        conn.execute("DELETE FROM activities WHERE task_id = ?1;", params![id])?;
-        conn.execute("DELETE FROM tasks WHERE id = ?1;", params![id])?;
+        let updated_at = chrono::Local::now().to_rfc3339();
+        conn.execute(
+            "UPDATE services SET name = ?1, default_price = ?2, is_active = ?3, updated_at = ?4 WHERE id = ?5;",
+            params![service.name, service.default_price, if service.is_active {1} else {0}, updated_at, service.id],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_service(&self, id: &str) -> Result<()> {
+        let conn = self.get_connection()?;
+        conn.execute("UPDATE services SET is_active = 0 WHERE id = ?1;", params![id])?;
+        Ok(())
+    }
+
+    pub fn fetch_payments(&self) -> Result<Vec<Payment>> {
+        let conn = self.get_connection()?;
+        let mut stmt = conn.prepare("SELECT id, task_id, amount, created_at FROM payments ORDER BY rowid DESC;")?;
+        let payment_iter = stmt.query_map([], |row| {
+            Ok(Payment {
+                id: row.get(0)?,
+                task_id: row.get(1)?,
+                amount: row.get(2)?,
+                created_at: row.get(3)?,
+            })
+        })?;
+        let mut payments = Vec::new();
+        for p in payment_iter {
+            payments.push(p?);
+        }
+        Ok(payments)
+    }
+
+    pub fn insert_payment(&self, payment: &Payment) -> Result<()> {
+        let conn = self.get_connection()?;
+        conn.execute(
+            "INSERT INTO payments (id, task_id, amount, created_at) VALUES (?1, ?2, ?3, ?4);",
+            params![payment.id, payment.task_id, payment.amount, payment.created_at],
+        )?;
         Ok(())
     }
 
     pub fn fetch_activities(&self) -> Result<Vec<ActivityEvent>> {
         let conn = self.get_connection()?;
-        let mut stmt = conn.prepare("SELECT id, time, time_period, activity_type, title, customer_name, customer_phone, description, badge_text, status, task_id, date FROM activities ORDER BY rowid DESC;")?;
-
+        let mut stmt = conn.prepare("SELECT id, activity_type, title, description, task_id, customer_id, created_at FROM activities ORDER BY rowid DESC;")?;
         let act_iter = stmt.query_map([], |row| {
             Ok(ActivityEvent {
                 id: row.get(0)?,
-                time: row.get(1)?,
-                timePeriod: row.get(2)?,
-                activity_type: row.get(3)?,
-                title: row.get(4)?,
-                customerName: row.get(5)?,
-                customerPhone: row.get(6)?,
-                description: row.get(7)?,
-                badgeText: row.get(8)?,
-                status: row.get(9)?,
-                taskId: row.get(10)?,
-                date: row.get(11)?,
+                activity_type: row.get(1)?,
+                title: row.get(2)?,
+                description: row.get(3)?,
+                task_id: row.get(4)?,
+                customer_id: row.get(5)?,
+                created_at: row.get(6)?,
             })
         })?;
-
         let mut activities = Vec::new();
         for a in act_iter {
             activities.push(a?);
@@ -417,23 +635,70 @@ impl Database {
     pub fn insert_activity(&self, act: &ActivityEvent) -> Result<()> {
         let conn = self.get_connection()?;
         conn.execute(
-            "INSERT INTO activities (id, time, time_period, activity_type, title, customer_name, customer_phone, description, badge_text, status, task_id, date)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12);",
-            params![
-                act.id,
-                act.time,
-                act.timePeriod,
-                act.activity_type,
-                act.title,
-                act.customerName,
-                act.customerPhone,
-                act.description,
-                act.badgeText,
-                act.status,
-                act.taskId,
-                act.date
-            ],
+            "INSERT INTO activities (id, activity_type, title, description, task_id, customer_id, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7);",
+            params![act.id, act.activity_type, act.title, act.description, act.task_id, act.customer_id, act.created_at],
         )?;
+        Ok(())
+    }
+
+    pub fn fetch_settings(&self) -> Result<Vec<Setting>> {
+        let conn = self.get_connection()?;
+        let mut stmt = conn.prepare("SELECT key, value FROM settings;")?;
+        let iter = stmt.query_map([], |row| {
+            Ok(Setting {
+                key: row.get(0)?,
+                value: row.get(1)?,
+            })
+        })?;
+        let mut settings = Vec::new();
+        for s in iter {
+            settings.push(s?);
+        }
+        Ok(settings)
+    }
+
+    pub fn save_setting(&self, key: &str, value: &str) -> Result<()> {
+        let conn = self.get_connection()?;
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = ?2;",
+            params![key, value],
+        )?;
+        Ok(())
+    }
+
+    pub fn create_backup(&self) -> Result<String> {
+        let backup_dir = self.app_dir.join("backups");
+        if !backup_dir.exists() {
+            let _ = fs::create_dir_all(&backup_dir);
+        }
+        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S").to_string();
+        let backup_filename = format!("desklog_backup_{}.db", timestamp);
+        let backup_path = backup_dir.join(&backup_filename);
+
+        fs::copy(&self.db_path, &backup_path).map_err(|_e| rusqlite::Error::QueryReturnedNoRows)?;
+        Ok(backup_path.to_string_lossy().to_string())
+    }
+
+    pub fn restore_backup(&self, backup_path_str: &str) -> Result<()> {
+        let src_path = PathBuf::from(backup_path_str);
+        if !src_path.exists() {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
+
+        // Validate that src_path is a valid SQLite database
+        let test_conn = Connection::open(&src_path)?;
+        let count: i64 = test_conn.query_row("SELECT COUNT(*) FROM customers;", [], |row| row.get(0))?;
+        if count < 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
+        drop(test_conn);
+
+        // Create safety backup of current database first 
+        let _ = self.create_backup();
+
+        // Perform restore
+        fs::copy(&src_path, &self.db_path).map_err(|_e| rusqlite::Error::QueryReturnedNoRows)?;
         Ok(())
     }
 }

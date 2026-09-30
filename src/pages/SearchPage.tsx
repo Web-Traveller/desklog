@@ -14,21 +14,21 @@ export const SearchPage: React.FC = () => {
     (c) =>
       !query ||
       c.name.toLowerCase().includes(query) ||
-      c.phone.includes(query) ||
-      c.notes?.toLowerCase().includes(query)
+      (c.mobile || "").includes(query) ||
+      c.note?.toLowerCase().includes(query)
   );
 
   let matchingTasks = tasks.filter(
     (t) =>
       !query ||
       t.title.toLowerCase().includes(query) ||
-      t.customerName.toLowerCase().includes(query) ||
-      t.customerPhone.includes(query)
+      (customers.find(c => c.id === t.customer_id)?.name || "").toLowerCase().includes(query) ||
+      (customers.find(c => c.id === t.customer_id)?.mobile || "").includes(query)
   );
 
   if (sortBy === 'name') {
     matchingCustomers = [...matchingCustomers].sort((a, b) => a.name.localeCompare(b.name));
-    matchingTasks = [...matchingTasks].sort((a, b) => a.customerName.localeCompare(b.customerName));
+    matchingTasks = [...matchingTasks].sort((a, b) => a.id.localeCompare(b.id));
   } else if (sortBy === 'recent') {
     matchingCustomers = [...matchingCustomers].reverse();
     matchingTasks = [...matchingTasks].reverse();
@@ -150,10 +150,10 @@ export const SearchPage: React.FC = () => {
 
             <div className="flex flex-col gap-space-md">
               {matchingCustomers.map((cust) => {
-                const custTasks = tasks.filter((t) => t.customerId === cust.id);
-                const activeCount = custTasks.filter((t) => t.status !== 'done').length;
-                const completedCount = custTasks.filter((t) => t.status === 'done').length;
-                const ongoingTask = custTasks.find((t) => t.status !== 'done')?.title;
+                const custTasks = tasks.filter((t) => t.customer_id === cust.id);
+                const activeCount = custTasks.filter((t) => t.status !== 'DELIVERED').length;
+                const completedCount = custTasks.filter((t) => t.status === 'DELIVERED').length;
+                const ongoingTask = custTasks.find((t) => t.status !== 'DELIVERED')?.title;
 
                 return (
                   <CustomerCard

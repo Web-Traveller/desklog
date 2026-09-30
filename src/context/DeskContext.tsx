@@ -1,11 +1,21 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+} from "react";
 import {
   Customer,
+  CustomerRelationship,
   Task,
   ActivityEvent,
   ActivePage,
   TaskStatus,
   GENERAL_CUSTOMER,
+  Service,
+  Payment,
+  Setting,
 } from "../types";
 import { getFormattedToday, getFormattedNow } from "../utils/dateUtils";
 import {
@@ -13,24 +23,41 @@ import {
   saveTauriCustomer,
   updateTauriCustomer,
   deleteTauriCustomer,
+  fetchTauriRelationships,
+  saveTauriRelationship,
+  deleteTauriRelationship,
   fetchTauriTasks,
   saveTauriTask,
-  updateTauriTaskStatus,
   updateTauriTask,
   deleteTauriTask,
   fetchTauriActivities,
   saveTauriActivity,
   triggerDesktopNotification,
+  fetchTauriServices,
+  saveTauriService,
+  updateTauriService,
+  deleteTauriService,
+  fetchTauriPayments,
+  saveTauriPayment,
+  fetchTauriSettings,
+  saveTauriSetting,
+  createTauriBackup,
+  restoreTauriBackup,
 } from "../api/tauri";
+import { createActivityEvent } from "../services/activityService";
+import { isTaskOverdue } from "../services/taskService";
 import { ConfirmModal } from "../components/ConfirmModal";
-import { ToastNotification, ToastMessage } from "../components/ToastNotification";
+import {
+  ToastNotification,
+  ToastMessage,
+} from "../components/ToastNotification";
 
 export interface ConfirmOptions {
   title: string;
   message: string;
   confirmText?: string;
   cancelText?: string;
-  variant?: 'danger' | 'warning' | 'info';
+  variant?: "danger" | "warning" | "info";
   onConfirm: () => void;
 }
 
@@ -50,21 +77,57 @@ interface DeskContextType {
   setSelectedCalendarDate: (date: string) => void;
 
   customers: Customer[];
+  relationships: CustomerRelationship[];
   tasks: Task[];
   activities: ActivityEvent[];
+  services: Service[];
+  payments: Payment[];
+  settings: Setting[];
 
-  addCustomer: (customer: Omit<Customer, "id" | "registeredDate">) => Customer;
+  addService: (
+    service: Omit<Service, "id" | "created_at" | "updated_at">,
+  ) => Promise<void>;
+  editService: (service: Service) => Promise<void>;
+  deleteService: (id: string) => Promise<void>;
+  addPayment: (payment: Omit<Payment, "id" | "created_at">) => Promise<void>;
+
+  addCustomer: (
+    customerData: Omit<Customer, "id" | "created_at" | "updated_at">,
+  ) => Promise<Customer>;
   editCustomer: (id: string, customerData: Partial<Customer>) => Promise<void>;
   deleteCustomer: (id: string) => Promise<void>;
-  addTask: (task: Omit<Task, "id" | "createdDate">) => Promise<void>;
-  updateTaskStatus: (taskId: string, newStatus: TaskStatus) => Promise<void>;
+
+  addRelationship: (
+    relatedCustomerId: string,
+    relationshipType: string,
+  ) => Promise<void>;
+  deleteRelationship: (relationshipId: string) => Promise<void>;
+  getRelationshipsForCustomer: (customerId: string) => CustomerRelationship[];
+
+  addTask: (
+    taskData: Omit<Task, "id" | "created_at" | "updated_at">,
+  ) => Promise<void>;
+  updateTaskStatus: (
+    taskId: string,
+    newStatus: TaskStatus,
+    cancellationReason?: string,
+  ) => Promise<void>;
   updateTask: (taskId: string, taskData: Partial<Task>) => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
+
+  saveAppSetting: (key: string, value: string) => Promise<void>;
+  getSettingValue: (key: string, defaultValue?: string) => string;
+
+  createDatabaseBackup: () => Promise<string | null>;
+  restoreDatabaseBackup: (backupPath: string) => Promise<boolean>;
 
   confirmDeleteTask: (task: Task) => void;
   confirmDeleteCustomer: (customer: Customer) => void;
   showConfirm: (options: ConfirmOptions) => void;
-  showToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
+  showToast: (
+    message: string,
+    type?: "info" | "success" | "warning" | "error",
+  ) => void;
 
   isAddCustomerOpen: boolean;
   setIsAddCustomerOpen: (open: boolean) => void;
@@ -105,21 +168,27 @@ export const DeskProvider: React.FC<{ children: React.ReactNode }> = ({
   const [selectedCalendarDate, setSelectedCalendarDate] =
     useState<string>(getFormattedToday());
 
-  // Pure state
   const [customers, setCustomers] = useState<Customer[]>([GENERAL_CUSTOMER]);
+  const [relationships, setRelationships] = useState<CustomerRelationship[]>(
+    [],
+  );
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activities, setActivities] = useState<ActivityEvent[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [settings, setSettings] = useState<Setting[]>([]);
 
   const [isAddCustomerOpen, setIsAddCustomerOpen] = useState(false);
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
   const [isEditTaskOpen, setIsEditTaskOpen] = useState(false);
-  const [selectedTaskToEdit, setSelectedTaskToEdit] = useState<Task | null>(null);
+  const [selectedTaskToEdit, setSelectedTaskToEdit] = useState<Task | null>(
+    null,
+  );
 
   const [taskPage, setTaskPage] = useState(0);
   const [customerPage, setCustomerPage] = useState(0);
   const ITEMS_PER_PAGE = 20;
 
-  // Custom Toast & Confirmation modal state
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [confirmState, setConfirmState] = useState<{
     isOpen: boolean;
@@ -127,16 +196,19 @@ export const DeskProvider: React.FC<{ children: React.ReactNode }> = ({
     message: string;
     confirmText?: string;
     cancelText?: string;
-    variant?: 'danger' | 'warning' | 'info';
+    variant?: "danger" | "warning" | "info";
     onConfirm: () => void;
   }>({
     isOpen: false,
-    title: '',
-    message: '',
+    title: "",
+    message: "",
     onConfirm: () => {},
   });
 
-  const showToast = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+  const showToast = (
+    message: string,
+    type: "info" | "success" | "warning" | "error" = "info",
+  ) => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
@@ -164,89 +236,78 @@ export const DeskProvider: React.FC<{ children: React.ReactNode }> = ({
     setCurrentPageInternal(page);
   };
 
-  // Initialize data from Tauri Rust SQLite database
+  const loadAllData = async () => {
+    const dbCusts = await fetchTauriCustomers();
+    if (dbCusts && dbCusts.length > 0) setCustomers(dbCusts);
+
+    const dbTasks = await fetchTauriTasks();
+    if (dbTasks) setTasks(dbTasks);
+
+    const dbActs = await fetchTauriActivities();
+    if (dbActs) setActivities(dbActs);
+
+    const dbSvcs = await fetchTauriServices();
+    if (dbSvcs) setServices(dbSvcs);
+
+    const dbPay = await fetchTauriPayments();
+    if (dbPay) setPayments(dbPay);
+
+    const dbSets = await fetchTauriSettings();
+    if (dbSets) setSettings(dbSets);
+  };
+
   useEffect(() => {
-    async function initData() {
-      const dbCusts = await fetchTauriCustomers();
-      if (dbCusts && dbCusts.length > 0) {
-        setCustomers(dbCusts);
-      }
-
-      const dbTasks = await fetchTauriTasks();
-      if (dbTasks) {
-        setTasks(dbTasks);
-      }
-
-      const dbActs = await fetchTauriActivities();
-      if (dbActs) {
-        setActivities(dbActs);
-      }
-    }
-    initData();
+    loadAllData();
   }, []);
 
-  // Background interval checking for scheduled task reminders and due alarms every 30 seconds
+  // Fetch relationships when selected customer changes
+  useEffect(() => {
+    if (selectedCustomerId) {
+      fetchTauriRelationships(selectedCustomerId).then((rels) => {
+        if (rels) setRelationships(rels);
+      });
+    }
+  }, [selectedCustomerId]);
+
+  // Notifications Loop
   useEffect(() => {
     const checkScheduledNotifications = () => {
       const now = new Date();
       const todayStr = getFormattedToday();
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = `${tomorrow.getDate()} ${tomorrow.toLocaleString('default', { month: 'short' })} ${tomorrow.getFullYear()}`;
 
       tasks.forEach((task) => {
-        if (task.status === 'done') return;
+        if (task.status === "DELIVERED" || task.status === "CANCELLED") return;
+        const customerName =
+          customers.find((c) => c.id === task.customer_id)?.name || "";
 
-        // 1. Check scheduleDate (alarm for exact time or day)
-        if (task.scheduleDate) {
-          const scheduleTime = new Date(task.scheduleDate);
+        if (task.scheduled_date) {
+          const scheduleTime = new Date(task.scheduled_date);
           if (!isNaN(scheduleTime.getTime())) {
             const timeDiff = scheduleTime.getTime() - now.getTime();
             const keyTime = `${task.id}-sched-time-${scheduleTime.getTime()}`;
 
-            // Alarm when scheduled time has arrived (within last 5 minutes or due right now)
-            if (timeDiff <= 0 && timeDiff >= -5 * 60 * 1000 && !notifiedKeysRef.current.has(keyTime)) {
+            if (
+              timeDiff <= 0 &&
+              timeDiff >= -5 * 60 * 1000 &&
+              !notifiedKeysRef.current.has(keyTime)
+            ) {
               notifiedKeysRef.current.add(keyTime);
               triggerDesktopNotification(
                 "⏰ DeskLog: Scheduled Task Reminder!",
-                `Task '${task.title}' for ${task.customerName} is scheduled NOW!`
-              );
-            }
-
-            // Morning reminder if scheduled for today
-            const schedStr = `${scheduleTime.getDate()} ${scheduleTime.toLocaleString('default', { month: 'short' })} ${scheduleTime.getFullYear()}`;
-            const keyToday = `${task.id}-sched-today-${schedStr}`;
-            if (schedStr === todayStr && timeDiff > 0 && !notifiedKeysRef.current.has(keyToday)) {
-              notifiedKeysRef.current.add(keyToday);
-              triggerDesktopNotification(
-                "📅 DeskLog: Task Scheduled Today",
-                `Task '${task.title}' for ${task.customerName} is scheduled for today.`
+                `Task '${task.title}' for ${customerName} is scheduled NOW!`,
               );
             }
           }
         }
 
-        // 2. Check targetDate (target completion deadline)
-        if (task.targetDate) {
-          const targetDay = new Date(task.targetDate);
-          if (!isNaN(targetDay.getTime())) {
-            const targetStr = `${targetDay.getDate()} ${targetDay.toLocaleString('default', { month: 'short' })} ${targetDay.getFullYear()}`;
-            const keyTargetToday = `${task.id}-target-today-${targetStr}`;
-            const keyTargetTomorrow = `${task.id}-target-tomorrow-${targetStr}`;
-
-            if (targetStr === todayStr && !notifiedKeysRef.current.has(keyTargetToday)) {
-              notifiedKeysRef.current.add(keyTargetToday);
-              triggerDesktopNotification(
-                "⚠️ DeskLog: Target Completion Today!",
-                `Task '${task.title}' for ${task.customerName} target date is TODAY.`
-              );
-            } else if (targetStr === tomorrowStr && !notifiedKeysRef.current.has(keyTargetTomorrow)) {
-              notifiedKeysRef.current.add(keyTargetTomorrow);
-              triggerDesktopNotification(
-                "📌 DeskLog: Target Completion Tomorrow",
-                `Task '${task.title}' for ${task.customerName} target date is tomorrow.`
-              );
-            }
+        if (isTaskOverdue(task)) {
+          const keyOverdue = `${task.id}-overdue-${todayStr}`;
+          if (!notifiedKeysRef.current.has(keyOverdue)) {
+            notifiedKeysRef.current.add(keyOverdue);
+            triggerDesktopNotification(
+              "⚠️ DeskLog: Overdue Task Alert!",
+              `Task '${task.title}' for ${customerName} target completion date has passed!`,
+            );
           }
         }
       });
@@ -255,11 +316,12 @@ export const DeskProvider: React.FC<{ children: React.ReactNode }> = ({
     checkScheduledNotifications();
     const interval = setInterval(checkScheduledNotifications, 30000);
     return () => clearInterval(interval);
-  }, [tasks]);
+  }, [tasks, customers]);
 
-  const addCustomer = (
-    customerData: Omit<Customer, "id" | "registeredDate">,
-  ) => {
+  // --- CUSTOMER OPERATIONS ---
+  const addCustomer = async (
+    customerData: Omit<Customer, "id" | "created_at" | "updated_at">,
+  ): Promise<Customer> => {
     const newId = `cust-${Date.now()}`;
     const initials = customerData.name
       .split(" ")
@@ -271,41 +333,30 @@ export const DeskProvider: React.FC<{ children: React.ReactNode }> = ({
     const newCust: Customer = {
       ...customerData,
       id: newId,
-      registeredDate: getFormattedToday(),
-      avatarInitials: initials || "DS",
-      avatarColor: "bg-primary-fixed text-on-primary-fixed",
+      created_at: getFormattedToday(),
+      updated_at: getFormattedToday(),
+      is_active: true,
+      avatar_initials: initials || "DS",
+      avatar_color: "bg-primary-fixed text-on-primary-fixed",
     };
 
     setCustomers((prev) => [newCust, ...prev]);
+    await saveTauriCustomer(newCust);
 
-    // Persist via Tauri SQLite & Desktop Notification
-    saveTauriCustomer(newCust);
-
-    // Create activity log for customer enrollment
-    const newAct: ActivityEvent = {
-      id: `act-${Date.now()}`,
-      time: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      timePeriod: "Just Now",
-      type: "customer_registered",
-      title: `Registered: ${newCust.name}`,
+    // Automatic Activity Generation
+    const act = createActivityEvent({
+      type: "customer_created",
+      title: `Enrolled Customer: ${newCust.name}`,
+      description: `Registered new customer profile with mobile ${newCust.mobile || "N/A"}.`,
+      customerId: newCust.id,
       customerName: newCust.name,
-      customerPhone: newCust.phone,
-      description: "New customer profile registered in desk log.",
+      customerPhone: newCust.mobile || "",
       badgeText: "ENROLLED",
-      status: "new",
-      date: getFormattedToday(),
-    };
-    saveTauriActivity(newAct);
-    setActivities((prev) => [newAct, ...prev]);
+    });
+    await saveTauriActivity(act);
+    setActivities((prev) => [act, ...prev]);
 
-    triggerDesktopNotification(
-      "DeskLog: Customer Enrolled",
-      `Registered ${newCust.name} (${newCust.phone}) in desk database.`,
-    );
-
+    showToast(`Registered ${newCust.name} successfully`, "success");
     return newCust;
   };
 
@@ -314,198 +365,236 @@ export const DeskProvider: React.FC<{ children: React.ReactNode }> = ({
       prev.map((c) => (c.id === id ? { ...c, ...customerData } : c)),
     );
 
-    // Also update denormalized fields in tasks state
-    if (customerData.name || customerData.phone) {
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.customerId === id
-            ? {
-                ...t,
-                customerName: customerData.name || t.customerName,
-                customerPhone: customerData.phone || t.customerPhone,
-              }
-            : t
-        )
-      );
-    }
-
     const updated = customers.find((c) => c.id === id);
     if (updated) {
       await updateTauriCustomer(
         id,
         customerData.name || updated.name,
-        customerData.phone || updated.phone,
-        customerData.notes !== undefined ? customerData.notes : updated.notes,
+        customerData.mobile !== undefined
+          ? customerData.mobile
+          : updated.mobile,
+        customerData.note !== undefined ? customerData.note : updated.note,
       );
+
+      // Automatic Activity Generation
+      const act = createActivityEvent({
+        type: "customer_updated",
+        title: `Updated Profile: ${customerData.name || updated.name}`,
+        description: "Customer contact or profile information was updated.",
+        customerId: id,
+        customerName: customerData.name || updated.name,
+        customerPhone: customerData.mobile || updated.mobile || "",
+        badgeText: "UPDATED",
+      });
+      await saveTauriActivity(act);
+      setActivities((prev) => [act, ...prev]);
     }
   };
 
   const deleteCustomer = async (id: string) => {
-    if (id === 'cust-general') {
-      showToast("System Default Walk-in customer profile cannot be deleted.", "warning");
+    if (id === "cust-general") {
+      showToast(
+        "System Default Walk-in customer profile cannot be deleted.",
+        "warning",
+      );
       return;
     }
-    const deletedTaskIds = tasks.filter((t) => t.customerId === id).map((t) => t.id);
     const success = await deleteTauriCustomer(id);
     if (success) {
       setCustomers((prev) => prev.filter((c) => c.id !== id));
-      setTasks((prev) => prev.filter((t) => t.customerId !== id));
-      setActivities((prev) => prev.filter((a) => !a.taskId || !deletedTaskIds.includes(a.taskId)));
       if (selectedCustomerId === id) {
-        setSelectedCustomerId('cust-general');
+        setSelectedCustomerId("cust-general");
       }
-      showToast("Customer profile deleted successfully", "success");
+      showToast("Customer profile archived successfully", "success");
     } else {
-      showToast("Error: Failed to delete customer from database.", "error");
+      showToast("Error: Failed to delete customer.", "error");
     }
   };
 
-  const addTask = async (taskData: Omit<Task, "id" | "createdDate">) => {
+  // --- RELATIONSHIP OPERATIONS ---
+  const addRelationship = async (
+    relatedCustomerId: string,
+    relationshipType: string,
+  ) => {
+    if (!selectedCustomerId || selectedCustomerId === relatedCustomerId) return;
+    const rel: CustomerRelationship = {
+      id: `rel-${Date.now()}`,
+      customer_id: selectedCustomerId,
+      related_customer_id: relatedCustomerId,
+      relationship_type: relationshipType,
+      created_at: getFormattedNow(),
+    };
+    const saved = await saveTauriRelationship(rel);
+    if (saved) {
+      setRelationships((prev) => [saved, ...prev]);
+      showToast("Family / related customer linked successfully", "success");
+    }
+  };
+
+  const deleteRelationship = async (relationshipId: string) => {
+    const success = await deleteTauriRelationship(relationshipId);
+    if (success) {
+      setRelationships((prev) => prev.filter((r) => r.id !== relationshipId));
+      showToast("Relationship unlinked successfully", "success");
+    }
+  };
+
+  const getRelationshipsForCustomer = (customerId: string) => {
+    return relationships.filter(
+      (r) =>
+        r.customer_id === customerId || r.related_customer_id === customerId,
+    );
+  };
+
+  // --- TASK OPERATIONS ---
+  const addTask = async (
+    taskData: Omit<Task, "id" | "created_at" | "updated_at">,
+  ) => {
     const newTaskId = `task-${Date.now()}`;
     const nowFormatted = getFormattedNow();
-
-    // Auto-calculate billing status based on math
-    let autoBillingStatus = taskData.billingStatus || "pending";
-    if (taskData.billingAmount !== undefined) {
-      const paid = taskData.amountPaid || 0;
-      if (paid >= taskData.billingAmount && taskData.billingAmount > 0) {
-        autoBillingStatus = "paid";
-      } else if (paid > 0 && paid < taskData.billingAmount) {
-        autoBillingStatus = "partial";
-      } else if (paid === 0) {
-        autoBillingStatus = "unpaid";
-      }
-    }
 
     const newTask: Task = {
       ...taskData,
       id: newTaskId,
-      createdDate: nowFormatted,
-      billingStatus: autoBillingStatus,
+      created_at: nowFormatted,
+      updated_at: nowFormatted,
     };
-    
-    // Persist via Tauri SQLite BEFORE updating UI
+
     const savedTask = await saveTauriTask(newTask);
     if (!savedTask) {
-      alert("Error: Failed to save task to database. Disk might be full or database locked.");
+      showToast("Error: Failed to save task to database.", "error");
       return;
     }
 
     setTasks((prev) => [savedTask, ...prev]);
 
-    // Add activity log
-    const newAct: ActivityEvent = {
-      id: `act-${Date.now()}`,
-      time: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      timePeriod: "Just Now",
-      type: "task_created",
-      title: savedTask.title,
-      customerName: savedTask.customerName,
-      customerPhone: savedTask.customerPhone,
-      description: `Task logged with status: ${savedTask.status.toUpperCase()}`,
-      badgeText: savedTask.status.toUpperCase(),
-      status: savedTask.status,
-      taskId: newTaskId,
-      date: getFormattedToday(),
-    };
-    
-    // Save to DB
-    await saveTauriActivity(newAct);
-    setActivities((prev) => [newAct, ...prev]);
+    const cust = customers.find((c) => c.id === savedTask.customer_id);
+    const customerName = cust?.name || "";
+    const customerMobile = cust?.mobile || "";
 
-    triggerDesktopNotification(
-      "DeskLog: New Task Logged",
-      `Registered task '${savedTask.title}' for ${savedTask.customerName}.`,
-    );
+    // Automatic Activity Generation
+    const act = createActivityEvent({
+      type: "task_created",
+      title: `Created Task: ${savedTask.title}`,
+      description: `Task logged with status ${savedTask.status}. Billing: ₹${savedTask.billing_amount || 0}`,
+      taskId: newTaskId,
+      customerId: savedTask.customer_id,
+      customerName,
+      customerPhone: customerMobile,
+      badgeText: savedTask.status,
+    });
+    await saveTauriActivity(act);
+    setActivities((prev) => [act, ...prev]);
+
+    showToast(`Task '${savedTask.title}' logged successfully`, "success");
   };
 
-  const updateTaskStatus = async (taskId: string, newStatus: TaskStatus) => {
-    const updatedTime = getFormattedNow();
-    const subStatus = newStatus === "done" ? "Ready for handover" : undefined;
+  const updateTaskStatus = async (
+    taskId: string,
+    newStatus: TaskStatus,
+    cancellationReason?: string,
+  ) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
 
-    // Persist via Tauri SQLite
-    const success = await updateTauriTaskStatus(taskId, newStatus, updatedTime, subStatus);
+    const updatedTime = getFormattedNow();
+    const isCompleted = newStatus === "DELIVERED";
+    const completedAt = isCompleted ? updatedTime : task.completed_at;
+
+    const updatedTask: Task = {
+      ...task,
+      status: newStatus,
+      cancellation_reason: cancellationReason || task.cancellation_reason,
+      updated_at: updatedTime,
+      completed_at: completedAt,
+    };
+
+    const success = await updateTauriTask(updatedTask);
     if (!success) {
-      alert("Error: Failed to update task status in database.");
+      showToast("Error: Failed to update task status in database.", "error");
       return;
     }
 
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === taskId
-          ? {
-              ...t,
-              status: newStatus,
-              updatedDate: updatedTime,
-              subStatus: subStatus || t.subStatus,
-            }
-          : t,
-      ),
-    );
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? updatedTask : t)));
 
-    const task = tasks.find((t) => t.id === taskId);
-    if (task) {
-      if (newStatus === "done") {
-        const newAct: ActivityEvent = {
-          id: `act-${Date.now()}`,
-          time: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          timePeriod: "Just Now",
-          type: "task_completed",
-          title: task.title,
-          customerName: task.customerName,
-          customerPhone: task.customerPhone,
-          description: "Task marked as DONE / Ready for handover.",
-          badgeText: "READY",
-          status: "done",
-          taskId: task.id,
-          date: getFormattedToday(),
-        };
-        await saveTauriActivity(newAct);
-        setActivities((prev) => [newAct, ...prev]);
+    const cust = customers.find((c) => c.id === task.customer_id);
+    const customerName = cust?.name || "";
+    const customerMobile = cust?.mobile || "";
 
-        triggerDesktopNotification(
-          "DeskLog: Task Completed ✓",
-          `Task '${task.title}' for ${task.customerName} is now ready for delivery.`,
-        );
-      }
+    // Automatic Activity Generation
+    let actType = "status_changed";
+    let badge = newStatus;
+    let desc = `Status moved from ${task.status} to ${newStatus}.`;
+
+    if (newStatus === "READY") {
+      actType = "task_ready";
+      desc = `Work completed! Task '${task.title}' marked READY for delivery.`;
+    } else if (newStatus === "DELIVERED") {
+      actType = "task_delivered";
+      desc = `Task '${task.title}' marked DELIVERED / Handed over to customer.`;
+    } else if (newStatus === "CANCELLED") {
+      actType = "task_cancelled";
+      desc = `Task '${task.title}' CANCELLED.${cancellationReason ? ` Reason: ${cancellationReason}` : ""}`;
     }
+
+    const act = createActivityEvent({
+      type: actType,
+      title: `Status: ${newStatus} — ${task.title}`,
+      description: desc,
+      taskId: task.id,
+      customerId: task.customer_id,
+      customerName,
+      customerPhone: customerMobile,
+      badgeText: badge,
+    });
+    await saveTauriActivity(act);
+    setActivities((prev) => [act, ...prev]);
+
+    showToast(`Task status updated to ${newStatus}`, "success");
   };
 
   const updateTask = async (taskId: string, taskData: Partial<Task>) => {
-    const updatedTime = getFormattedNow();
-    const oldTask = tasks.find(t => t.id === taskId);
+    const oldTask = tasks.find((t) => t.id === taskId);
     if (!oldTask) return;
 
-    const updatedTask = { ...oldTask, ...taskData, updatedDate: updatedTime };
-    
-    // Auto-calculate billing status based on math
-    if (updatedTask.billingAmount !== undefined) {
-      const paid = updatedTask.amountPaid || 0;
-      if (paid >= updatedTask.billingAmount && updatedTask.billingAmount > 0) {
-        updatedTask.billingStatus = "paid";
-      } else if (paid > 0 && paid < updatedTask.billingAmount) {
-        updatedTask.billingStatus = "partial";
-      } else if (paid === 0 && updatedTask.billingStatus === "paid") {
-        updatedTask.billingStatus = "unpaid"; // rollback if amount paid set to 0
-      }
-    }
+    const updatedTime = getFormattedNow();
+    const updatedTask: Task = {
+      ...oldTask,
+      ...taskData,
+      updated_at: updatedTime,
+    };
 
-    // Call full update in Tauri DB BEFORE updating UI
     const success = await updateTauriTask(updatedTask);
     if (!success) {
-      alert("Error: Failed to save changes to database.");
+      showToast("Error: Failed to save task changes to database.", "error");
       return;
     }
 
-    setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? updatedTask : t))
-    );
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? updatedTask : t)));
+
+    const cust = customers.find((c) => c.id === oldTask.customer_id);
+    const isRescheduled =
+      taskData.scheduled_date &&
+      taskData.scheduled_date !== oldTask.scheduled_date;
+
+    const act = createActivityEvent({
+      type: isRescheduled ? "task_rescheduled" : "task_edited",
+      title: isRescheduled
+        ? `Rescheduled Task: ${oldTask.title}`
+        : `Updated Task: ${oldTask.title}`,
+      description: isRescheduled
+        ? `Rescheduled task for ${taskData.scheduled_date}`
+        : "Task details or billing amount updated.",
+      taskId: oldTask.id,
+      customerId: oldTask.customer_id,
+      customerName: cust?.name || "",
+      customerPhone: cust?.mobile || "",
+      badgeText: isRescheduled ? "RESCHEDULED" : "EDITED",
+    });
+    await saveTauriActivity(act);
+    setActivities((prev) => [act, ...prev]);
+
+    showToast("Task updated successfully", "success");
   };
 
   const deleteTask = async (taskId: string) => {
@@ -515,14 +604,137 @@ export const DeskProvider: React.FC<{ children: React.ReactNode }> = ({
       setActivities((prev) => prev.filter((a) => a.taskId !== taskId));
       showToast("Task deleted successfully", "success");
     } else {
-      showToast("Error: Failed to delete task from database.", "error");
+      showToast("Error: Failed to delete task.", "error");
     }
   };
 
+  // --- SERVICE OPERATIONS ---
+  const addService = async (
+    serviceData: Omit<Service, "id" | "created_at" | "updated_at">,
+  ) => {
+    const newSvc: Service = {
+      ...serviceData,
+      id: `svc-${Date.now()}`,
+      created_at: getFormattedToday(),
+      updated_at: getFormattedToday(),
+    };
+    const saved = await saveTauriService(newSvc);
+    if (saved) {
+      setServices((prev) => [...prev, saved]);
+      showToast(`Added service template '${saved.name}'`, "success");
+    }
+  };
+
+  const editService = async (service: Service) => {
+    const success = await updateTauriService(service);
+    if (success) {
+      setServices((prev) =>
+        prev.map((s) => (s.id === service.id ? service : s)),
+      );
+      showToast(`Updated service '${service.name}'`, "success");
+    }
+  };
+
+  const deleteService = async (id: string) => {
+    const success = await deleteTauriService(id);
+    if (success) {
+      setServices((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, is_active: false } : s)),
+      );
+      showToast("Service template deactivated", "success");
+    }
+  };
+
+  // --- PAYMENT OPERATIONS ---
+  const addPayment = async (
+    paymentData: Omit<Payment, "id" | "created_at">,
+  ) => {
+    const newPay: Payment = {
+      ...paymentData,
+      id: `pay-${Date.now()}`,
+      created_at: getFormattedNow(),
+    };
+    const saved = await saveTauriPayment(newPay);
+    if (saved) {
+      setPayments((prev) => [...prev, saved]);
+
+      const task = tasks.find((t) => t.id === paymentData.task_id);
+      const cust = task
+        ? customers.find((c) => c.id === task.customer_id)
+        : null;
+
+      // Automatic Activity Generation
+      const act = createActivityEvent({
+        type: "payment_added",
+        title: `Payment Received: ₹${saved.amount}`,
+        description: `Recorded payment of ₹${saved.amount} for task '${task?.title || ""}'.`,
+        taskId: paymentData.task_id,
+        customerId: task?.customer_id,
+        customerName: cust?.name || "",
+        customerPhone: cust?.mobile || "",
+        badgeText: "PAYMENT",
+      });
+      await saveTauriActivity(act);
+      setActivities((prev) => [act, ...prev]);
+
+      showToast(`Payment of ₹${saved.amount} recorded`, "success");
+    }
+  };
+
+  // --- SETTINGS OPERATIONS ---
+  const saveAppSetting = async (key: string, value: string) => {
+    const success = await saveTauriSetting(key, value);
+    if (success) {
+      setSettings((prev) => {
+        const exists = prev.some((s) => s.key === key);
+        if (exists)
+          return prev.map((s) => (s.key === key ? { key, value } : s));
+        return [...prev, { key, value }];
+      });
+    }
+  };
+
+  const getSettingValue = (key: string, defaultValue: string = "") => {
+    const found = settings.find((s) => s.key === key);
+    return found ? found.value : defaultValue;
+  };
+
+  // --- BACKUP & RESTORE ---
+  const createDatabaseBackup = async (): Promise<string | null> => {
+    const path = await createTauriBackup();
+    if (path) {
+      showToast("SQLite Database Backup created successfully", "success");
+      return path;
+    } else {
+      showToast("Error creating SQLite database backup.", "error");
+      return null;
+    }
+  };
+
+  const restoreDatabaseBackup = async (
+    backupPath: string,
+  ): Promise<boolean> => {
+    const success = await restoreTauriBackup(backupPath);
+    if (success) {
+      await loadAllData();
+      showToast("Database restored successfully from backup!", "success");
+      return true;
+    } else {
+      showToast(
+        "Error: Failed to restore database backup. File may be invalid.",
+        "error",
+      );
+      return false;
+    }
+  };
+
+  // --- CONFIRMATION DIALOG HELPERS ---
   const confirmDeleteTask = (task: Task) => {
+    const customerName =
+      customers.find((c) => c.id === task.customer_id)?.name || "";
     showConfirm({
       title: "Delete Desk Task?",
-      message: `Are you sure you want to delete task "${task.title}" for ${task.customerName}? This record will be permanently removed.`,
+      message: `Are you sure you want to delete task "${task.title}" for ${customerName}? This record will be permanently removed.`,
       confirmText: "Delete Task",
       variant: "danger",
       onConfirm: () => deleteTask(task.id),
@@ -530,14 +742,17 @@ export const DeskProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const confirmDeleteCustomer = (customer: Customer) => {
-    if (customer.id === 'cust-general') {
-      showToast("System Default Walk-in customer profile cannot be deleted.", "warning");
+    if (customer.id === "cust-general") {
+      showToast(
+        "System Default Walk-in customer profile cannot be deleted.",
+        "warning",
+      );
       return;
     }
     showConfirm({
-      title: "Delete Customer Profile?",
-      message: `Are you sure you want to delete customer "${customer.name}" and all associated task records? This action cannot be undone.`,
-      confirmText: "Delete Customer",
+      title: "Archive Customer Profile?",
+      message: `Are you sure you want to archive customer "${customer.name}"? Their profile will be deactivated while preserving historical task records.`,
+      confirmText: "Archive Customer",
       variant: "danger",
       onConfirm: () => deleteCustomer(customer.id),
     });
@@ -556,8 +771,6 @@ export const DeskProvider: React.FC<{ children: React.ReactNode }> = ({
     setSelectedCustomerId(customerId);
     setHighlightedTaskId(taskId);
     setCurrentPage("profile");
-
-    // Automatically remove highlight after 4 seconds
     setTimeout(() => {
       setHighlightedTaskId(null);
     }, 4000);
@@ -594,15 +807,30 @@ export const DeskProvider: React.FC<{ children: React.ReactNode }> = ({
         selectedCalendarDate,
         setSelectedCalendarDate,
         customers,
+        relationships,
         tasks,
         activities,
+        services,
+        payments,
+        settings,
+        addService,
+        editService,
+        deleteService,
+        addPayment,
         addCustomer,
         editCustomer,
         deleteCustomer,
+        addRelationship,
+        deleteRelationship,
+        getRelationshipsForCustomer,
         addTask,
         updateTaskStatus,
         updateTask,
         deleteTask,
+        saveAppSetting,
+        getSettingValue,
+        createDatabaseBackup,
+        restoreDatabaseBackup,
         confirmDeleteTask,
         confirmDeleteCustomer,
         showConfirm,
@@ -626,7 +854,6 @@ export const DeskProvider: React.FC<{ children: React.ReactNode }> = ({
       }}
     >
       {children}
-
       <ConfirmModal
         cancelText={confirmState.cancelText}
         confirmText={confirmState.confirmText}
@@ -640,7 +867,6 @@ export const DeskProvider: React.FC<{ children: React.ReactNode }> = ({
           setConfirmState((prev) => ({ ...prev, isOpen: false }));
         }}
       />
-
       <ToastNotification toasts={toasts} onDismiss={dismissToast} />
     </DeskContext.Provider>
   );

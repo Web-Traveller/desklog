@@ -7,8 +7,11 @@ export const Sidebar: React.FC = () => {
 
   const navItems: { id: ActivePage; label: string; icon: string }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
-    { id: 'customers', label: 'All Customers', icon: 'group' },
+    { id: 'customers', label: 'Customers', icon: 'group' },
+    { id: 'tasks', label: 'Tasks Register', icon: 'assignment' },
     { id: 'calendar', label: 'Calendar Log', icon: 'calendar_month' },
+    { id: 'payments', label: 'Payments', icon: 'payments' },
+    { id: 'services', label: 'Services Catalog', icon: 'design_services' },
   ];
 
   const bottomItems: { id: ActivePage; label: string; icon: string }[] = [

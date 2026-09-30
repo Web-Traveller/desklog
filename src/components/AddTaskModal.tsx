@@ -2,22 +2,34 @@ import React, { useState } from 'react';
 import { useDesk } from '../context/DeskContext';
 import { TaskStatus } from '../types';
 import { CustomerSearchPicker } from './CustomerSearchPicker';
-import { getFormattedNow } from '../utils/dateUtils';
 
 export const AddTaskModal: React.FC = () => {
-  const { isAddTaskOpen, setIsAddTaskOpen, customers, selectedCustomerId, addTask } = useDesk();
+  const { isAddTaskOpen, setIsAddTaskOpen, customers, selectedCustomerId, addTask, services } = useDesk();
   const [activeCustId, setActiveCustId] = useState<string>(selectedCustomerId || 'cust-general');
+  const [selectedServiceId, setSelectedServiceId] = useState<string>('');
   const [title, setTitle] = useState('');
-  const [status, setStatus] = useState<TaskStatus>('pending');
+  const [status, setStatus] = useState<TaskStatus>('PENDING');
   const [targetDate, setTargetDate] = useState('');
-  const [subStatus, setSubStatus] = useState('');
   const [notes, setNotes] = useState('');
   const [billingAmount, setBillingAmount] = useState('');
-  const [amountPaid, setAmountPaid] = useState('');
-  const [billingStatus, setBillingStatus] = useState<'paid' | 'unpaid' | 'pending'>('pending');
   const [scheduleDate, setScheduleDate] = useState('');
 
   if (!isAddTaskOpen) return null;
+
+  const handleServiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const svcId = e.target.value;
+    setSelectedServiceId(svcId);
+    
+    if (svcId) {
+      const svc = services.find(s => s.id === svcId);
+      if (svc && svc.default_price !== undefined) {
+        setBillingAmount(svc.default_price.toString());
+        if (!title) {
+          setTitle(svc.name);
+        }
+      }
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,29 +40,22 @@ export const AddTaskModal: React.FC = () => {
       customers[0];
 
     addTask({
-      customerId: customer.id,
-      customerName: customer.name,
-      customerPhone: customer.phone,
+      customer_id: customer.id,
+      service_id: selectedServiceId || undefined,
       title: title.trim(),
       status,
-      targetDate: targetDate || undefined,
-      subStatus: subStatus || (status === 'pending' ? 'Needs document' : status === 'processing' ? 'In Review' : 'Ready'),
+      target_date: targetDate || undefined,
       notes: notes.trim(),
-      billingAmount: billingAmount ? Number(billingAmount) : undefined,
-      amountPaid: amountPaid ? Number(amountPaid) : undefined,
-      billingStatus,
-      billingDate: billingAmount ? getFormattedNow() : undefined,
-      scheduleDate: scheduleDate || undefined,
+      billing_amount: billingAmount ? Number(billingAmount) : undefined,
+      scheduled_date: scheduleDate || undefined,
     });
 
     setTitle('');
-    setStatus('pending');
+    setStatus('PENDING');
+    setSelectedServiceId('');
     setTargetDate('');
-    setSubStatus('');
     setNotes('');
     setBillingAmount('');
-    setAmountPaid('');
-    setBillingStatus('pending');
     setScheduleDate('');
     setIsAddTaskOpen(false);
   };
@@ -75,7 +80,6 @@ export const AddTaskModal: React.FC = () => {
         </div>
 
         <form className="flex flex-col gap-space-sm" onSubmit={handleSubmit}>
-          {/* Searchable Customer Picker */}
           <CustomerSearchPicker
             customers={customers}
             label="Select Customer / Walk-in Client *"
@@ -84,11 +88,25 @@ export const AddTaskModal: React.FC = () => {
           />
 
           <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant">
-            Task / Service Title *
+            Service Type (Optional)
+            <select
+              className="px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility cursor-pointer"
+              value={selectedServiceId}
+              onChange={handleServiceChange}
+            >
+              <option value="">-- Custom / No Service --</option>
+              {services.filter(s => s.is_active).map(svc => (
+                <option key={svc.id} value={svc.id}>{svc.name}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant">
+            Task Title *
             <input
               required
               className="px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility"
-              placeholder="e.g. Caste Certificate, PAN Renewal, Gazette..."
+              placeholder="e.g. Caste Certificate..."
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -103,9 +121,10 @@ export const AddTaskModal: React.FC = () => {
                 value={status}
                 onChange={(e) => setStatus(e.target.value as TaskStatus)}
               >
-                <option value="pending">Pending</option>
-                <option value="processing">Processing</option>
-                <option value="done">Done / Ready</option>
+                <option value="PENDING">Pending</option>
+                <option value="PROCESSING">Processing</option>
+                <option value="READY">Ready</option>
+                <option value="DELIVERED">Delivered</option>
               </select>
             </label>
 
@@ -113,7 +132,6 @@ export const AddTaskModal: React.FC = () => {
               Target Completion Date
               <input
                 className="px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility"
-                placeholder="e.g. 05 Nov"
                 type="date"
                 value={targetDate}
                 onChange={(e) => setTargetDate(e.target.value)}
@@ -122,13 +140,13 @@ export const AddTaskModal: React.FC = () => {
           </div>
 
           <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant">
-            Status Remark / Note
+            Notes / Remarks
             <input
               className="px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility"
-              placeholder="e.g. Awaiting customer photo copy"
+              placeholder="e.g. Awaiting docs"
               type="text"
-              value={subStatus}
-              onChange={(e) => setSubStatus(e.target.value)}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
             />
           </label>
 
@@ -143,57 +161,16 @@ export const AddTaskModal: React.FC = () => {
                 onChange={(e) => setBillingAmount(e.target.value)}
               />
             </label>
-
             <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant">
-              Amount Paid (₹)
+              Schedule Date
               <input
                 className="px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility"
-                placeholder="e.g. 200"
-                type="number"
-                value={amountPaid}
-                onChange={(e) => setAmountPaid(e.target.value)}
+                type="datetime-local"
+                value={scheduleDate}
+                onChange={(e) => setScheduleDate(e.target.value)}
               />
             </label>
           </div>
-
-          {billingAmount ? (
-            <div className="p-2.5 rounded-xl bg-surface-container-low border border-surface-container-high/60 flex items-center justify-between text-xs font-medium">
-              <span className="text-on-surface-variant">Calculated Due Balance:</span>
-              <span className={`font-bold font-mono ${
-                (Number(billingAmount) - (Number(amountPaid) || 0)) > 0
-                  ? 'text-tertiary'
-                  : 'text-secondary'
-              }`}>
-                ₹{Math.max(0, (Number(billingAmount) || 0) - (Number(amountPaid) || 0))}
-              </span>
-            </div>
-          ) : null}
-
-          <div className="grid grid-cols-2 gap-space-xs">
-            <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant">
-              Billing Status
-              <select
-                className="px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility cursor-pointer"
-                value={billingStatus}
-                onChange={(e) => setBillingStatus(e.target.value as 'paid' | 'unpaid' | 'pending')}
-              >
-                <option value="pending">Pending</option>
-                <option value="unpaid">Unpaid</option>
-                <option value="partial">Partial</option>
-                <option value="paid">Paid</option>
-              </select>
-            </label>
-          </div>
-
-          <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant">
-            Schedule Date & Time
-            <input
-              className="px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility"
-              type="datetime-local"
-              value={scheduleDate}
-              onChange={(e) => setScheduleDate(e.target.value)}
-            />
-          </label>
 
           <div className="flex items-center justify-end gap-space-sm mt-space-xs pt-space-xs border-t border-surface-container">
             <button

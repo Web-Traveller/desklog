@@ -110,6 +110,25 @@ export default {
         "button-large": ["18px", { lineHeight: "1.0", letterSpacing: "0px", fontWeight: "300" }],
         "nav-link": ["12px", { lineHeight: "1.0", letterSpacing: "-0.12px", fontWeight: "400" }],
       },
+      animation: {
+        fadeIn: 'fadeIn 0.2s ease-out forwards',
+        slideUp: 'slideUp 0.3s ease-out forwards',
+        scaleIn: 'scaleIn 0.2s ease-out forwards',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        slideUp: {
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        scaleIn: {
+          '0%': { opacity: '0', transform: 'scale(0.97)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        }
+      }
     },
   },
   plugins: [],

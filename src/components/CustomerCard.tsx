@@ -44,8 +44,8 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-space-md">
         <div className="flex items-start gap-space-md">
           <CustomerAvatar
-            colorClass={customer.avatarColor}
-            initials={customer.avatarInitials || 'DS'}
+            colorClass={customer.avatar_color}
+            initials={customer.avatar_initials || 'DS'}
             size="md"
           />
           <div className="flex flex-col gap-1 min-w-0">
@@ -63,11 +63,11 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({
             <div className="flex flex-wrap items-center gap-x-space-md gap-y-1 font-caption text-caption text-on-surface-variant">
               <span className="flex items-center gap-1 font-mono">
                 <span className="material-symbols-outlined text-sm text-outline">call</span>
-                {customer.phone}
+                {customer.mobile}
               </span>
               <span className="flex items-center gap-1">
                 <span className="material-symbols-outlined text-sm text-outline">event</span>
-                Enrolled {customer.registeredDate}
+                Enrolled {customer.created_at}
               </span>
             </div>
           </div>
@@ -100,7 +100,7 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({
 
       <div className="flex flex-wrap items-center justify-between gap-space-sm pt-space-xs border-t border-surface-container/40">
         <span className="font-fine-print text-fine-print text-on-surface-variant">
-          {customer.notes || 'Desk Client Profile'}
+          {customer.note || 'Desk Client Profile'}
         </span>
         <div className="flex items-center gap-space-xs">
           {customer.id !== 'cust-general' && (

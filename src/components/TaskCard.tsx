@@ -13,7 +13,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   layout = 'kanban',
   isHighlighted = false,
 }) => {
-  const { updateTaskStatus, navigateToCustomerTaskProfile, highlightedTaskId, setSelectedTaskToEdit, setIsEditTaskOpen, confirmDeleteTask } = useDesk();
+  const { updateTaskStatus, navigateToCustomerTaskProfile, highlightedTaskId, setSelectedTaskToEdit, setIsEditTaskOpen, confirmDeleteTask, customers, payments } = useDesk();
+
+  const taskPayments = payments.filter(p => p.task_id === task.id);
+  const totalPaid = taskPayments.reduce((acc, curr) => acc + curr.amount, 0);
 
   const activeHighlight = isHighlighted || highlightedTaskId === task.id;
 
@@ -24,7 +27,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   };
 
   const handleTaskClick = () => {
-    navigateToCustomerTaskProfile(task.customerId, task.id);
+    navigateToCustomerTaskProfile(task.customer_id, task.id);
   };
 
   const handleEditClick = (e: React.MouseEvent) => {
@@ -57,7 +60,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             {task.title}
           </span>
           <span className="font-micro-legal text-micro-legal text-outline font-mono">
-            {task.createdDate}
+            {task.created_at}
           </span>
         </div>
 
@@ -68,51 +71,61 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               className="font-semibold text-on-surface hover:text-primary hover:underline"
               onClick={handleTaskClick}
             >
-              {task.customerName}
+              {(customers.find(c => c.id === task.customer_id)?.name || "")}
             </button>
           </span>
-          <span className="font-mono text-xs">{task.customerPhone}</span>
+          <span className="font-mono text-xs">{(customers.find(c => c.id === task.customer_id)?.mobile || "")}</span>
         </div>
 
-        {task.scheduleDate && (
+        {task.scheduled_date && (
           <div className="text-xs text-primary font-medium flex items-center gap-1">
             <span className="material-symbols-outlined text-[14px]">alarm</span>
-            {task.scheduleDate}
+            {task.scheduled_date}
           </div>
         )}
-        {task.billingAmount !== undefined && (
+        {task.billing_amount !== undefined && (
           <div className="text-xs text-on-surface-variant flex items-center gap-1">
             <span className="material-symbols-outlined text-[14px]">payments</span>
-            ₹{task.billingAmount} ({task.billingStatus}{task.amountPaid ? ` - Paid ₹${task.amountPaid}` : ''})
+            ₹{task.billing_amount} ({totalPaid >= task.billing_amount ? "PAID" : totalPaid > 0 ? "PARTIAL" : "UNPAID"}{totalPaid > 0 ? ` - Paid ₹${totalPaid.toFixed(2)}` : ''})
           </div>
         )}
 
         {/* Stage Status Change Selector */}
         <div className="flex items-center justify-between pt-1 mt-1 border-t border-surface-container/40 gap-space-xs">
           <span className="font-micro-legal text-micro-legal text-outline truncate flex-1">
-            {task.subStatus || 'Stage'}
+            {task.status || 'Stage'}
           </span>
 
-          <div className="relative">
+          <div className="relative flex items-center">
             <select
               className={`px-2 py-1 rounded-full font-fine-print text-fine-print font-medium focus:outline-none cursor-pointer transition-colors border border-surface-container-high/60 ${
-                task.status === 'pending'
+                task.status === 'PENDING'
                   ? 'bg-tertiary-fixed text-on-tertiary-fixed font-bold'
-                  : task.status === 'processing'
+                  : task.status === 'PROCESSING'
                   ? 'bg-secondary-fixed text-on-secondary-fixed-variant font-bold'
+                  : task.status === 'READY'
+                  ? 'bg-primary-container text-on-primary-container font-bold'
+                  : task.status === 'CANCELLED'
+                  ? 'bg-error-container text-on-error-container font-bold'
                   : 'bg-secondary text-on-secondary font-bold'
               }`}
               value={task.status}
               onChange={(e) => handleStatusSelect(e.target.value as TaskStatus)}
             >
-              <option className="bg-surface-container-lowest text-on-surface" value="pending">
+              <option className="bg-surface-container-lowest text-on-surface" value="PENDING">
                 Pending
               </option>
-              <option className="bg-surface-container-lowest text-on-surface" value="processing">
+              <option className="bg-surface-container-lowest text-on-surface" value="PROCESSING">
                 Processing
               </option>
-              <option className="bg-surface-container-lowest text-on-surface" value="done">
-                Done / Ready
+              <option className="bg-surface-container-lowest text-on-surface" value="READY">
+                Ready
+              </option>
+              <option className="bg-surface-container-lowest text-on-surface" value="DELIVERED">
+                Delivered
+              </option>
+              <option className="bg-surface-container-lowest text-on-surface" value="CANCELLED">
+                Cancelled
               </option>
             </select>
             <button
@@ -149,18 +162,22 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       <div className="flex items-start gap-space-md min-w-0 flex-1">
         <div
           className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 cursor-pointer ${
-            task.status === 'processing'
+            task.status === 'PROCESSING'
               ? 'bg-primary-fixed text-primary'
-              : task.status === 'done'
+              : task.status === 'READY'
+              ? 'bg-primary-container text-on-primary-container'
+              : task.status === 'DELIVERED'
               ? 'bg-secondary-fixed text-secondary'
               : 'bg-tertiary-fixed text-tertiary'
           }`}
           onClick={handleTaskClick}
         >
           <span className="material-symbols-outlined text-xl">
-            {task.status === 'processing'
+            {task.status === 'PROCESSING'
               ? 'pending_actions'
-              : task.status === 'done'
+              : task.status === 'READY'
+              ? 'task_alt'
+              : task.status === 'DELIVERED'
               ? 'check_circle'
               : 'hourglass_empty'}
           </span>
@@ -175,7 +192,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               {task.title}
             </span>
             <span className="font-fine-print text-fine-print text-on-surface-variant">
-              ({task.customerName})
+              ({(customers.find(c => c.id === task.customer_id)?.name || "")})
             </span>
             {activeHighlight && (
               <span className="px-2 py-0.5 rounded-full bg-primary text-on-primary font-fine-print text-fine-print font-bold animate-pulse">
@@ -185,38 +202,38 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </div>
 
           <p className="font-caption text-caption text-on-surface-variant">
-            {task.notes || task.subStatus || 'Task logged in desk register.'}
+            {task.notes || task.status || 'Task logged in desk register.'}
           </p>
 
           <div className="flex flex-wrap items-center gap-y-1 gap-x-space-md font-fine-print text-fine-print text-outline mt-1">
             <span className="flex items-center gap-1">
               <span className="material-symbols-outlined text-xs">schedule</span>
-              Created: <strong className="text-on-surface font-medium">{task.createdDate}</strong>
+              Created: <strong className="text-on-surface font-medium">{task.created_at}</strong>
             </span>
-            {task.updatedDate && (
+            {task.updated_at && (
               <>
                 <span className="text-surface-dim">•</span>
                 <span className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-xs">update</span>
-                  Updated: <strong className="text-on-surface font-medium">{task.updatedDate}</strong>
+                  Updated: <strong className="text-on-surface font-medium">{task.updated_at}</strong>
                 </span>
               </>
             )}
-            {task.scheduleDate && (
+            {task.scheduled_date && (
               <>
                 <span className="text-surface-dim">•</span>
                 <span className="flex items-center gap-1 text-primary">
                   <span className="material-symbols-outlined text-xs">alarm</span>
-                  Scheduled: <strong className="font-medium">{task.scheduleDate}</strong>
+                  Scheduled: <strong className="font-medium">{task.scheduled_date}</strong>
                 </span>
               </>
             )}
-            {task.billingAmount !== undefined && (
+            {task.billing_amount !== undefined && (
               <>
                 <span className="text-surface-dim">•</span>
                 <span className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-xs">payments</span>
-                  ₹{task.billingAmount} ({task.billingStatus}{task.amountPaid ? ` - Paid ₹${task.amountPaid}` : ''})
+                  ₹{task.billing_amount} ({totalPaid >= task.billing_amount ? "PAID" : totalPaid > 0 ? "PARTIAL" : "UNPAID"}{totalPaid > 0 ? ` - Paid ₹${totalPaid.toFixed(2)}` : ''})
                 </span>
               </>
             )}
@@ -229,23 +246,33 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         <span className="font-fine-print text-fine-print text-on-surface-variant font-medium">Stage:</span>
         <select
           className={`px-3 py-1.5 rounded-full font-button-utility text-button-utility font-medium focus:outline-none cursor-pointer border border-surface-container-high/60 shadow-xs ${
-            task.status === 'pending'
+            task.status === 'PENDING'
               ? 'bg-tertiary-fixed text-on-tertiary-fixed font-bold'
-              : task.status === 'processing'
+              : task.status === 'PROCESSING'
               ? 'bg-secondary-fixed text-on-secondary-fixed-variant font-bold'
+              : task.status === 'READY'
+              ? 'bg-primary-container text-on-primary-container font-bold'
+              : task.status === 'CANCELLED'
+              ? 'bg-error-container text-on-error-container font-bold'
               : 'bg-secondary text-on-secondary font-bold'
           }`}
           value={task.status}
           onChange={(e) => handleStatusSelect(e.target.value as TaskStatus)}
         >
-          <option className="bg-surface-container-lowest text-on-surface" value="pending">
+          <option className="bg-surface-container-lowest text-on-surface" value="PENDING">
             Pending
           </option>
-          <option className="bg-surface-container-lowest text-on-surface" value="processing">
+          <option className="bg-surface-container-lowest text-on-surface" value="PROCESSING">
             Processing
           </option>
-          <option className="bg-surface-container-lowest text-on-surface" value="done">
-            Done / Ready
+          <option className="bg-surface-container-lowest text-on-surface" value="READY">
+            Ready
+          </option>
+          <option className="bg-surface-container-lowest text-on-surface" value="DELIVERED">
+            Delivered
+          </option>
+          <option className="bg-surface-container-lowest text-on-surface" value="CANCELLED">
+            Cancelled
           </option>
         </select>
         <button
