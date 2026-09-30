@@ -360,31 +360,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               </div>
             </div>
           </div>
-
-          {/* Sentry Integration Verification Section */}
-          <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-xs border border-surface-container/60 flex flex-col gap-space-md">
-            <div className="flex items-center gap-space-xs border-b border-surface-container/40 pb-space-xs">
-              <span className="material-symbols-outlined text-primary text-xl">bug_report</span>
-              <h2 className="font-tagline text-tagline text-on-surface font-semibold">
-                Sentry Diagnostics & Error Testing
-              </h2>
-            </div>
-
-            <p className="font-caption text-caption text-on-surface-variant">
-              Test your Sentry integration configuration by triggering a test exception.
-            </p>
-
-            <button
-              type="button"
-              className="w-full flex items-center justify-center gap-2 px-space-md py-2.5 rounded-full bg-error text-on-error hover:bg-error/90 font-button-utility text-button-utility font-semibold transition-all active:scale-95 shadow-sm"
-              onClick={() => {
-                throw new Error("This is your first error!");
-              }}
-            >
-              <span className="material-symbols-outlined text-lg">bolt</span>
-              <span>Break the world (Test Sentry Error)</span>
-            </button>
-          </div>
         </div>
       </div>
     </div>
