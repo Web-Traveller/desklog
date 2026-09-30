@@ -91,6 +91,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     });
   };
 
+  const cleanCSVCell = (val: string | number | undefined | null): string => {
+    if (val === undefined || val === null) return '""';
+    const str = String(val).replace(/"/g, '""');
+    // Sanitization for formula injection characters (=, +, -, @)
+    if (/^[=+\-@]/.test(str)) {
+      return `"'${str}"`;
+    }
+    return `"${str}"`;
+  };
+
   const downloadCSV = (filename: string, content: string) => {
     const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -105,12 +115,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const exportCustomersCSV = () => {
     const headers = ["ID", "Name", "Mobile", "Note", "Verified", "Created At"];
     const rows = customers.map((c) => [
-      `"${c.id}"`,
-      `"${c.name.replace(/"/g, '""')}"`,
-      `"${c.mobile || ""}"`,
-      `"${(c.note || "").replace(/"/g, '""')}"`,
-      `"${c.is_verified ? "Yes" : "No"}"`,
-      `"${c.created_at}"`,
+      cleanCSVCell(c.id),
+      cleanCSVCell(c.name),
+      cleanCSVCell(c.mobile || ""),
+      cleanCSVCell(c.note || ""),
+      cleanCSVCell(c.is_verified ? "Yes" : "No"),
+      cleanCSVCell(c.created_at),
     ]);
     const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
     downloadCSV(`desklog_customers_${new Date().toISOString().slice(0, 10)}.csv`, csv);
@@ -133,17 +143,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     const rows = tasks.map((t) => {
       const cust = customers.find((c) => c.id === t.customer_id);
       return [
-        `"${t.id}"`,
-        `"${t.title.replace(/"/g, '""')}"`,
-        `"${t.customer_id}"`,
-        `"${(cust?.name || "").replace(/"/g, '""')}"`,
-        `"${t.service_id || ""}"`,
-        `"${t.status}"`,
-        `"${t.billing_amount || 0}"`,
-        `"${t.target_date || ""}"`,
-        `"${t.scheduled_date || ""}"`,
-        `"${(t.notes || "").replace(/"/g, '""')}"`,
-        `"${t.created_at}"`,
+        cleanCSVCell(t.id),
+        cleanCSVCell(t.title),
+        cleanCSVCell(t.customer_id),
+        cleanCSVCell(cust?.name || ""),
+        cleanCSVCell(t.service_id || ""),
+        cleanCSVCell(t.status),
+        cleanCSVCell(t.billing_amount || 0),
+        cleanCSVCell(t.target_date || ""),
+        cleanCSVCell(t.scheduled_date || ""),
+        cleanCSVCell(t.notes || ""),
+        cleanCSVCell(t.created_at),
       ];
     });
     const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");

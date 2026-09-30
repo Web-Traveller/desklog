@@ -115,15 +115,19 @@ export async function fetchTauriTask(id: string): Promise<Task | null> {
 export async function saveTauriTask(task: Task): Promise<Task | null> {
   if (!isTauriEnv()) return task;
   try {
+    const rawBilling = task.billing_amount;
+    const safeCents = rawBilling !== undefined && rawBilling !== null && !isNaN(Number(rawBilling))
+      ? Math.round(Number(rawBilling) * 100)
+      : undefined;
+
     const taskForDb = {
       ...task,
-      // Convert rupees in JS -> cents in DB
-      billing_amount: task.billing_amount !== undefined && task.billing_amount !== null ? Math.round(task.billing_amount * 100) : undefined,
+      billing_amount: safeCents,
     };
     const saved = await invoke<Task>('add_task', { task: taskForDb });
     return {
       ...saved,
-      billing_amount: saved.billing_amount !== undefined && saved.billing_amount !== null ? saved.billing_amount / 100 : undefined,
+      billing_amount: saved.billing_amount !== undefined && saved.billing_amount !== null ? Math.round(saved.billing_amount) / 100 : undefined,
     };
   } catch (err) {
     console.warn('Failed to save task:', err);
@@ -134,10 +138,14 @@ export async function saveTauriTask(task: Task): Promise<Task | null> {
 export async function updateTauriTask(task: Task): Promise<boolean> {
   if (!isTauriEnv()) return true;
   try {
+    const rawBilling = task.billing_amount;
+    const safeCents = rawBilling !== undefined && rawBilling !== null && !isNaN(Number(rawBilling))
+      ? Math.round(Number(rawBilling) * 100)
+      : undefined;
+
     const taskForDb = {
       ...task,
-      // Convert rupees in JS -> cents in DB
-      billing_amount: task.billing_amount !== undefined && task.billing_amount !== null ? Math.round(task.billing_amount * 100) : undefined,
+      billing_amount: safeCents,
     };
     await invoke('edit_task', { task: taskForDb });
     return true;

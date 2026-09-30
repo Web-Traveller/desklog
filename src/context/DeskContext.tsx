@@ -281,8 +281,21 @@ export const DeskProvider: React.FC<{ children: React.ReactNode }> = ({
           customers.find((c) => c.id === task.customer_id)?.name || "";
 
         if (task.scheduled_date) {
-          const scheduleTime = new Date(task.scheduled_date);
-          if (!isNaN(scheduleTime.getTime())) {
+          const parts = task.scheduled_date.split("-").map(Number);
+          if (parts.length === 3 && !parts.some(isNaN)) {
+            const [y, m, d] = parts;
+            let hrs = 9;
+            let mins = 0;
+            if (task.scheduled_time) {
+              const timeParts = task.scheduled_time.split(":");
+              if (timeParts.length >= 2) {
+                const parsedH = parseInt(timeParts[0], 10);
+                const parsedM = parseInt(timeParts[1], 10);
+                if (!isNaN(parsedH)) hrs = parsedH;
+                if (!isNaN(parsedM)) mins = parsedM;
+              }
+            }
+            const scheduleTime = new Date(y, m - 1, d, hrs, mins);
             const timeDiff = scheduleTime.getTime() - now.getTime();
             const keyTime = `${task.id}-sched-time-${scheduleTime.getTime()}`;
 
@@ -361,34 +374,31 @@ export const DeskProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const editCustomer = async (id: string, customerData: Partial<Customer>) => {
+    const existing = customers.find((c) => c.id === id);
+    if (!existing) return;
+
+    const newName = customerData.name || existing.name;
+    const newMobile = customerData.mobile !== undefined ? customerData.mobile : existing.mobile;
+    const newNote = customerData.note !== undefined ? customerData.note : existing.note;
+
     setCustomers((prev) =>
       prev.map((c) => (c.id === id ? { ...c, ...customerData } : c)),
     );
 
-    const updated = customers.find((c) => c.id === id);
-    if (updated) {
-      await updateTauriCustomer(
-        id,
-        customerData.name || updated.name,
-        customerData.mobile !== undefined
-          ? customerData.mobile
-          : updated.mobile,
-        customerData.note !== undefined ? customerData.note : updated.note,
-      );
+    await updateTauriCustomer(id, newName, newMobile, newNote);
 
-      // Automatic Activity Generation
-      const act = createActivityEvent({
-        type: "customer_updated",
-        title: `Updated Profile: ${customerData.name || updated.name}`,
-        description: "Customer contact or profile information was updated.",
-        customerId: id,
-        customerName: customerData.name || updated.name,
-        customerPhone: customerData.mobile || updated.mobile || "",
-        badgeText: "UPDATED",
-      });
-      await saveTauriActivity(act);
-      setActivities((prev) => [act, ...prev]);
-    }
+    // Automatic Activity Generation
+    const act = createActivityEvent({
+      type: "customer_updated",
+      title: `Updated Profile: ${newName}`,
+      description: "Customer contact or profile information was updated.",
+      customerId: id,
+      customerName: newName,
+      customerPhone: newMobile || "",
+      badgeText: "UPDATED",
+    });
+    await saveTauriActivity(act);
+    setActivities((prev) => [act, ...prev]);
   };
 
   const deleteCustomer = async (id: string) => {
@@ -602,6 +612,7 @@ export const DeskProvider: React.FC<{ children: React.ReactNode }> = ({
     if (success) {
       setTasks((prev) => prev.filter((t) => t.id !== taskId));
       setActivities((prev) => prev.filter((a) => a.taskId !== taskId));
+      setPayments((prev) => prev.filter((p) => p.task_id !== taskId));
       showToast("Task deleted successfully", "success");
     } else {
       showToast("Error: Failed to delete task.", "error");
