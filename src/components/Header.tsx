@@ -20,11 +20,11 @@ export const Header: React.FC<HeaderProps> = ({ onOpenHelpModal }) => {
       <div className="h-16 w-full px-gutter flex items-center justify-between gap-space-md">
         {/* Brand / Logo */}
         <div className="flex items-center gap-space-sm min-w-max">
-          <div className="h-8 w-8 rounded-lg bg-primary-container text-on-primary flex items-center justify-center font-bold shadow-sm">
-            <span className="material-symbols-outlined text-xl">
-              folder_managed
-            </span>
-          </div>
+          <img
+            src="/logo.png"
+            alt="DeskLog Logo"
+            className="h-9 w-9 rounded-xl object-cover shadow-sm border border-surface-container-high/40"
+          />
           <div className="flex flex-col">
             <span className="font-tagline text-tagline text-primary tracking-tight font-semibold">
               DeskLog

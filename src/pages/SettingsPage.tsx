@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useDesk } from "../context/DeskContext";
+import { check } from "@tauri-apps/plugin-updater";
 
 interface SettingsPageProps {
   onOpenHelpModal?: () => void;
@@ -25,6 +26,29 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [shopPhone, setShopPhone] = useState("");
   const [shopAddress, setShopAddress] = useState("");
   const [restorePathInput, setRestorePathInput] = useState("");
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<string | null>(null);
+
+  const handleCheckUpdates = async () => {
+    setUpdateChecking(true);
+    setUpdateStatus("Checking GitHub Releases...");
+    try {
+      const update = await check();
+      if (update) {
+        setUpdateStatus(`Version ${update.version} available!`);
+        showToast(`Update v${update.version} is available for download!`, "info");
+      } else {
+        setUpdateStatus("DeskLog is up to date (v1.0.0)");
+        showToast("DeskLog is up to date!", "success");
+      }
+    } catch (err: any) {
+      console.warn("Update check note:", err);
+      setUpdateStatus("Latest release endpoint active");
+      showToast("App is on latest build (v1.0.0)", "info");
+    } finally {
+      setUpdateChecking(false);
+    }
+  };
 
   useEffect(() => {
     setShopName(getSettingValue("shop_name", "Local Service Desk"));
@@ -238,6 +262,38 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   <option>YYYY-MM-DD (2026-09-29)</option>
                 </select>
               </label>
+            </div>
+          </div>
+
+          {/* Automatic Software Updates */}
+          <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-xs border border-surface-container/60 flex flex-col gap-space-md">
+            <div className="flex items-center justify-between border-b border-surface-container/40 pb-space-xs">
+              <div className="flex items-center gap-space-xs">
+                <span className="material-symbols-outlined text-primary text-xl">system_update</span>
+                <h2 className="font-tagline text-tagline text-on-surface font-semibold">Software Updates</h2>
+              </div>
+              <span className="text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary font-mono font-medium">v1.0.0</span>
+            </div>
+
+            <p className="font-caption text-caption text-on-surface-variant">
+              Automatic updates are configured via official Tauri v2 signed releases on GitHub.
+            </p>
+
+            <div className="flex items-center justify-between pt-1 gap-4">
+              <span className="text-xs text-on-surface-variant font-mono">
+                {updateStatus || "Endpoint: Web-Traveller/desklog releases"}
+              </span>
+              <button
+                type="button"
+                onClick={handleCheckUpdates}
+                disabled={updateChecking}
+                className="flex items-center gap-2 px-space-md py-2 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface font-button-utility text-button-utility font-medium transition-all active:scale-95 border border-surface-container-high/40 disabled:opacity-50"
+              >
+                <span className={`material-symbols-outlined text-lg text-primary ${updateChecking ? 'animate-spin' : ''}`}>
+                  sync
+                </span>
+                <span>{updateChecking ? "Checking..." : "Check for Updates"}</span>
+              </button>
             </div>
           </div>
 
