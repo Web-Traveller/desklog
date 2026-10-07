@@ -71,3 +71,19 @@ export function dateMatchesCalendarDate(dateStr?: string, calendarDateStr?: stri
   // Fallback string includes check
   return dateStr.toLowerCase().includes(calendarDateStr.toLowerCase());
 }
+
+export function formatDisplayDate(dateStr?: string): string {
+  if (!dateStr) return "-";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const day = d.getDate().toString().padStart(2, '0');
+    const month = months[d.getMonth()];
+    const year = d.getFullYear();
+    const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `${day} ${month} ${year}, ${time}`;
+  } catch {
+    return dateStr;
+  }
+}

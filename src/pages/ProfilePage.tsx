@@ -4,8 +4,10 @@ import { CustomerAvatar } from "../components/CustomerAvatar";
 import { MetricCard } from "../components/MetricCard";
 import { TaskCard } from "../components/TaskCard";
 import { EditCustomerModal } from "../components/EditCustomerModal";
-import { CustomerSearchPicker } from "../components/CustomerSearchPicker";
 import { calculateDueAmount } from "../services/paymentService";
+import { formatDisplayDate } from "../utils/dateUtils";
+import { formatRupees, rupeesToPaise } from "../utils/currencyUtils";
+import { parseBankingMetadata } from "../types";
 
 export const ProfilePage: React.FC = () => {
   const {
@@ -14,28 +16,22 @@ export const ProfilePage: React.FC = () => {
     customers,
     tasks,
     payments,
+    bankingTransactions,
     setCurrentPage,
     confirmDeleteCustomer,
     showToast,
-    addRelationship,
-    deleteRelationship,
-    getRelationshipsForCustomer,
-    navigateToCustomerProfile,
   } = useDesk();
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [taskFilter, setTaskFilter] = useState<
     "all" | "PROCESSING" | "DELIVERED"
   >("all");
-
-  // Relationship Linking Form State
-  const [isAddRelOpen, setIsAddRelOpen] = useState(false);
-  const [relTargetCustId, setRelTargetCustId] = useState<string>("");
-  const [relType, setRelType] = useState<string>("Son");
+  const [activeTab, setActiveTab] = useState<"tasks" | "banking">("tasks");
 
   const customer =
     customers.find((c) => c.id === selectedCustomerId) || customers[0];
   const customerTasks = tasks.filter((t) => t.customer_id === customer?.id);
+  const customerBankingTxs = bankingTransactions.filter(tx => tx.customer_id === customer?.id);
 
   const pendingCount = customerTasks.filter(
     (t) => t.status === "PENDING",
@@ -53,25 +49,10 @@ export const ProfilePage: React.FC = () => {
     return acc + calculateDueAmount(t.billing_amount, taskPayments);
   }, 0);
 
-  const customerRelationships = customer
-    ? getRelationshipsForCustomer(customer.id)
-    : [];
-
   const handleDeleteCustomer = () => {
     if (customer) {
       confirmDeleteCustomer(customer);
     }
-  };
-
-  const handleAddRelationshipSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!relTargetCustId || relTargetCustId === customer.id) {
-      showToast("Please select another customer to link.", "warning");
-      return;
-    }
-    await addRelationship(relTargetCustId, relType);
-    setRelTargetCustId("");
-    setIsAddRelOpen(false);
   };
 
   const filteredTasks = customerTasks.filter((t) => {
@@ -97,6 +78,32 @@ export const ProfilePage: React.FC = () => {
         "success",
       );
     }
+  };
+
+  const renderRefDetails = (tx: any) => {
+    const meta = parseBankingMetadata(tx.metadata);
+    if (Object.keys(meta).length === 0) return tx.transaction_ref_no || '-';
+
+    if (tx.transaction_type === 'Transfer') {
+      if (tx.payment_mode === 'Bank Transfer') {
+        return `A/C: ${meta.beneficiary_account || ''} | IFSC: ${meta.beneficiary_ifsc || ''} | Ref: ${tx.transaction_ref_no || ''}`;
+      }
+      if (tx.payment_mode === 'UPI') {
+        return `UPI: ${meta.beneficiary_upi || ''} | Ref: ${tx.transaction_ref_no || ''}`;
+      }
+    }
+    if (tx.transaction_type === 'Withdrawal') {
+      if (tx.payment_mode.startsWith('AePS')) {
+        return `Aadhaar: ${meta.customer_aadhaar_number || meta.customer_id_number || ''} | Bank: ${meta.customer_bank || ''} | Ref: ${tx.transaction_ref_no || ''}`;
+      }
+    }
+    
+    const parts = [];
+    if (meta.target_account) parts.push(`A/C: ${meta.target_account}`);
+    if (meta.target_upi) parts.push(`UPI: ${meta.target_upi}`);
+    if (tx.transaction_ref_no) parts.push(`Ref: ${tx.transaction_ref_no}`);
+    
+    return parts.join(' | ') || '-';
   };
 
   if (!customer) return null;
@@ -194,6 +201,17 @@ export const ProfilePage: React.FC = () => {
                 </span>
                 <span>Enrolled: {customer.created_at}</span>
               </div>
+              {customer.aadhaar_number && (
+                <>
+                  <span className="text-surface-dim">/</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-base text-outline">
+                      badge
+                    </span>
+                    <span className="font-mono">{customer.aadhaar_number}</span>
+                  </div>
+                </>
+              )}
             </div>
 
             {customer.note && (
@@ -203,131 +221,6 @@ export const ProfilePage: React.FC = () => {
             )}
           </div>
         </div>
-      </div>
-
-      {/* Family & Related Customers Section */}
-      <div className="bg-surface-container-lowest rounded-2xl p-space-md shadow-xs border border-surface-container/60 flex flex-col gap-space-sm">
-        <div className="flex items-center justify-between pb-space-xs border-b border-surface-container/40">
-          <div className="flex items-center gap-space-xs">
-            <span className="material-symbols-outlined text-primary text-xl">
-              family_restroom
-            </span>
-            <h2 className="font-body-strong text-body-strong text-on-surface">
-              Family & Related Customers
-            </h2>
-            <span className="px-2 py-0.5 rounded-full bg-surface-container text-xs font-semibold text-outline">
-              {customerRelationships.length} Linked
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setIsAddRelOpen(!isAddRelOpen)}
-            className="px-3 py-1 rounded-full bg-primary-container text-on-primary hover:bg-primary transition-all font-button-utility text-xs font-semibold flex items-center gap-1"
-          >
-            <span className="material-symbols-outlined text-sm">
-              {isAddRelOpen ? "close" : "add"}
-            </span>
-            <span>{isAddRelOpen ? "Cancel" : "Link Family Member"}</span>
-          </button>
-        </div>
-
-        {isAddRelOpen && (
-          <form
-            onSubmit={handleAddRelationshipSubmit}
-            className="p-3 bg-surface-container-low rounded-xl flex flex-col md:flex-row items-end gap-3 border border-surface-container-high/50 my-1 animate-fadeIn"
-          >
-            <div className="flex-1">
-              <CustomerSearchPicker
-                customers={customers.filter((c) => c.id !== customer.id)}
-                label="Select Family Member / Related Customer"
-                selectedCustomerId={relTargetCustId}
-                onSelectCustomer={(c) => setRelTargetCustId(c.id)}
-              />
-            </div>
-            <div className="flex flex-col gap-1 w-full md:w-44">
-              <label className="font-fine-print text-fine-print text-on-surface-variant font-medium">
-                Relationship
-              </label>
-              <select
-                value={relType}
-                onChange={(e) => setRelType(e.target.value)}
-                className="px-3 py-2 rounded-xl bg-surface-container text-on-surface border border-surface-container-high focus:outline-none font-button-utility text-xs"
-              >
-                <option value="Father">Father</option>
-                <option value="Mother">Mother</option>
-                <option value="Son">Son</option>
-                <option value="Daughter">Daughter</option>
-                <option value="Husband">Husband</option>
-                <option value="Wife">Wife</option>
-                <option value="Sibling">Sibling</option>
-                <option value="Family">Family Member</option>
-                <option value="Other">Other Associate</option>
-              </select>
-            </div>
-            <button
-              type="submit"
-              className="w-full md:w-auto px-4 py-2 bg-primary text-on-primary rounded-xl font-button-utility text-xs font-semibold hover:bg-primary-container shadow-xs"
-            >
-              Link Relationship
-            </button>
-          </form>
-        )}
-
-        {customerRelationships.length === 0 ? (
-          <p className="font-fine-print text-fine-print text-outline text-center py-2">
-            No family members or related customers linked to this profile.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-space-xs pt-1">
-            {customerRelationships.map((rel) => {
-              const otherCustId =
-                rel.customer_id === customer.id
-                  ? rel.related_customer_id
-                  : rel.customer_id;
-              const otherCust = customers.find((c) => c.id === otherCustId);
-              if (!otherCust) return null;
-
-              return (
-                <div
-                  key={rel.id}
-                  className="p-2.5 rounded-xl bg-surface-container-low border border-surface-container-high/40 flex items-center justify-between hover:bg-surface-container transition-colors"
-                >
-                  <div
-                    className="flex items-center gap-2 cursor-pointer"
-                    onClick={() => navigateToCustomerProfile(otherCust.id)}
-                  >
-                    <CustomerAvatar
-                      colorClass={otherCust.avatar_color}
-                      initials={otherCust.avatar_initials || "DS"}
-                      size="sm"
-                    />
-                    <div className="flex flex-col">
-                      <span className="font-body-strong text-body-strong text-on-surface hover:text-primary hover:underline font-semibold text-xs">
-                        {otherCust.name}
-                      </span>
-                      <span className="font-caption text-caption text-on-surface-variant font-mono text-[11px]">
-                        {otherCust.mobile || "No Mobile"} •{" "}
-                        <strong className="text-primary">
-                          {rel.relationship_type}
-                        </strong>
-                      </span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => deleteRelationship(rel.id)}
-                    className="p-1 rounded-full text-outline hover:text-error hover:bg-surface-container"
-                    title="Remove Link"
-                  >
-                    <span className="material-symbols-outlined text-sm">
-                      link_off
-                    </span>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       {/* Task Summary Metrics */}
@@ -360,11 +253,31 @@ export const ProfilePage: React.FC = () => {
             totalDueBalance > 0 ? "text-tertiary" : "text-secondary"
           }
           title="Due Balance"
-          value={`₹${totalDueBalance}`}
+          value={formatRupees(rupeesToPaise(totalDueBalance))}
         />
       </div>
 
-      {/* Task History List */}
+      {/* Tabs */}
+      <div className="flex border-b border-surface-container gap-4 mt-4">
+        <button
+          className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "tasks" ? "border-primary text-primary" : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-surface-variant"
+          }`}
+          onClick={() => setActiveTab("tasks")}
+        >
+          Task History
+        </button>
+        <button
+          className={`pb-2 px-1 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "banking" ? "border-primary text-primary" : "border-transparent text-on-surface-variant hover:text-on-surface hover:border-surface-variant"
+          }`}
+          onClick={() => setActiveTab("banking")}
+        >
+          Banking History
+        </button>
+      </div>
+
+      {activeTab === "tasks" && (
       <div
         className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-xs border border-surface-container/60 flex flex-col gap-space-lg"
         id="customer-task-section"
@@ -433,6 +346,69 @@ export const ProfilePage: React.FC = () => {
           )}
         </div>
       </div>
+      )}
+
+      {activeTab === "banking" && (
+      <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-xs border border-surface-container/60 flex flex-col gap-space-lg">
+        <div className="flex items-center gap-space-sm pb-space-xs border-b border-surface-container">
+          <h2 className="font-tagline text-tagline font-semibold text-on-surface">
+            Banking History
+          </h2>
+          <span className="font-caption text-caption text-on-surface-variant">
+            Recent Transactions
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-surface-container-lowest sticky top-0 border-b border-surface-variant">
+              <tr>
+                <th className="p-4 font-medium text-sm text-on-surface-variant whitespace-nowrap">Date</th>
+                <th className="p-4 font-medium text-sm text-on-surface-variant">Type</th>
+                <th className="p-4 font-medium text-sm text-on-surface-variant">Mode</th>
+                <th className="p-4 font-medium text-sm text-on-surface-variant text-right">Amount</th>
+                <th className="p-4 font-medium text-sm text-on-surface-variant">Ref / Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {customerBankingTxs.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="p-8 text-center text-on-surface-variant">
+                    No banking transactions found for this customer.
+                  </td>
+                </tr>
+              ) : (
+                customerBankingTxs.map((tx) => (
+                  <tr key={tx.id} className="border-b border-surface-variant/50 hover:bg-surface-container-lowest/50 transition-colors">
+                    <td className="p-4 text-sm text-on-surface whitespace-nowrap">
+                      {formatDisplayDate(tx.transaction_date)}
+                    </td>
+                    <td className="p-4">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                        tx.transaction_type === 'Transfer' ? 'bg-blue-100 text-blue-800' :
+                        tx.transaction_type === 'Withdrawal' ? 'bg-orange-100 text-orange-800' :
+                        'bg-green-100 text-green-800'
+                      }`}>
+                        {tx.transaction_type}
+                      </span>
+                    </td>
+                    <td className="p-4 text-sm text-on-surface-variant">
+                      {tx.payment_mode}
+                    </td>
+                    <td className="p-4 text-sm font-semibold text-right text-on-surface font-mono">
+                      {formatRupees(tx.amount)}
+                    </td>
+                    <td className="p-4 text-sm text-on-surface-variant font-mono">
+                      {renderRefDetails(tx)}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      )}
 
       <EditCustomerModal
         customer={customer}

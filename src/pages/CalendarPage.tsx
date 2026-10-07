@@ -3,6 +3,7 @@ import { useDesk } from "../context/DeskContext";
 import { CustomerSearchPicker } from "../components/CustomerSearchPicker";
 import { TaskCard } from "../components/TaskCard";
 import { dateMatchesCalendarDate, getFormattedToday } from "../utils/dateUtils";
+import { formatRupees } from "../utils/currencyUtils";
 
 export const CalendarPage: React.FC = () => {
   const {
@@ -11,6 +12,7 @@ export const CalendarPage: React.FC = () => {
     customers,
     tasks,
     activities,
+    bankingTransactions,
     addTask,
   } = useDesk();
 
@@ -87,6 +89,11 @@ export const CalendarPage: React.FC = () => {
       return act.type === "task_completed" || act.type === "task_delivered";
     if (activityFilter === "payments") return act.type === "payment_added";
     return true;
+  });
+
+  // 3. Banking Transactions : Money movements that happened on this date
+  const bankingTransactionsForDate = bankingTransactions.filter((tx) => {
+    return !tx.is_deleted && dateMatchesCalendarDate(tx.transaction_date, selectedCalendarDate);
   });
 
   return (
@@ -316,7 +323,8 @@ export const CalendarPage: React.FC = () => {
                 </h2>
                 <span className="font-caption text-caption text-on-surface-variant">
                   {scheduledWorkForDate.length} scheduled task(s) •{" "}
-                  {activitiesForDate.length} activity event(s) logged
+                  {activitiesForDate.length} activity event(s) •{" "}
+                  {bankingTransactionsForDate.length} banking tx(s)
                 </span>
               </div>
             </div>
@@ -413,6 +421,60 @@ export const CalendarPage: React.FC = () => {
                         </div>
                         <p className="font-fine-print text-fine-print text-outline mt-0.5">
                           {act.description}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* CONCEPT 3 : Banking Transactions */}
+          <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-xs border border-surface-container/60 flex flex-col gap-space-md">
+            <div className="flex items-center justify-between pb-space-xs border-b border-surface-container">
+              <h2 className="font-tagline text-tagline text-on-surface font-semibold flex items-center gap-2">
+                <span className="material-symbols-outlined text-tertiary text-xl">
+                  account_balance
+                </span>
+                <span>3. Banking Ledger</span>
+              </h2>
+              <span className="px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-fine-print text-fine-print font-bold">
+                {bankingTransactionsForDate.length} Tx
+              </span>
+            </div>
+
+            {bankingTransactionsForDate.length === 0 ? (
+              <div className="py-8 text-center text-fine-print text-outline font-caption flex flex-col items-center gap-1">
+                <span className="material-symbols-outlined text-3xl text-outline/40">
+                  account_balance_wallet
+                </span>
+                <span>No banking transactions recorded for this day.</span>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-space-sm">
+                {bankingTransactionsForDate.map((tx) => (
+                  <div
+                    key={tx.id}
+                    className="p-space-md rounded-xl bg-surface-container-low border border-surface-container-high/40 flex flex-col md:flex-row md:items-center justify-between gap-space-md transition-all hover:border-tertiary/30"
+                  >
+                    <div className="flex items-start gap-space-md">
+                      <div className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center text-tertiary flex-shrink-0">
+                        <span className="material-symbols-outlined text-lg">
+                          {tx.transaction_type === "Transfer" ? "swap_horiz" : tx.transaction_type === "Withdrawal" ? "arrow_downward" : "arrow_upward"}
+                        </span>
+                      </div>
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-space-xs flex-wrap">
+                          <span className="font-body-strong text-body-strong text-on-surface font-semibold">
+                            {tx.transaction_type} via {tx.payment_mode}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-fine-print text-fine-print font-bold">
+                            {formatRupees(tx.amount)}
+                          </span>
+                        </div>
+                        <p className="font-fine-print text-fine-print text-outline mt-0.5">
+                          {tx.transaction_ref_no ? `Ref: ${tx.transaction_ref_no}` : 'No Ref'}
                         </p>
                       </div>
                     </div>

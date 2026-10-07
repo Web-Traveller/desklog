@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDesk } from '../context/DeskContext';
 import { TaskStatus } from '../types';
+import { formatRupees, rupeesToPaise } from '../utils/currencyUtils';
 
 export const EditTaskModal: React.FC = () => {
   const { isEditTaskOpen, setIsEditTaskOpen, selectedTaskToEdit, updateTask, payments, addPayment } = useDesk();
@@ -152,17 +153,17 @@ export const EditTaskModal: React.FC = () => {
           <div className="mt-space-sm p-space-md rounded-xl bg-surface-container-low border border-surface-container flex flex-col gap-space-xs">
             <h4 className="font-semibold text-on-surface text-sm">Payments Activity</h4>
             <div className="flex justify-between text-xs mb-2">
-              <span className="text-on-surface-variant">Total Billed: ₹{billingAmount || 0}</span>
-              <span className="text-secondary font-bold">Total Paid: ₹{totalPaid.toFixed(2)}</span>
+              <span className="text-on-surface-variant">Total Billed: {formatRupees(rupeesToPaise(Number(billingAmount) || 0))}</span>
+              <span className="text-secondary font-bold">Total Paid: {formatRupees(rupeesToPaise(totalPaid))}</span>
               <span className="text-tertiary font-bold">
-                Due: ₹{Math.max(0, (Number(billingAmount) || 0) - totalPaid).toFixed(2)}
+                Due: {formatRupees(rupeesToPaise(Math.max(0, (Number(billingAmount) || 0) - totalPaid)))}
               </span>
             </div>
             
             {taskPayments.map(p => (
-              <div key={p.id} className="flex justify-between items-center text-xs py-1 border-t border-surface-container-high/40 text-on-surface-variant">
+              <div key={p.id} className="flex justify-between items-center text-xs py-1 border-t border-surface-container-high/40 text-on-surface-variant font-mono">
                 <span>Payment</span>
-                <span>₹{p.amount.toFixed(2)}</span>
+                <span>{formatRupees(rupeesToPaise(p.amount))}</span>
               </div>
             ))}
 

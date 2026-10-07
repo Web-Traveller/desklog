@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useDesk } from "../context/DeskContext";
 import { Service } from "../types";
+import { formatRupees, rupeesToPaise } from "../utils/currencyUtils";
 
 export const ServicesPage: React.FC = () => {
   const { services, addService, editService } = useDesk();
@@ -220,10 +221,7 @@ export const ServicesPage: React.FC = () => {
                   <p className="font-caption text-caption text-on-surface-variant">
                     Default Billing Price:{" "}
                     <strong className="text-on-surface font-mono">
-                      ₹
-                      {svc.default_price !== undefined
-                        ? svc.default_price
-                        : "0"}
+                      {formatRupees(rupeesToPaise(svc.default_price))}
                     </strong>
                   </p>
                 </div>

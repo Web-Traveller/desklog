@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useDesk } from '../context/DeskContext';
 import { MetricCard } from '../components/MetricCard';
+import { formatDisplayDate } from '../utils/dateUtils';
+import { formatRupees, rupeesToPaise } from '../utils/currencyUtils';
 
 export const PaymentsPage: React.FC = () => {
   const { tasks, payments, customers, navigateToCustomerTaskProfile } = useDesk();
@@ -66,14 +68,14 @@ export const PaymentsPage: React.FC = () => {
           iconColorClass="text-primary"
           subtitle="All time collections"
           title="Total Received"
-          value={`₹${totalReceived.toFixed(2)}`}
+          value={formatRupees(rupeesToPaise(totalReceived))}
         />
         <MetricCard
           icon="pending"
           iconColorClass="text-error"
           subtitle={`From ${tasksWithDues} active tasks`}
           title="Outstanding Dues"
-          value={`₹${totalDue.toFixed(2)}`}
+          value={formatRupees(rupeesToPaise(totalDue))}
         />
         <MetricCard
           icon="receipt_long"
@@ -138,11 +140,8 @@ export const PaymentsPage: React.FC = () => {
                   <tr key={pay.id} className="hover:bg-surface-container-low transition-colors">
                     <td className="px-space-md py-space-sm whitespace-nowrap">
                       <div className="flex flex-col">
-                        <span className="font-body-strong text-body-strong text-on-surface">
-                          {pay.created_at.split(' ')[0]} {pay.created_at.split(' ')[1]} {pay.created_at.split(' ')[2]}
-                        </span>
-                        <span className="font-micro-legal text-micro-legal text-outline">
-                          {pay.created_at.split(' ').slice(3).join(' ')}
+                        <span className="font-body-strong text-body-strong text-on-surface font-mono">
+                          {formatDisplayDate(pay.created_at)}
                         </span>
                       </div>
                     </td>
@@ -167,8 +166,8 @@ export const PaymentsPage: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-space-md py-space-sm text-right">
-                      <span className="font-body-strong text-body-strong text-primary bg-primary-fixed/30 px-3 py-1 rounded-full">
-                        ₹{pay.amount.toFixed(2)}
+                      <span className="font-body-strong text-body-strong text-primary bg-primary-fixed/30 px-3 py-1 rounded-full font-mono">
+                        {formatRupees(rupeesToPaise(pay.amount))}
                       </span>
                     </td>
                     <td className="px-space-md py-space-sm text-center">

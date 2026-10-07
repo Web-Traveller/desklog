@@ -8,23 +8,29 @@ export const SearchPage: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<'all' | 'customers' | 'tasks'>('all');
   const [sortBy, setSortBy] = useState<'relevance' | 'recent' | 'name'>('relevance');
 
-  const query = searchQuery.trim().toLowerCase();
+  const rawQ = searchQuery.trim().toLowerCase();
+  const cleanQ = searchQuery.replace(/[\s-]/g, '').toLowerCase();
 
   let matchingCustomers = customers.filter(
     (c) =>
-      !query ||
-      c.name.toLowerCase().includes(query) ||
-      (c.mobile || "").includes(query) ||
-      c.note?.toLowerCase().includes(query)
+      !rawQ ||
+      c.name.toLowerCase().includes(rawQ) ||
+      (c.mobile && c.mobile.replace(/[\s-]/g, '').includes(cleanQ)) ||
+      (c.aadhaar_number && c.aadhaar_number.replace(/[\s-]/g, '').includes(cleanQ)) ||
+      c.note?.toLowerCase().includes(rawQ)
   );
 
-  let matchingTasks = tasks.filter(
-    (t) =>
-      !query ||
-      t.title.toLowerCase().includes(query) ||
-      (customers.find(c => c.id === t.customer_id)?.name || "").toLowerCase().includes(query) ||
-      (customers.find(c => c.id === t.customer_id)?.mobile || "").includes(query)
-  );
+  let matchingTasks = tasks.filter((t) => {
+    if (!rawQ) return true;
+    if (t.title.toLowerCase().includes(rawQ)) return true;
+    const cust = customers.find((c) => c.id === t.customer_id);
+    if (!cust) return false;
+    return (
+      cust.name.toLowerCase().includes(rawQ) ||
+      (cust.mobile && cust.mobile.replace(/[\s-]/g, '').includes(cleanQ)) ||
+      (cust.aadhaar_number && cust.aadhaar_number.replace(/[\s-]/g, '').includes(cleanQ))
+    );
+  });
 
   if (sortBy === 'name') {
     matchingCustomers = [...matchingCustomers].sort((a, b) => a.name.localeCompare(b.name));

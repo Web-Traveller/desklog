@@ -1,6 +1,7 @@
 import React from 'react';
 import { Task, TaskStatus } from '../types';
 import { useDesk } from '../context/DeskContext';
+import { formatRupees, rupeesToPaise } from '../utils/currencyUtils';
 
 interface TaskCardProps {
   task: Task;
@@ -84,9 +85,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </div>
         )}
         {task.billing_amount !== undefined && (
-          <div className="text-xs text-on-surface-variant flex items-center gap-1">
+          <div className="text-xs text-on-surface-variant flex items-center gap-1 font-mono">
             <span className="material-symbols-outlined text-[14px]">payments</span>
-            ₹{task.billing_amount} ({totalPaid >= task.billing_amount ? "PAID" : totalPaid > 0 ? "PARTIAL" : "UNPAID"}{totalPaid > 0 ? ` - Paid ₹${totalPaid.toFixed(2)}` : ''})
+            {formatRupees(rupeesToPaise(task.billing_amount))} ({totalPaid >= task.billing_amount ? "PAID" : totalPaid > 0 ? "PARTIAL" : "UNPAID"}{totalPaid > 0 ? ` - Paid ${formatRupees(rupeesToPaise(totalPaid))}` : ''})
           </div>
         )}
 
@@ -231,9 +232,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             {task.billing_amount !== undefined && (
               <>
                 <span className="text-surface-dim">•</span>
-                <span className="flex items-center gap-1">
+                <span className="flex items-center gap-1 font-mono">
                   <span className="material-symbols-outlined text-xs">payments</span>
-                  ₹{task.billing_amount} ({totalPaid >= task.billing_amount ? "PAID" : totalPaid > 0 ? "PARTIAL" : "UNPAID"}{totalPaid > 0 ? ` - Paid ₹${totalPaid.toFixed(2)}` : ''})
+                  {formatRupees(rupeesToPaise(task.billing_amount))} ({totalPaid >= task.billing_amount ? "PAID" : totalPaid > 0 ? "PARTIAL" : "UNPAID"}{totalPaid > 0 ? ` - Paid ${formatRupees(rupeesToPaise(totalPaid))}` : ''})
                 </span>
               </>
             )}

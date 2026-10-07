@@ -37,8 +37,13 @@ export const CustomerSearchPicker: React.FC<CustomerSearchPickerProps> = ({
 
   const filteredCustomers = customers.filter((c) => {
     if (!searchTerm.trim()) return true;
-    const q = searchTerm.toLowerCase();
-    return c.name.toLowerCase().includes(q) || c.mobile?.toLowerCase().includes(q);
+    const rawQ = searchTerm.toLowerCase();
+    const cleanQ = searchTerm.replace(/[\s-]/g, '').toLowerCase();
+    return (
+      c.name.toLowerCase().includes(rawQ) ||
+      (c.mobile && c.mobile.replace(/[\s-]/g, '').includes(cleanQ)) ||
+      (c.aadhaar_number && c.aadhaar_number.replace(/[\s-]/g, '').includes(cleanQ))
+    );
   });
 
   return (

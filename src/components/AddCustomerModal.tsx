@@ -14,6 +14,7 @@ export const AddCustomerModal: React.FC = () => {
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [aadhaar, setAadhaar] = useState("");
   const [notes, setNotes] = useState("");
 
   if (!isAddCustomerOpen) return null;
@@ -35,10 +36,12 @@ export const AddCustomerModal: React.FC = () => {
       mobile: phone.trim(),
       is_verified: true,
       note: notes.trim(),
+      aadhaar_number: aadhaar.trim(),
     });
 
     setName("");
     setPhone("");
+    setAadhaar("");
     setNotes("");
     setIsAddCustomerOpen(false);
   };
@@ -47,6 +50,7 @@ export const AddCustomerModal: React.FC = () => {
     setIsAddCustomerOpen(false);
     setName("");
     setPhone("");
+    setAadhaar("");
     setNotes("");
     navigateToCustomerProfile(id);
     setIsAddTaskOpen(true);
@@ -135,6 +139,17 @@ export const AddCustomerModal: React.FC = () => {
               type="text"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+            />
+          </label>
+
+          <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant">
+            Aadhaar Number
+            <input
+              className="px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility font-mono"
+              placeholder="e.g. 1234 5678 9012"
+              type="text"
+              value={aadhaar}
+              onChange={(e) => setAadhaar(e.target.value)}
             />
           </label>
 

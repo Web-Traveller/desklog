@@ -63,8 +63,14 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({
             <div className="flex flex-wrap items-center gap-x-space-md gap-y-1 font-caption text-caption text-on-surface-variant">
               <span className="flex items-center gap-1 font-mono">
                 <span className="material-symbols-outlined text-sm text-outline">call</span>
-                {customer.mobile}
+                {customer.mobile || "No Mobile"}
               </span>
+              {customer.aadhaar_number && (
+                <span className="flex items-center gap-1 font-mono">
+                  <span className="material-symbols-outlined text-sm text-outline">badge</span>
+                  {customer.aadhaar_number}
+                </span>
+              )}
               <span className="flex items-center gap-1">
                 <span className="material-symbols-outlined text-sm text-outline">event</span>
                 Enrolled {customer.created_at}

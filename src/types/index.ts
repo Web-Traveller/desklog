@@ -11,15 +11,9 @@ export interface Customer {
   is_verified?: boolean;
   avatar_initials?: string;
   avatar_color?: string;
+  aadhaar_number?: string;
 }
 
-export interface CustomerRelationship {
-  id: string;
-  customer_id: string;
-  related_customer_id: string;
-  relationship_type: string;
-  created_at: string;
-}
 
 export interface Service {
   id: string;
@@ -75,6 +69,83 @@ export interface Setting {
   value: string;
 }
 
+export interface BankTransferMeta {
+  from_account?: string;
+  beneficiary_bank?: string;
+  beneficiary_account?: string;
+  beneficiary_ifsc?: string;
+  transaction_ref_no?: string;
+}
+
+export interface UpiTransferMeta {
+  sender_info?: string;
+  beneficiary_upi?: string;
+  upi_transaction_id?: string;
+}
+
+export interface AePSWithdrawalMeta {
+  customer_aadhaar_number?: string;
+  customer_id_number?: string;
+  customer_bank?: string;
+  terminal_rrn?: string;
+}
+
+export interface DebitCardMiniAtmMeta {
+  card_type?: string;
+  approval_code?: string;
+}
+
+export interface UpiCashoutMeta {
+  customer_upi?: string;
+  transaction_ref_no?: string;
+}
+
+export interface CashToBankMeta {
+  target_bank?: string;
+  target_account?: string;
+  target_ifsc?: string;
+  depositor_info?: string;
+  transaction_ref_no?: string;
+}
+
+export interface CashToUpiMeta {
+  target_upi?: string;
+  transaction_ref_no?: string;
+}
+
+export type BankingMetadata =
+  | BankTransferMeta
+  | UpiTransferMeta
+  | AePSWithdrawalMeta
+  | DebitCardMiniAtmMeta
+  | UpiCashoutMeta
+  | CashToBankMeta
+  | CashToUpiMeta
+  | Record<string, string>;
+
+export function parseBankingMetadata(metadataStr?: string): Record<string, string> {
+  if (!metadataStr) return {};
+  try {
+    const parsed = JSON.parse(metadataStr);
+    return typeof parsed === 'object' && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export interface BankingTransaction {
+  id?: number;
+  customer_id: string;
+  transaction_type: 'Transfer' | 'Withdrawal' | 'Deposit' | string;
+  payment_mode: 'AePS' | 'UPI' | 'Bank Transfer' | 'Card' | 'Cash' | 'Cash to Bank Account' | 'Cash to UPI' | 'Debit Card / Mini ATM' | 'UPI Cash-out' | string;
+  /** Stored in integer paise (cents), 1 INR = 100 Paise */
+  amount: number;
+  transaction_ref_no?: string;
+  metadata?: string; // Serialized BankingMetadata JSON string
+  transaction_date: string;
+  is_deleted: boolean;
+}
+
 export type ActivePage =
   | 'dashboard'
   | 'customers'
@@ -84,6 +155,7 @@ export type ActivePage =
   | 'services'
   | 'settings'
   | 'search'
+  | 'banking'
   | 'profile';
 
 export const GENERAL_CUSTOMER: Customer = {

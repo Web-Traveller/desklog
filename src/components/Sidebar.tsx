@@ -11,6 +11,7 @@ export const Sidebar: React.FC = () => {
     { id: 'tasks', label: 'Tasks Register', icon: 'assignment' },
     { id: 'calendar', label: 'Calendar Log', icon: 'calendar_month' },
     { id: 'payments', label: 'Payments', icon: 'payments' },
+    { id: 'banking', label: 'Banking', icon: 'account_balance' },
     { id: 'services', label: 'Services Catalog', icon: 'design_services' },
   ];
 

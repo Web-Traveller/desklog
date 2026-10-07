@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
-import { Customer, CustomerRelationship, Task, ActivityEvent, Service, Payment, Setting } from '../types';
+import { Customer, Task, ActivityEvent, Service, Payment, Setting, BankingTransaction } from '../types';
 
 const isTauriEnv = (): boolean => {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -27,10 +27,10 @@ export async function saveTauriCustomer(customer: Customer): Promise<Customer | 
   }
 }
 
-export async function updateTauriCustomer(id: string, name: string, mobile?: string, note?: string): Promise<boolean> {
-  if (!isTauriEnv()) return false;
+export async function updateTauriCustomer(id: string, name: string, mobile?: string, note?: string, aadhaar_number?: string): Promise<boolean> {
+  if (!isTauriEnv()) return true;
   try {
-    await invoke('edit_customer', { id, name, mobile, note });
+    await invoke('edit_customer', { id, name, mobile, note, aadhaar_number });
     return true;
   } catch (err) {
     console.warn('Failed to update customer:', err);
@@ -39,44 +39,12 @@ export async function updateTauriCustomer(id: string, name: string, mobile?: str
 }
 
 export async function deleteTauriCustomer(id: string): Promise<boolean> {
-  if (!isTauriEnv()) return false;
+  if (!isTauriEnv()) return true;
   try {
     await invoke('delete_customer', { id });
     return true;
   } catch (err) {
     console.warn('Failed to delete customer:', err);
-    return false;
-  }
-}
-
-// --- CUSTOMER RELATIONSHIPS ---
-export async function fetchTauriRelationships(customerId: string): Promise<CustomerRelationship[] | null> {
-  if (!isTauriEnv()) return null;
-  try {
-    return await invoke<CustomerRelationship[]>('get_customer_relationships', { customerId });
-  } catch (err) {
-    console.warn('Failed to fetch relationships:', err);
-    return null;
-  }
-}
-
-export async function saveTauriRelationship(relationship: CustomerRelationship): Promise<CustomerRelationship | null> {
-  if (!isTauriEnv()) return null;
-  try {
-    return await invoke<CustomerRelationship>('add_customer_relationship', { relationship });
-  } catch (err) {
-    console.warn('Failed to save relationship:', err);
-    return null;
-  }
-}
-
-export async function deleteTauriRelationship(id: string): Promise<boolean> {
-  if (!isTauriEnv()) return false;
-  try {
-    await invoke('delete_customer_relationship', { id });
-    return true;
-  } catch (err) {
-    console.warn('Failed to delete relationship:', err);
     return false;
   }
 }
@@ -156,7 +124,7 @@ export async function updateTauriTask(task: Task): Promise<boolean> {
 }
 
 export async function deleteTauriTask(id: string): Promise<boolean> {
-  if (!isTauriEnv()) return false;
+  if (!isTauriEnv()) return true;
   try {
     await invoke('delete_task', { id });
     return true;
@@ -218,7 +186,7 @@ export async function updateTauriService(service: Service): Promise<boolean> {
 }
 
 export async function deleteTauriService(id: string): Promise<boolean> {
-  if (!isTauriEnv()) return false;
+  if (!isTauriEnv()) return true;
   try {
     await invoke('delete_service', { id });
     return true;
@@ -268,21 +236,37 @@ export async function fetchTauriActivities(): Promise<ActivityEvent[] | null> {
   if (!isTauriEnv()) return null;
   try {
     const raw = await invoke<any[]>('get_activities');
-    return raw.map(a => ({
-      id: a.id,
-      time: new Date(a.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      timePeriod: new Date(a.created_at).toLocaleDateString(),
-      type: a.activity_type,
-      title: a.title,
-      customerName: a.customer_id || '',
-      customerPhone: '',
-      description: a.description,
-      badgeText: a.activity_type.toUpperCase().replace(/_/g, ' '),
-      status: 'done',
-      taskId: a.task_id,
-      customerId: a.customer_id,
-      date: new Date(a.created_at).toISOString(),
-    }));
+    return raw.map(a => {
+      let timeStr = 'Just Now';
+      let dateIsoStr = new Date().toISOString();
+      try {
+        if (a.created_at) {
+          const d = new Date(a.created_at);
+          if (!isNaN(d.getTime())) {
+            timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            dateIsoStr = d.toISOString();
+          }
+        }
+      } catch {
+        // Fallback
+      }
+
+      return {
+        id: a.id,
+        time: timeStr,
+        timePeriod: a.created_at || 'Recently',
+        type: a.activity_type,
+        title: a.title,
+        customerName: a.customer_id || '',
+        customerPhone: '',
+        description: a.description,
+        badgeText: a.activity_type ? a.activity_type.toUpperCase().replace(/_/g, ' ') : 'ACTIVITY',
+        status: 'done',
+        taskId: a.task_id,
+        customerId: a.customer_id,
+        date: dateIsoStr,
+      };
+    });
   } catch (err) {
     console.warn('Failed to fetch activities:', err);
     return null;
@@ -349,6 +333,48 @@ export async function restoreTauriBackup(backupPath: string): Promise<boolean> {
     return true;
   } catch (err) {
     console.warn('Failed to restore database backup:', err);
+    return false;
+  }
+}
+
+// --- BANKING TRANSACTIONS ---
+export async function fetchTauriBankingTransactions(): Promise<BankingTransaction[] | null> {
+  if (!isTauriEnv()) return null;
+  try {
+    return await invoke<BankingTransaction[]>('get_banking_transactions');
+  } catch (err) {
+    console.warn('Failed to fetch banking transactions:', err);
+    return null;
+  }
+}
+
+export async function fetchTauriBankingTransactionsForCustomer(customerId: string): Promise<BankingTransaction[] | null> {
+  if (!isTauriEnv()) return null;
+  try {
+    return await invoke<BankingTransaction[]>('get_banking_transactions_for_customer', { customerId });
+  } catch (err) {
+    console.warn('Failed to fetch banking transactions for customer:', err);
+    return null;
+  }
+}
+
+export async function saveTauriBankingTransaction(tx: BankingTransaction): Promise<BankingTransaction | null> {
+  if (!isTauriEnv()) return tx;
+  try {
+    return await invoke<BankingTransaction>('add_banking_transaction', { tx });
+  } catch (err) {
+    console.warn('Failed to save banking transaction:', err);
+    return null;
+  }
+}
+
+export async function deleteTauriBankingTransaction(id: number): Promise<boolean> {
+  if (!isTauriEnv()) return true;
+  try {
+    await invoke('delete_banking_transaction', { id });
+    return true;
+  } catch (err) {
+    console.warn('Failed to delete banking transaction:', err);
     return false;
   }
 }

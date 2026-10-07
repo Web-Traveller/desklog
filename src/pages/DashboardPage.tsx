@@ -4,6 +4,7 @@ import { TaskCard } from "../components/TaskCard";
 import { CustomerAvatar } from "../components/CustomerAvatar";
 import { MetricCard } from "../components/MetricCard";
 import { calculateDashboardMetrics } from "../services/taskService";
+import { formatRupees, rupeesToPaise } from "../utils/currencyUtils";
 
 export const DashboardPage: React.FC = () => {
   const {
@@ -99,7 +100,7 @@ export const DashboardPage: React.FC = () => {
           icon="payments"
           iconColorClass="text-secondary"
           title="Today's Collection"
-          value={`₹${metrics.todayCollection}`}
+          value={formatRupees(rupeesToPaise(metrics.todayCollection))}
           subtitle="Payments received today"
         />
       </div>

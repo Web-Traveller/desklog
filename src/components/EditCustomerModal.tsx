@@ -16,12 +16,14 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
   const { editCustomer } = useDesk();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [aadhaar, setAadhaar] = useState('');
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
     if (customer) {
       setName(customer.name);
       setPhone(customer.mobile || '');
+      setAadhaar(customer.aadhaar_number || '');
       setNotes(customer.note || '');
     }
   }, [customer]);
@@ -35,6 +37,7 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
     editCustomer(customer.id, {
       name: name.trim(),
       mobile: phone.trim(),
+      aadhaar_number: aadhaar.trim(),
       note: notes.trim(),
     });
 
@@ -77,6 +80,16 @@ export const EditCustomerModal: React.FC<EditCustomerModalProps> = ({
               type="text"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+            />
+          </label>
+
+          <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant">
+            Aadhaar Number
+            <input
+              className="px-space-md py-2 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility font-mono"
+              type="text"
+              value={aadhaar}
+              onChange={(e) => setAadhaar(e.target.value)}
             />
           </label>
 
