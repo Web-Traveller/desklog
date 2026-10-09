@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useDesk } from '../context/DeskContext';
 import { MetricCard } from '../components/MetricCard';
+import { EmptyState } from '../components/EmptyState';
 import { formatDisplayDate } from '../utils/dateUtils';
-import { formatRupees, rupeesToPaise } from '../utils/currencyUtils';
+import { formatRupees } from '../utils/currencyUtils';
 
 export const PaymentsPage: React.FC = () => {
   const { tasks, payments, customers, navigateToCustomerTaskProfile } = useDesk();
@@ -68,14 +69,14 @@ export const PaymentsPage: React.FC = () => {
           iconColorClass="text-primary"
           subtitle="All time collections"
           title="Total Received"
-          value={formatRupees(rupeesToPaise(totalReceived))}
+          value={formatRupees(totalReceived)}
         />
         <MetricCard
           icon="pending"
           iconColorClass="text-error"
           subtitle={`From ${tasksWithDues} active tasks`}
           title="Outstanding Dues"
-          value={formatRupees(rupeesToPaise(totalDue))}
+          value={formatRupees(totalDue)}
         />
         <MetricCard
           icon="receipt_long"
@@ -116,13 +117,11 @@ export const PaymentsPage: React.FC = () => {
 
         {/* Payments Table */}
         {filteredPayments.length === 0 ? (
-          <div className="py-16 text-center text-on-surface-variant flex flex-col items-center gap-2">
-            <span className="material-symbols-outlined text-4xl text-outline/40">receipt_long</span>
-            <span className="font-caption-strong text-caption-strong">No payments found</span>
-            <p className="font-fine-print text-fine-print text-outline">
-              {searchTerm ? `No transaction matching "${searchTerm}"` : 'Record your first payment on a task.'}
-            </p>
-          </div>
+          <EmptyState
+            icon="receipt_long"
+            title="No payments found"
+            description={searchTerm ? `No transaction matching "${searchTerm}"` : 'Record your first payment on a task.'}
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -167,7 +166,7 @@ export const PaymentsPage: React.FC = () => {
                     </td>
                     <td className="px-space-md py-space-sm text-right">
                       <span className="font-body-strong text-body-strong text-primary bg-primary-fixed/30 px-3 py-1 rounded-full font-mono">
-                        {formatRupees(rupeesToPaise(pay.amount))}
+                        {formatRupees(pay.amount)}
                       </span>
                     </td>
                     <td className="px-space-md py-space-sm text-center">

@@ -18,7 +18,8 @@ export interface Customer {
 export interface Service {
   id: string;
   name: string;
-  default_price?: number; // In Rupees in frontend domain model
+  /** Stored in integer paise, 1 INR = 100 Paise */
+  default_price?: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -34,7 +35,8 @@ export interface Task {
   scheduled_time?: string;
   target_date?: string;
   notes?: string;
-  billing_amount?: number; // In Rupees in frontend domain model
+  /** Stored in integer paise, 1 INR = 100 Paise */
+  billing_amount?: number;
   cancellation_reason?: string;
   created_at: string;
   updated_at: string;
@@ -44,15 +46,29 @@ export interface Task {
 export interface Payment {
   id: string;
   task_id: string;
-  amount: number; // In Rupees in frontend domain model
+  /** Stored in integer paise, 1 INR = 100 Paise */
+  amount: number;
   created_at: string;
 }
+
+export type ActivityEventType =
+  | 'customer_created'
+  | 'customer_updated'
+  | 'task_created'
+  | 'task_edited'
+  | 'task_scheduled'
+  | 'task_rescheduled'
+  | 'status_changed'
+  | 'payment_added'
+  | 'task_ready'
+  | 'task_delivered'
+  | 'task_cancelled';
 
 export interface ActivityEvent {
   id: string;
   time: string;
   timePeriod: string;
-  type: string; // 'customer_created' | 'customer_updated' | 'task_created' | 'task_edited' | 'task_scheduled' | 'task_rescheduled' | 'status_changed' | 'payment_added' | 'task_ready' | 'task_delivered' | 'task_cancelled'
+  type: ActivityEventType | string; // union + string fallback for DB-sourced raw values
   title: string;
   customerName: string;
   customerPhone: string;
@@ -136,9 +152,9 @@ export function parseBankingMetadata(metadataStr?: string): Record<string, strin
 export interface BankingTransaction {
   id?: number;
   customer_id: string;
-  transaction_type: 'Transfer' | 'Withdrawal' | 'Deposit' | string;
+  transaction_type: 'Transfer' | 'Withdrawal' | 'Deposit';
   payment_mode: 'AePS' | 'UPI' | 'Bank Transfer' | 'Card' | 'Cash' | 'Cash to Bank Account' | 'Cash to UPI' | 'Debit Card / Mini ATM' | 'UPI Cash-out' | string;
-  /** Stored in integer paise (cents), 1 INR = 100 Paise */
+  /** Stored in integer paise, 1 INR = 100 Paise */
   amount: number;
   transaction_ref_no?: string;
   metadata?: string; // Serialized BankingMetadata JSON string
@@ -161,8 +177,8 @@ export type ActivePage =
 export const GENERAL_CUSTOMER: Customer = {
   id: 'cust-general',
   name: 'General / Walk-in Client',
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
+  created_at: '2026-01-01T00:00:00.000Z',
+  updated_at: '2026-01-01T00:00:00.000Z',
   is_active: true,
   is_verified: false,
   note: 'Default profile for one-off walk-in customers and quick desk services.',

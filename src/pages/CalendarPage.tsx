@@ -337,7 +337,7 @@ export const CalendarPage: React.FC = () => {
                 <span className="material-symbols-outlined text-primary text-xl">
                   event_available
                 </span>
-                <span>1. Scheduled Work (Planned Tasks)</span>
+                <span>1. Scheduled Tasks</span>
               </h2>
               <span className="px-2 py-0.5 rounded-full bg-primary-container text-on-primary font-fine-print text-fine-print font-bold">
                 {scheduledWorkForDate.length} Tasks
@@ -369,7 +369,7 @@ export const CalendarPage: React.FC = () => {
                 <span className="material-symbols-outlined text-secondary text-xl">
                   history
                 </span>
-                <span>2. Operational Activity Log (What Happened)</span>
+                <span>2. Activity Log</span>
               </h2>
               <span className="px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-fine-print text-fine-print font-bold">
                 {activitiesForDate.length} Logs

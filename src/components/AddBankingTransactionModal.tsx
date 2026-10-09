@@ -13,15 +13,16 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
   isOpen,
   onClose,
 }) => {
-  const { customers, addBankingTransaction } = useDesk();
+  const { customers, addBankingTransaction, showToast } = useDesk();
   
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [transactionType, setTransactionType] = useState('Transfer');
+  const [transactionType, setTransactionType] = useState<'Transfer' | 'Withdrawal' | 'Deposit'>('Transfer');
   const [paymentMode, setPaymentMode] = useState('Bank Transfer');
   const [amount, setAmount] = useState('');
   
   // Dynamic fields
   const [metadata, setMetadata] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -45,12 +46,12 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCustomer) return;
     const numAmount = Number(amount);
     if (!amount || isNaN(numAmount) || !isFinite(numAmount) || numAmount <= 0) {
-      alert("Please enter a valid positive amount.");
+      showToast("Please enter a valid positive amount.", "warning");
       return;
     }
 
@@ -69,17 +70,24 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
 
     let refNo = finalMetadata['transaction_ref_no'] || finalMetadata['upi_transaction_id'] || finalMetadata['terminal_rrn'] || finalMetadata['approval_code'];
 
-    addBankingTransaction({
-      customer_id: selectedCustomer.id,
-      transaction_type: transactionType,
-      payment_mode: paymentMode,
-      amount: rupeesToPaise(amount),
-      transaction_ref_no: refNo || '',
-      metadata: JSON.stringify(finalMetadata),
-      transaction_date: new Date().toISOString(),
-    });
-
-    onClose();
+    setIsSubmitting(true);
+    try {
+      await addBankingTransaction({
+        customer_id: selectedCustomer.id,
+        transaction_type: transactionType,
+        payment_mode: paymentMode,
+        amount: rupeesToPaise(amount),
+        transaction_ref_no: refNo || '',
+        metadata: JSON.stringify(finalMetadata),
+        transaction_date: new Date().toISOString(),
+      });
+      onClose();
+    } catch (error) {
+      console.error("Failed to add transaction", error);
+      showToast("Failed to save transaction.", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const paymentModesMap: Record<string, string[]> = {
@@ -291,7 +299,7 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
               <select
                 value={transactionType}
                 onChange={(e) => {
-                  setTransactionType(e.target.value);
+                  setTransactionType(e.target.value as 'Transfer' | 'Withdrawal' | 'Deposit');
                   setPaymentMode(paymentModesMap[e.target.value][0]);
                 }}
                 className="w-full px-space-md py-2.5 bg-surface-container text-on-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility border-none"
@@ -335,11 +343,11 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
           </div>
 
           <div className="flex items-center justify-end gap-space-sm mt-space-xs pt-space-xs border-t border-surface-container">
-            <button type="button" onClick={onClose} className="px-space-md py-2 rounded-full text-on-surface-variant hover:bg-surface-container font-button-utility text-button-utility">
+            <button type="button" onClick={onClose} disabled={isSubmitting} className="px-space-md py-2 rounded-full text-on-surface-variant hover:bg-surface-container font-button-utility text-button-utility disabled:opacity-50">
               Cancel
             </button>
-            <button type="submit" disabled={!selectedCustomer || !amount} className="px-space-md py-2 rounded-full bg-primary-container hover:bg-primary transition-all active:scale-95 text-on-primary font-button-utility text-button-utility font-medium shadow-sm disabled:opacity-50">
-              Save Transaction
+            <button type="submit" disabled={!selectedCustomer || !amount || isSubmitting} className="px-space-md py-2 rounded-full bg-primary-container hover:bg-primary transition-all active:scale-95 text-on-primary font-button-utility text-button-utility font-medium shadow-sm disabled:opacity-50">
+              {isSubmitting ? 'Saving...' : 'Save Transaction'}
             </button>
           </div>
         </form>

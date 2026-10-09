@@ -161,7 +161,7 @@ impl Database {
                 name TEXT NOT NULL,
                 mobile TEXT,
                 note TEXT,
-            aadhaar_number TEXT,
+                aadhaar_number TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 is_active INTEGER NOT NULL DEFAULT 1,
@@ -244,7 +244,7 @@ impl Database {
                 customer_id TEXT NOT NULL,
                 transaction_type TEXT NOT NULL,
                 payment_mode TEXT NOT NULL,
-                amount REAL NOT NULL,
+                amount INTEGER NOT NULL,
                 transaction_ref_no TEXT,
                 metadata TEXT,
                 transaction_date DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -665,6 +665,8 @@ impl Database {
             let amount: i64 = match row.get::<_, i64>(4) {
                 Ok(val) => val,
                 Err(_) => {
+                    // Migration shim: Some older DB versions stored amount as REAL (f64)
+                    // before the integer paise migration. We gracefully parse and convert it here.
                     let float_val: f64 = row.get(4)?;
                     (float_val * 100.0).round() as i64
                 }
@@ -695,6 +697,8 @@ impl Database {
             let amount: i64 = match row.get::<_, i64>(4) {
                 Ok(val) => val,
                 Err(_) => {
+                    // Migration shim: Some older DB versions stored amount as REAL (f64)
+                    // before the integer paise migration. We gracefully parse and convert it here.
                     let float_val: f64 = row.get(4)?;
                     (float_val * 100.0).round() as i64
                 }

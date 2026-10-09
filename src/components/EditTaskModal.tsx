@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDesk } from '../context/DeskContext';
 import { TaskStatus } from '../types';
-import { formatRupees, rupeesToPaise } from '../utils/currencyUtils';
+import { formatRupees, rupeesToPaise, paiseToRupees } from '../utils/currencyUtils';
 
 export const EditTaskModal: React.FC = () => {
   const { isEditTaskOpen, setIsEditTaskOpen, selectedTaskToEdit, updateTask, payments, addPayment } = useDesk();
@@ -23,7 +23,7 @@ export const EditTaskModal: React.FC = () => {
       setStatus(selectedTaskToEdit.status || 'PENDING');
       setTargetDate(selectedTaskToEdit.target_date || '');
       setNotes(selectedTaskToEdit.notes || '');
-      setBillingAmount(selectedTaskToEdit.billing_amount ? selectedTaskToEdit.billing_amount.toString() : '');
+      setBillingAmount(selectedTaskToEdit.billing_amount ? paiseToRupees(selectedTaskToEdit.billing_amount).toString() : '');
       setScheduleDate(selectedTaskToEdit.scheduled_date || '');
       setNewPaymentAmount('');
     }
@@ -40,7 +40,7 @@ export const EditTaskModal: React.FC = () => {
       status,
       target_date: targetDate || undefined,
       notes: notes.trim(),
-      billing_amount: billingAmount ? Number(billingAmount) : undefined,
+      billing_amount: billingAmount ? rupeesToPaise(billingAmount) : undefined,
       scheduled_date: scheduleDate || undefined,
     });
 
@@ -49,16 +49,19 @@ export const EditTaskModal: React.FC = () => {
 
   const handleAddPayment = async () => {
     if (!newPaymentAmount) return;
-    const amount = Number(newPaymentAmount);
-    if (amount <= 0) return;
+    const amountPaise = rupeesToPaise(newPaymentAmount);
+    if (amountPaise <= 0) return;
     
     await addPayment({
       task_id: selectedTaskToEdit.id,
-      amount,
+      amount: amountPaise,
     });
     
     setNewPaymentAmount('');
   };
+
+  const currentBillingPaise = rupeesToPaise(billingAmount);
+  const duePaise = Math.max(0, currentBillingPaise - totalPaid);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 backdrop-blur-sm p-4 animate-fadeIn">
@@ -153,17 +156,17 @@ export const EditTaskModal: React.FC = () => {
           <div className="mt-space-sm p-space-md rounded-xl bg-surface-container-low border border-surface-container flex flex-col gap-space-xs">
             <h4 className="font-semibold text-on-surface text-sm">Payments Activity</h4>
             <div className="flex justify-between text-xs mb-2">
-              <span className="text-on-surface-variant">Total Billed: {formatRupees(rupeesToPaise(Number(billingAmount) || 0))}</span>
-              <span className="text-secondary font-bold">Total Paid: {formatRupees(rupeesToPaise(totalPaid))}</span>
+              <span className="text-on-surface-variant">Total Billed: {formatRupees(currentBillingPaise)}</span>
+              <span className="text-secondary font-bold">Total Paid: {formatRupees(totalPaid)}</span>
               <span className="text-tertiary font-bold">
-                Due: {formatRupees(rupeesToPaise(Math.max(0, (Number(billingAmount) || 0) - totalPaid)))}
+                Due: {formatRupees(duePaise)}
               </span>
             </div>
             
             {taskPayments.map(p => (
               <div key={p.id} className="flex justify-between items-center text-xs py-1 border-t border-surface-container-high/40 text-on-surface-variant font-mono">
                 <span>Payment</span>
-                <span>{formatRupees(rupeesToPaise(p.amount))}</span>
+                <span>{formatRupees(p.amount)}</span>
               </div>
             ))}
 

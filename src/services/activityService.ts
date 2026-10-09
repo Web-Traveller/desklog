@@ -1,5 +1,4 @@
 import { ActivityEvent } from '../types';
-import { getFormattedToday } from '../utils/dateUtils';
 
 export function createActivityEvent(params: {
   type: string;
@@ -25,6 +24,6 @@ export function createActivityEvent(params: {
     status: 'done',
     taskId: params.taskId,
     customerId: params.customerId,
-    date: getFormattedToday(),
+    date: new Date().toISOString(),
   };
 }

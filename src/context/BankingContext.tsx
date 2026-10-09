@@ -22,7 +22,11 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const reloadBankingTransactions = async () => {
     const dbBanking = await fetchTauriBankingTransactions();
-    if (dbBanking) setBankingTransactions(dbBanking);
+    if (dbBanking) {
+      setBankingTransactions(dbBanking);
+    } else {
+      console.warn('[BankingContext] Failed to load banking transactions');
+    }
   };
 
   useEffect(() => {

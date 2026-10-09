@@ -1,7 +1,8 @@
 import React from 'react';
 import { Task, TaskStatus } from '../types';
 import { useDesk } from '../context/DeskContext';
-import { formatRupees, rupeesToPaise } from '../utils/currencyUtils';
+import { formatRupees } from '../utils/currencyUtils';
+import { formatDisplayDate } from '../utils/dateUtils';
 
 interface TaskCardProps {
   task: Task;
@@ -61,7 +62,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             {task.title}
           </span>
           <span className="font-micro-legal text-micro-legal text-outline font-mono">
-            {task.created_at}
+            {formatDisplayDate(task.created_at)}
           </span>
         </div>
 
@@ -87,7 +88,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         {task.billing_amount !== undefined && (
           <div className="text-xs text-on-surface-variant flex items-center gap-1 font-mono">
             <span className="material-symbols-outlined text-[14px]">payments</span>
-            {formatRupees(rupeesToPaise(task.billing_amount))} ({totalPaid >= task.billing_amount ? "PAID" : totalPaid > 0 ? "PARTIAL" : "UNPAID"}{totalPaid > 0 ? ` - Paid ${formatRupees(rupeesToPaise(totalPaid))}` : ''})
+            {formatRupees(task.billing_amount)} ({totalPaid >= task.billing_amount ? "PAID" : totalPaid > 0 ? "PARTIAL" : "UNPAID"}{totalPaid > 0 ? ` - Paid ${formatRupees(totalPaid)}` : ''})
           </div>
         )}
 
@@ -234,7 +235,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 <span className="text-surface-dim">•</span>
                 <span className="flex items-center gap-1 font-mono">
                   <span className="material-symbols-outlined text-xs">payments</span>
-                  {formatRupees(rupeesToPaise(task.billing_amount))} ({totalPaid >= task.billing_amount ? "PAID" : totalPaid > 0 ? "PARTIAL" : "UNPAID"}{totalPaid > 0 ? ` - Paid ${formatRupees(rupeesToPaise(totalPaid))}` : ''})
+                  {formatRupees(task.billing_amount)} ({totalPaid >= task.billing_amount ? "PAID" : totalPaid > 0 ? "PARTIAL" : "UNPAID"}{totalPaid > 0 ? ` - Paid ${formatRupees(totalPaid)}` : ''})
                 </span>
               </>
             )}

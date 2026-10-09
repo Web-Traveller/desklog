@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useDesk } from '../context/DeskContext';
 import { CustomerCard } from '../components/CustomerCard';
 import { TaskCard } from '../components/TaskCard';
+import { EmptyState } from '../components/EmptyState';
 
 export const SearchPage: React.FC = () => {
   const { searchQuery, customers, tasks } = useDesk();
@@ -34,10 +35,14 @@ export const SearchPage: React.FC = () => {
 
   if (sortBy === 'name') {
     matchingCustomers = [...matchingCustomers].sort((a, b) => a.name.localeCompare(b.name));
-    matchingTasks = [...matchingTasks].sort((a, b) => a.id.localeCompare(b.id));
+    matchingTasks = [...matchingTasks].sort((a, b) => a.title.localeCompare(b.title));
   } else if (sortBy === 'recent') {
-    matchingCustomers = [...matchingCustomers].reverse();
-    matchingTasks = [...matchingTasks].reverse();
+    matchingCustomers = [...matchingCustomers].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    matchingTasks = [...matchingTasks].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
   }
 
   const totalMatches = matchingCustomers.length + matchingTasks.length;
@@ -78,7 +83,7 @@ export const SearchPage: React.FC = () => {
               <select
                 className="bg-transparent font-medium text-on-surface focus:outline-none cursor-pointer"
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
+                onChange={(e) => setSortBy(e.target.value as 'relevance' | 'recent' | 'name')}
               >
                 <option value="relevance">Highest Relevance</option>
                 <option value="recent">Most Recent Date</option>
@@ -138,67 +143,75 @@ export const SearchPage: React.FC = () => {
       </div>
 
       {/* Main Results Column */}
-      <div className="flex flex-col gap-space-xl">
-        {/* Customer Profiles Results */}
-        {(activeFilter === 'all' || activeFilter === 'customers') && (
-          <section className="flex flex-col gap-space-md">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-space-xs">
-                <span className="material-symbols-outlined text-primary text-xl">person_pin</span>
-                <h2 className="font-tagline text-tagline text-on-surface font-semibold">
-                  Customer Profiles
-                </h2>
-                <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-fine-print text-fine-print font-medium">
-                  {matchingCustomers.length} matches
-                </span>
+      {totalMatches === 0 ? (
+        <EmptyState
+          icon="search_off"
+          title="No records found"
+          description={`No customer profile, mobile number, or task title matching "${searchQuery}".`}
+        />
+      ) : (
+        <div className="flex flex-col gap-space-xl">
+          {/* Customer Profiles Results */}
+          {(activeFilter === 'all' || activeFilter === 'customers') && matchingCustomers.length > 0 && (
+            <section className="flex flex-col gap-space-md">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-space-xs">
+                  <span className="material-symbols-outlined text-primary text-xl">person_pin</span>
+                  <h2 className="font-tagline text-tagline text-on-surface font-semibold">
+                    Customer Profiles
+                  </h2>
+                  <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-fine-print text-fine-print font-medium">
+                    {matchingCustomers.length} matches
+                  </span>
+                </div>
               </div>
-            </div>
 
-            <div className="flex flex-col gap-space-md">
-              {matchingCustomers.map((cust) => {
-                const custTasks = tasks.filter((t) => t.customer_id === cust.id);
-                const activeCount = custTasks.filter((t) => t.status !== 'DELIVERED').length;
-                const completedCount = custTasks.filter((t) => t.status === 'DELIVERED').length;
-                const ongoingTask = custTasks.find((t) => t.status !== 'DELIVERED')?.title;
+              <div className="flex flex-col gap-space-md">
+                {matchingCustomers.map((cust) => {
+                  const custTasks = tasks.filter((t) => t.customer_id === cust.id);
+                  const activeCount = custTasks.filter((t) => t.status !== 'DELIVERED').length;
+                  const completedCount = custTasks.filter((t) => t.status === 'DELIVERED').length;
+                  const ongoingTask = custTasks.find((t) => t.status !== 'DELIVERED')?.title;
 
-                return (
-                  <CustomerCard
-                    key={cust.id}
-                    activeTasksCount={activeCount}
-                    completedTasksCount={completedCount}
-                    customer={cust}
-                    highlightQuery={searchQuery}
-                    ongoingTaskTitle={ongoingTask}
-                  />
-                );
-              })}
-            </div>
-          </section>
-        )}
-
-        {/* Tasks & Services Results */}
-        {(activeFilter === 'all' || activeFilter === 'tasks') && (
-          <section className="flex flex-col gap-space-md mt-space-md">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-space-xs">
-                <span className="material-symbols-outlined text-primary text-xl">checklist</span>
-                <h2 className="font-tagline text-tagline text-on-surface font-semibold">
-                  Task & Service Records
-                </h2>
-                <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-fine-print text-fine-print font-medium">
-                  {matchingTasks.length} matches
-                </span>
+                  return (
+                    <CustomerCard
+                      key={cust.id}
+                      activeTasksCount={activeCount}
+                      completedTasksCount={completedCount}
+                      customer={cust}
+                      highlightQuery={searchQuery}
+                      ongoingTaskTitle={ongoingTask}
+                    />
+                  );
+                })}
               </div>
-            </div>
+            </section>
+          )}
 
-            <div className="flex flex-col gap-space-xs">
-              {matchingTasks.map((task) => (
-                <TaskCard key={task.id} layout="list" task={task} />
-              ))}
-            </div>
-          </section>
-        )}
-      </div>
+          {/* Tasks & Services Results */}
+          {(activeFilter === 'all' || activeFilter === 'tasks') && matchingTasks.length > 0 && (
+            <section className="flex flex-col gap-space-md mt-space-md">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-space-xs">
+                  <span className="material-symbols-outlined text-primary text-xl">checklist</span>
+                  <h2 className="font-tagline text-tagline text-on-surface font-semibold">
+                    Task & Service Records
+                  </h2>
+                  <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-fine-print text-fine-print font-medium">
+                    {matchingTasks.length} matches
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-space-xs">
+                {matchingTasks.map((task) => (
+                  <TaskCard key={task.id} layout="list" task={task} />
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
     </div>
   );
 };

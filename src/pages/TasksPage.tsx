@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useDesk } from "../context/DeskContext";
 import { TaskCard } from "../components/TaskCard";
+import { EmptyState } from "../components/EmptyState";
 import { TaskStatus } from "../types";
 import { isTaskOverdue } from "../services/taskService";
 import { calculatePaymentStatus } from "../services/paymentService";
@@ -161,7 +162,7 @@ export const TasksPage: React.FC = () => {
           <select
             value={paymentFilter}
             onChange={(e) => {
-              setPaymentFilter(e.target.value as any);
+              setPaymentFilter(e.target.value as "ALL" | "UNPAID" | "PARTIALLY_PAID" | "PAID");
               setTaskPage(0);
             }}
             className="w-full px-space-md py-2.5 rounded-full bg-surface-container-low text-on-surface font-button-utility text-button-utility border border-surface-container-high/40 cursor-pointer"
@@ -209,19 +210,17 @@ export const TasksPage: React.FC = () => {
 
       {/* Task List */}
       {paginatedTasks.length === 0 ? (
-        <div className="py-16 text-center text-on-surface-variant flex flex-col items-center gap-2 bg-surface-container-lowest rounded-2xl border border-surface-container/60">
-          <span className="material-symbols-outlined text-4xl text-outline/40">
-            assignment_turned_in
-          </span>
-          <span className="font-caption-strong text-caption-strong">
-            No tasks found
-          </span>
-          <p className="font-fine-print text-fine-print text-outline">
-            {searchTerm
+        <EmptyState
+          icon="assignment_turned_in"
+          title="No tasks found"
+          description={
+            searchTerm
               ? `No tasks matching "${searchTerm}"`
-              : "No task records matching the selected filters."}
-          </p>
-        </div>
+              : "No task records matching the selected filters."
+          }
+          actionLabel="+ Create New Task"
+          onAction={() => setIsAddTaskOpen(true)}
+        />
       ) : (
         <div className="flex flex-col gap-space-sm">
           {paginatedTasks.map((task) => (

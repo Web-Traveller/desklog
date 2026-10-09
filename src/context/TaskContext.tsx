@@ -31,6 +31,7 @@ import { isTaskOverdue } from '../services/taskService';
 import { useUI } from './UIContext';
 import { useCustomers } from './CustomerContext';
 import { useBanking } from './BankingContext';
+import { formatRupees } from '../utils/currencyUtils';
 
 interface TaskContextType {
   tasks: Task[];
@@ -155,7 +156,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const act = createActivityEvent({
         type: 'payment_added',
-        title: `Payment received: ₹${saved.amount}`,
+        title: `Payment received: ${formatRupees(saved.amount)}`,
         description: `Payment recorded for task ${targetTask?.title || 'Desk Work'}.`,
         taskId: saved.task_id,
         customerId: targetCustomer?.id,

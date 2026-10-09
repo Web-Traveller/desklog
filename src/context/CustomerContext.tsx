@@ -62,7 +62,7 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       created_at: now,
       updated_at: now,
       is_active: true,
-      is_verified: true,
+      is_verified: false,
       avatar_initials: initials || 'CU',
       avatar_color: color,
     };

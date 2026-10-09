@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { useDesk } from '../context/DeskContext';
 import { Header } from '../components/Header';
 import { AddBankingTransactionModal } from '../components/AddBankingTransactionModal';
+import { EmptyState } from '../components/EmptyState';
 import { formatDisplayDate } from '../utils/dateUtils';
 import { formatRupees } from '../utils/currencyUtils';
-import { parseBankingMetadata, BankingTransaction } from '../types';
+import { formatRefDetails } from '../utils/bankingUtils';
 
 export const BankingPage: React.FC = () => {
-  const { bankingTransactions, customers, deleteBankingTransaction } = useDesk();
+  const { bankingTransactions, customers, deleteBankingTransaction, showConfirm } = useDesk();
   const [isModalOpen, setIsModalOpen] = useState(false);
   
   const [filterType, setFilterType] = useState('All');
@@ -34,34 +35,6 @@ export const BankingPage: React.FC = () => {
 
   const getCustomerName = (id: string) => {
     return customers.find(c => c.id === id)?.name || 'Unknown';
-  };
-
-  const renderRefDetails = (tx: BankingTransaction) => {
-    const meta = parseBankingMetadata(tx.metadata);
-    if (Object.keys(meta).length === 0) return tx.transaction_ref_no || '-';
-
-    // Return unmasked details based on type
-    if (tx.transaction_type === 'Transfer') {
-      if (tx.payment_mode === 'Bank Transfer') {
-        return `A/C: ${meta.beneficiary_account || ''} | IFSC: ${meta.beneficiary_ifsc || ''} | Ref: ${tx.transaction_ref_no || ''}`;
-      }
-      if (tx.payment_mode === 'UPI') {
-        return `UPI: ${meta.beneficiary_upi || ''} | Ref: ${tx.transaction_ref_no || ''}`;
-      }
-    }
-    if (tx.transaction_type === 'Withdrawal') {
-      if (tx.payment_mode.startsWith('AePS')) {
-        return `Aadhaar: ${meta.customer_aadhaar_number || meta.customer_id_number || ''} | Bank: ${meta.customer_bank || ''} | Ref: ${tx.transaction_ref_no || ''}`;
-      }
-    }
-    
-    // Default fallback to show something useful
-    const parts = [];
-    if (meta.target_account) parts.push(`A/C: ${meta.target_account}`);
-    if (meta.target_upi) parts.push(`UPI: ${meta.target_upi}`);
-    if (tx.transaction_ref_no) parts.push(`Ref: ${tx.transaction_ref_no}`);
-    
-    return parts.join(' | ') || '-';
   };
 
   return (
@@ -120,11 +93,19 @@ export const BankingPage: React.FC = () => {
               </thead>
               <tbody>
                 {filteredTransactions.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-space-xl text-center text-outline font-body">
-                      No transactions found.
-                    </td>
-                  </tr>
+                  <EmptyState
+                    isTableRow
+                    colSpan={7}
+                    icon="account_balance_wallet"
+                    title="No banking transactions found"
+                    description={
+                      filterType !== 'All' || dateFilter !== 'All Time'
+                        ? `No records matching type "${filterType}" and timeframe "${dateFilter}".`
+                        : 'Record your first bank transfer, AePS withdrawal, or deposit.'
+                    }
+                    actionLabel="+ New Transaction"
+                    onAction={() => setIsModalOpen(true)}
+                  />
                 ) : (
                   filteredTransactions.map((tx) => (
                     <tr key={tx.id} className="border-b border-surface-container/40 last:border-0 hover:bg-surface-container-lowest/80 transition-colors group">
@@ -150,13 +131,19 @@ export const BankingPage: React.FC = () => {
                         {formatRupees(tx.amount)}
                       </td>
                       <td className="p-space-md text-sm text-outline font-mono">
-                        {renderRefDetails(tx)}
+                        {formatRefDetails(tx)}
                       </td>
                       <td className="p-space-md text-center">
                         <button
                           onClick={() => {
-                            if(window.confirm('Are you sure you want to delete this transaction?')) {
-                              if(tx.id) deleteBankingTransaction(tx.id);
+                            if (tx.id) {
+                              showConfirm({
+                                title: 'Delete Banking Transaction',
+                                message: 'Are you sure you want to delete this banking transaction? This action cannot be undone.',
+                                confirmText: 'Delete Transaction',
+                                variant: 'danger',
+                                onConfirm: () => deleteBankingTransaction(tx.id!),
+                              });
                             }
                           }}
                           className="p-1.5 text-error hover:bg-error-container hover:text-on-error-container rounded-full transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"

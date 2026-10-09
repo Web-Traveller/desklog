@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { useDesk } from "../context/DeskContext";
+import { EmptyState } from "../components/EmptyState";
 import { Service } from "../types";
-import { formatRupees, rupeesToPaise } from "../utils/currencyUtils";
+import { formatRupees, rupeesToPaise, paiseToRupees } from "../utils/currencyUtils";
 
 export const ServicesPage: React.FC = () => {
   const { services, addService, editService } = useDesk();
@@ -20,7 +21,7 @@ export const ServicesPage: React.FC = () => {
 
     await addService({
       name: newServiceName.trim(),
-      default_price: newServicePrice ? Number(newServicePrice) : undefined,
+      default_price: newServicePrice ? rupeesToPaise(newServicePrice) : undefined,
       is_active: true,
     });
 
@@ -33,7 +34,7 @@ export const ServicesPage: React.FC = () => {
     setEditingService(svc);
     setEditName(svc.name);
     setEditPrice(
-      svc.default_price !== undefined ? svc.default_price.toString() : "",
+      svc.default_price !== undefined ? paiseToRupees(svc.default_price).toString() : "",
     );
   };
 
@@ -44,7 +45,7 @@ export const ServicesPage: React.FC = () => {
     await editService({
       ...editingService,
       name: editName.trim(),
-      default_price: editPrice ? Number(editPrice) : undefined,
+      default_price: editPrice ? rupeesToPaise(editPrice) : undefined,
       updated_at: new Date().toISOString(),
     });
 
@@ -190,9 +191,13 @@ export const ServicesPage: React.FC = () => {
       {/* Services List */}
       <div className="flex flex-col gap-space-xs">
         {services.length === 0 ? (
-          <div className="text-center py-space-2xl text-on-surface-variant bg-surface-container-lowest rounded-2xl border border-surface-container/60">
-            No service templates configured yet.
-          </div>
+          <EmptyState
+            icon="design_services"
+            title="No service templates configured"
+            description="Create shop service catalog templates with default billing prices for rapid work logging."
+            actionLabel="+ Add New Service"
+            onAction={() => setIsAdding(true)}
+          />
         ) : (
           services.map((svc) => (
             <div
@@ -221,7 +226,7 @@ export const ServicesPage: React.FC = () => {
                   <p className="font-caption text-caption text-on-surface-variant">
                     Default Billing Price:{" "}
                     <strong className="text-on-surface font-mono">
-                      {formatRupees(rupeesToPaise(svc.default_price))}
+                      {formatRupees(svc.default_price)}
                     </strong>
                   </p>
                 </div>

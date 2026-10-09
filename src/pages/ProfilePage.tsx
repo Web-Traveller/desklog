@@ -4,10 +4,11 @@ import { CustomerAvatar } from "../components/CustomerAvatar";
 import { MetricCard } from "../components/MetricCard";
 import { TaskCard } from "../components/TaskCard";
 import { EditCustomerModal } from "../components/EditCustomerModal";
+import { EmptyState } from "../components/EmptyState";
 import { calculateDueAmount } from "../services/paymentService";
 import { formatDisplayDate } from "../utils/dateUtils";
-import { formatRupees, rupeesToPaise } from "../utils/currencyUtils";
-import { parseBankingMetadata } from "../types";
+import { formatRupees } from "../utils/currencyUtils";
+import { formatRefDetails } from "../utils/bankingUtils";
 
 export const ProfilePage: React.FC = () => {
   const {
@@ -24,7 +25,7 @@ export const ProfilePage: React.FC = () => {
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [taskFilter, setTaskFilter] = useState<
-    "all" | "PROCESSING" | "DELIVERED"
+    "all" | "active" | "DELIVERED"
   >("all");
   const [activeTab, setActiveTab] = useState<"tasks" | "banking">("tasks");
 
@@ -56,7 +57,7 @@ export const ProfilePage: React.FC = () => {
   };
 
   const filteredTasks = customerTasks.filter((t) => {
-    if (taskFilter === "PROCESSING") return t.status !== "DELIVERED";
+    if (taskFilter === "active") return t.status !== "DELIVERED";
     if (taskFilter === "DELIVERED") return t.status === "DELIVERED";
     return true;
   });
@@ -78,32 +79,6 @@ export const ProfilePage: React.FC = () => {
         "success",
       );
     }
-  };
-
-  const renderRefDetails = (tx: any) => {
-    const meta = parseBankingMetadata(tx.metadata);
-    if (Object.keys(meta).length === 0) return tx.transaction_ref_no || '-';
-
-    if (tx.transaction_type === 'Transfer') {
-      if (tx.payment_mode === 'Bank Transfer') {
-        return `A/C: ${meta.beneficiary_account || ''} | IFSC: ${meta.beneficiary_ifsc || ''} | Ref: ${tx.transaction_ref_no || ''}`;
-      }
-      if (tx.payment_mode === 'UPI') {
-        return `UPI: ${meta.beneficiary_upi || ''} | Ref: ${tx.transaction_ref_no || ''}`;
-      }
-    }
-    if (tx.transaction_type === 'Withdrawal') {
-      if (tx.payment_mode.startsWith('AePS')) {
-        return `Aadhaar: ${meta.customer_aadhaar_number || meta.customer_id_number || ''} | Bank: ${meta.customer_bank || ''} | Ref: ${tx.transaction_ref_no || ''}`;
-      }
-    }
-    
-    const parts = [];
-    if (meta.target_account) parts.push(`A/C: ${meta.target_account}`);
-    if (meta.target_upi) parts.push(`UPI: ${meta.target_upi}`);
-    if (tx.transaction_ref_no) parts.push(`Ref: ${tx.transaction_ref_no}`);
-    
-    return parts.join(' | ') || '-';
   };
 
   if (!customer) return null;
@@ -253,7 +228,7 @@ export const ProfilePage: React.FC = () => {
             totalDueBalance > 0 ? "text-tertiary" : "text-secondary"
           }
           title="Due Balance"
-          value={formatRupees(rupeesToPaise(totalDueBalance))}
+          value={formatRupees(totalDueBalance)}
         />
       </div>
 
@@ -306,11 +281,11 @@ export const ProfilePage: React.FC = () => {
             </button>
             <button
               className={`px-space-sm py-1 rounded-lg transition-all ${
-                taskFilter === "PROCESSING"
+                taskFilter === "active"
                   ? "bg-surface-container-lowest text-on-surface font-medium shadow-xs"
                   : "hover:text-on-surface"
               }`}
-              onClick={() => setTaskFilter("PROCESSING")}
+              onClick={() => setTaskFilter("active")}
               type="button"
             >
               Active ({pendingCount + processingCount})
@@ -331,9 +306,12 @@ export const ProfilePage: React.FC = () => {
 
         <div className="flex flex-col gap-space-md">
           {filteredTasks.length === 0 ? (
-            <div className="py-8 text-center text-fine-print text-outline font-caption">
-              No tasks found for this filter.
-            </div>
+            <EmptyState
+              compact
+              icon="assignment"
+              title="No tasks found"
+              description="No tasks logged matching the selected stage filter."
+            />
           ) : (
             filteredTasks.map((t) => (
               <TaskCard
@@ -372,11 +350,14 @@ export const ProfilePage: React.FC = () => {
             </thead>
             <tbody>
               {customerBankingTxs.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="p-8 text-center text-on-surface-variant">
-                    No banking transactions found for this customer.
-                  </td>
-                </tr>
+                <EmptyState
+                  compact
+                  isTableRow
+                  colSpan={5}
+                  icon="account_balance_wallet"
+                  title="No banking history"
+                  description="No banking transactions recorded for this customer profile."
+                />
               ) : (
                 customerBankingTxs.map((tx) => (
                   <tr key={tx.id} className="border-b border-surface-variant/50 hover:bg-surface-container-lowest/50 transition-colors">
@@ -384,10 +365,10 @@ export const ProfilePage: React.FC = () => {
                       {formatDisplayDate(tx.transaction_date)}
                     </td>
                     <td className="p-4">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                        tx.transaction_type === 'Transfer' ? 'bg-blue-100 text-blue-800' :
-                        tx.transaction_type === 'Withdrawal' ? 'bg-orange-100 text-orange-800' :
-                        'bg-green-100 text-green-800'
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${
+                        tx.transaction_type === 'Transfer' ? 'bg-primary-container text-on-primary-container' :
+                        tx.transaction_type === 'Withdrawal' ? 'bg-tertiary-container text-on-tertiary-container' :
+                        'bg-secondary-container text-on-secondary-container'
                       }`}>
                         {tx.transaction_type}
                       </span>
@@ -399,7 +380,7 @@ export const ProfilePage: React.FC = () => {
                       {formatRupees(tx.amount)}
                     </td>
                     <td className="p-4 text-sm text-on-surface-variant font-mono">
-                      {renderRefDetails(tx)}
+                      {formatRefDetails(tx)}
                     </td>
                   </tr>
                 ))

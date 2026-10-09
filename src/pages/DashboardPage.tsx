@@ -4,7 +4,7 @@ import { TaskCard } from "../components/TaskCard";
 import { CustomerAvatar } from "../components/CustomerAvatar";
 import { MetricCard } from "../components/MetricCard";
 import { calculateDashboardMetrics } from "../services/taskService";
-import { formatRupees, rupeesToPaise } from "../utils/currencyUtils";
+import { formatRupees } from "../utils/currencyUtils";
 
 export const DashboardPage: React.FC = () => {
   const {
@@ -100,7 +100,7 @@ export const DashboardPage: React.FC = () => {
           icon="payments"
           iconColorClass="text-secondary"
           title="Today's Collection"
-          value={formatRupees(rupeesToPaise(metrics.todayCollection))}
+          value={formatRupees(metrics.todayCollection)}
           subtitle="Payments received today"
         />
       </div>
@@ -155,7 +155,7 @@ export const DashboardPage: React.FC = () => {
               checklist
             </span>
             <h2 className="font-body-strong text-body-strong text-on-surface font-semibold">
-              Active Counter Workload
+              Active Tasks
             </h2>
           </div>
           <span className="font-fine-print text-fine-print text-on-surface-variant">

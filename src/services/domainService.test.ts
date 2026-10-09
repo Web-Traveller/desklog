@@ -39,34 +39,34 @@ describe('Phase 18: Core Domain Business Rules', () => {
     const service: Service = {
       id: 'svc-1',
       name: 'Passport Application',
-      default_price: 150, // ₹150 initial price
+      default_price: 15000, // ₹150 initial price in paise
       is_active: true,
       created_at: '2026-01-01',
       updated_at: '2026-01-01',
     };
 
-    // Task created when default price was ₹150
+    // Task created when default price was ₹150 (15000 paise)
     const historicalTask: Task = {
       id: 'task-1',
       customer_id: 'cust-1',
       service_id: service.id,
       title: service.name,
-      billing_amount: 150,
+      billing_amount: 15000,
       status: 'DELIVERED',
       created_at: '2026-01-02 10:00:00',
       updated_at: '2026-01-02 10:00:00',
     };
 
-    // Service price increased to ₹200
+    // Service price increased to ₹200 (20000 paise)
     const updatedService: Service = {
       ...service,
-      default_price: 200,
+      default_price: 20000,
       updated_at: '2026-09-01',
     };
 
-    expect(updatedService.default_price).toBe(200);
-    // Historical task remains ₹150
-    expect(historicalTask.billing_amount).toBe(150);
+    expect(updatedService.default_price).toBe(20000);
+    // Historical task remains ₹150 (15000 paise)
+    expect(historicalTask.billing_amount).toBe(15000);
   });
 
   test('Payment System: Partial payments, full payments, and due amounts', () => {
@@ -74,7 +74,7 @@ describe('Phase 18: Core Domain Business Rules', () => {
       id: 'task-201',
       customer_id: 'cust-1',
       title: 'Income Certificate',
-      billing_amount: 500,
+      billing_amount: 50000, // ₹500 in paise
       status: 'PROCESSING',
       created_at: '2026-09-29 10:00:00',
       updated_at: '2026-09-29 10:00:00',
@@ -82,25 +82,25 @@ describe('Phase 18: Core Domain Business Rules', () => {
 
     const initialPayments: Payment[] = [];
 
-    // 1. Initial State: ₹0 paid -> UNPAID, ₹500 due
+    // 1. Initial State: ₹0 paid -> UNPAID, 50000 paise due
     expect(calculatePaidTotal(initialPayments)).toBe(0);
-    expect(calculateDueAmount(task.billing_amount, initialPayments)).toBe(500);
+    expect(calculateDueAmount(task.billing_amount, initialPayments)).toBe(50000);
     expect(calculatePaymentStatus(task.billing_amount, initialPayments)).toBe('UNPAID');
 
-    // 2. Partial Payment: ₹200 paid -> PARTIALLY_PAID, ₹300 due
+    // 2. Partial Payment: ₹200 (20000 paise) paid -> PARTIALLY_PAID, 30000 paise due
     const partialPayments: Payment[] = [
-      { id: 'pay-1', task_id: task.id, amount: 200, created_at: '2026-09-29 11:00:00' },
+      { id: 'pay-1', task_id: task.id, amount: 20000, created_at: '2026-09-29 11:00:00' },
     ];
-    expect(calculatePaidTotal(partialPayments)).toBe(200);
-    expect(calculateDueAmount(task.billing_amount, partialPayments)).toBe(300);
+    expect(calculatePaidTotal(partialPayments)).toBe(20000);
+    expect(calculateDueAmount(task.billing_amount, partialPayments)).toBe(30000);
     expect(calculatePaymentStatus(task.billing_amount, partialPayments)).toBe('PARTIALLY_PAID');
 
-    // 3. Full Payment: Additional ₹300 paid -> PAID, ₹0 due
+    // 3. Full Payment: Additional ₹300 (30000 paise) paid -> PAID, 0 due
     const fullPayments: Payment[] = [
       ...partialPayments,
-      { id: 'pay-2', task_id: task.id, amount: 300, created_at: '2026-09-29 12:00:00' },
+      { id: 'pay-2', task_id: task.id, amount: 30000, created_at: '2026-09-29 12:00:00' },
     ];
-    expect(calculatePaidTotal(fullPayments)).toBe(500);
+    expect(calculatePaidTotal(fullPayments)).toBe(50000);
     expect(calculateDueAmount(task.billing_amount, fullPayments)).toBe(0);
     expect(calculatePaymentStatus(task.billing_amount, fullPayments)).toBe('PAID');
   });

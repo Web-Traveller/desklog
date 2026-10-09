@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useDesk } from '../context/DeskContext';
 import { CustomerCard } from '../components/CustomerCard';
+import { EmptyState } from '../components/EmptyState';
 
 export const CustomersPage: React.FC = () => {
   const { customers, tasks, setIsAddCustomerOpen, customerPage, setCustomerPage, ITEMS_PER_PAGE } = useDesk();
@@ -77,13 +78,13 @@ export const CustomersPage: React.FC = () => {
 
       {/* Grid of Customer Cards */}
       {paginatedCustomers.length === 0 ? (
-        <div className="py-16 text-center text-on-surface-variant flex flex-col items-center gap-2 bg-surface-container-lowest rounded-2xl border border-surface-container/60">
-          <span className="material-symbols-outlined text-4xl text-outline/40">person_off</span>
-          <span className="font-caption-strong text-caption-strong">No customers found</span>
-          <p className="font-fine-print text-fine-print text-outline">
-            {customerSearch ? `No client matching "${customerSearch}"` : 'Register your first client to get started.'}
-          </p>
-        </div>
+        <EmptyState
+          icon="person_off"
+          title="No customers found"
+          description={customerSearch ? `No client matching "${customerSearch}"` : 'Register your first client to get started.'}
+          actionLabel="+ Add New Customer"
+          onAction={() => setIsAddCustomerOpen(true)}
+        />
       ) : (
         <div className="flex flex-col gap-space-md">
           {paginatedCustomers.map((customer) => {

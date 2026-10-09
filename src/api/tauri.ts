@@ -53,12 +53,7 @@ export async function deleteTauriCustomer(id: string): Promise<boolean> {
 export async function fetchTauriTasks(): Promise<Task[] | null> {
   if (!isTauriEnv()) return null;
   try {
-    const tasks = await invoke<Task[]>('get_tasks');
-    return tasks.map(t => ({
-      ...t,
-      // Convert DB cents -> rupees in JS domain model
-      billing_amount: t.billing_amount !== undefined && t.billing_amount !== null ? t.billing_amount / 100 : undefined,
-    }));
+    return await invoke<Task[]>('get_tasks');
   } catch (err) {
     console.warn('Failed to fetch tasks:', err);
     return null;
@@ -68,12 +63,7 @@ export async function fetchTauriTasks(): Promise<Task[] | null> {
 export async function fetchTauriTask(id: string): Promise<Task | null> {
   if (!isTauriEnv()) return null;
   try {
-    const t = await invoke<Task | null>('get_task', { id });
-    if (!t) return null;
-    return {
-      ...t,
-      billing_amount: t.billing_amount !== undefined && t.billing_amount !== null ? t.billing_amount / 100 : undefined,
-    };
+    return await invoke<Task | null>('get_task', { id });
   } catch (err) {
     console.warn('Failed to fetch task:', err);
     return null;
@@ -83,20 +73,7 @@ export async function fetchTauriTask(id: string): Promise<Task | null> {
 export async function saveTauriTask(task: Task): Promise<Task | null> {
   if (!isTauriEnv()) return task;
   try {
-    const rawBilling = task.billing_amount;
-    const safeCents = rawBilling !== undefined && rawBilling !== null && !isNaN(Number(rawBilling))
-      ? Math.round(Number(rawBilling) * 100)
-      : undefined;
-
-    const taskForDb = {
-      ...task,
-      billing_amount: safeCents,
-    };
-    const saved = await invoke<Task>('add_task', { task: taskForDb });
-    return {
-      ...saved,
-      billing_amount: saved.billing_amount !== undefined && saved.billing_amount !== null ? Math.round(saved.billing_amount) / 100 : undefined,
-    };
+    return await invoke<Task>('add_task', { task });
   } catch (err) {
     console.warn('Failed to save task:', err);
     return null;
@@ -106,16 +83,7 @@ export async function saveTauriTask(task: Task): Promise<Task | null> {
 export async function updateTauriTask(task: Task): Promise<boolean> {
   if (!isTauriEnv()) return true;
   try {
-    const rawBilling = task.billing_amount;
-    const safeCents = rawBilling !== undefined && rawBilling !== null && !isNaN(Number(rawBilling))
-      ? Math.round(Number(rawBilling) * 100)
-      : undefined;
-
-    const taskForDb = {
-      ...task,
-      billing_amount: safeCents,
-    };
-    await invoke('edit_task', { task: taskForDb });
+    await invoke('edit_task', { task });
     return true;
   } catch (err) {
     console.warn('Failed to edit task:', err);
@@ -138,12 +106,7 @@ export async function deleteTauriTask(id: string): Promise<boolean> {
 export async function fetchTauriServices(): Promise<Service[] | null> {
   if (!isTauriEnv()) return null;
   try {
-    const services = await invoke<Service[]>('get_services');
-    return services.map(s => ({
-      ...s,
-      // Convert DB cents -> rupees in JS domain model
-      default_price: s.default_price !== undefined && s.default_price !== null ? s.default_price / 100 : undefined,
-    }));
+    return await invoke<Service[]>('get_services');
   } catch (err) {
     console.warn('Failed to fetch services:', err);
     return null;
@@ -153,16 +116,7 @@ export async function fetchTauriServices(): Promise<Service[] | null> {
 export async function saveTauriService(service: Service): Promise<Service | null> {
   if (!isTauriEnv()) return service;
   try {
-    const svcForDb = {
-      ...service,
-      // Convert rupees in JS -> cents in DB
-      default_price: service.default_price !== undefined && service.default_price !== null ? Math.round(service.default_price * 100) : undefined,
-    };
-    const saved = await invoke<Service>('add_service', { service: svcForDb });
-    return {
-      ...saved,
-      default_price: saved.default_price !== undefined && saved.default_price !== null ? saved.default_price / 100 : undefined,
-    };
+    return await invoke<Service>('add_service', { service });
   } catch (err) {
     console.warn('Failed to save service:', err);
     return null;
@@ -172,12 +126,7 @@ export async function saveTauriService(service: Service): Promise<Service | null
 export async function updateTauriService(service: Service): Promise<boolean> {
   if (!isTauriEnv()) return true;
   try {
-    const svcForDb = {
-      ...service,
-      // Convert rupees in JS -> cents in DB
-      default_price: service.default_price !== undefined && service.default_price !== null ? Math.round(service.default_price * 100) : undefined,
-    };
-    await invoke('edit_service', { service: svcForDb });
+    await invoke('edit_service', { service });
     return true;
   } catch (err) {
     console.warn('Failed to edit service:', err);
@@ -200,12 +149,7 @@ export async function deleteTauriService(id: string): Promise<boolean> {
 export async function fetchTauriPayments(): Promise<Payment[] | null> {
   if (!isTauriEnv()) return null;
   try {
-    const payments = await invoke<Payment[]>('get_payments');
-    return payments.map(p => ({
-      ...p,
-      // Convert DB cents -> rupees in JS domain model
-      amount: p.amount / 100,
-    }));
+    return await invoke<Payment[]>('get_payments');
   } catch (err) {
     console.warn('Failed to fetch payments:', err);
     return null;
@@ -215,16 +159,7 @@ export async function fetchTauriPayments(): Promise<Payment[] | null> {
 export async function saveTauriPayment(payment: Payment): Promise<Payment | null> {
   if (!isTauriEnv()) return payment;
   try {
-    const pForDb = {
-      ...payment,
-      // Convert rupees in JS -> cents in DB
-      amount: Math.round(payment.amount * 100),
-    };
-    const saved = await invoke<Payment>('add_payment', { payment: pForDb });
-    return {
-      ...saved,
-      amount: saved.amount / 100,
-    };
+    return await invoke<Payment>('add_payment', { payment });
   } catch (err) {
     console.warn('Failed to save payment:', err);
     return null;
@@ -232,10 +167,20 @@ export async function saveTauriPayment(payment: Payment): Promise<Payment | null
 }
 
 // --- ACTIVITIES ---
+interface RawActivityEvent {
+  id: string;
+  activity_type: string;
+  title: string;
+  description: string;
+  task_id?: string;
+  customer_id?: string;
+  created_at?: string;
+}
+
 export async function fetchTauriActivities(): Promise<ActivityEvent[] | null> {
   if (!isTauriEnv()) return null;
   try {
-    const raw = await invoke<any[]>('get_activities');
+    const raw = await invoke<RawActivityEvent[]>('get_activities');
     return raw.map(a => {
       let timeStr = 'Just Now';
       let dateIsoStr = new Date().toISOString();

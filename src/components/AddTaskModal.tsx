@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useDesk } from '../context/DeskContext';
 import { TaskStatus } from '../types';
 import { CustomerSearchPicker } from './CustomerSearchPicker';
+import { rupeesToPaise, paiseToRupees } from '../utils/currencyUtils';
 
 export const AddTaskModal: React.FC = () => {
   const { isAddTaskOpen, setIsAddTaskOpen, customers, selectedCustomerId, addTask, services } = useDesk();
@@ -23,7 +24,7 @@ export const AddTaskModal: React.FC = () => {
     if (svcId) {
       const svc = services.find(s => s.id === svcId);
       if (svc && svc.default_price !== undefined) {
-        setBillingAmount(svc.default_price.toString());
+        setBillingAmount(paiseToRupees(svc.default_price).toString());
         if (!title) {
           setTitle(svc.name);
         }
@@ -46,7 +47,7 @@ export const AddTaskModal: React.FC = () => {
       status,
       target_date: targetDate || undefined,
       notes: notes.trim(),
-      billing_amount: billingAmount ? Number(billingAmount) : undefined,
+      billing_amount: billingAmount ? rupeesToPaise(billingAmount) : undefined,
       scheduled_date: scheduleDate || undefined,
     });
 
