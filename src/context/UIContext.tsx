@@ -88,13 +88,16 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     setCurrentPageInternal(page);
   };
 
-  const showToast = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
-    const id = Date.now().toString();
-    setToasts(prev => [...prev, { id, message, type }]);
-  };
-
   const removeToast = (id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
+  };
+
+  const showToast = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+    const id = `${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      removeToast(id);
+    }, 4000);
   };
 
   const showConfirm = (options: ConfirmOptions) => {

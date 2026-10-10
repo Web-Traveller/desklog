@@ -2,8 +2,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 import { Customer, Task, ActivityEvent, Service, Payment, Setting, BankingTransaction } from '../types';
 
-const isTauriEnv = (): boolean => {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+export const isTauriEnv = (): boolean => {
+  return typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
 };
 
 // --- CUSTOMERS ---
@@ -18,7 +18,7 @@ export async function fetchTauriCustomers(): Promise<Customer[] | null> {
 }
 
 export async function saveTauriCustomer(customer: Customer): Promise<Customer | null> {
-  if (!isTauriEnv()) return null;
+  if (!isTauriEnv()) return customer;
   try {
     return await invoke<Customer>('add_customer', { customer });
   } catch (err) {

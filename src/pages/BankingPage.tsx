@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useDesk } from '../context/DeskContext';
-import { Header } from '../components/Header';
 import { AddBankingTransactionModal } from '../components/AddBankingTransactionModal';
 import { EmptyState } from '../components/EmptyState';
 import { formatDisplayDate } from '../utils/dateUtils';
@@ -38,10 +37,7 @@ export const BankingPage: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col min-h-screen bg-surface">
-      <Header />
-
-      <main className="flex-1 p-space-md lg:p-space-lg flex flex-col max-w-7xl mx-auto w-full gap-space-md">
+    <div className="w-full max-w-[1400px] mx-auto px-gutter py-space-xl flex flex-col gap-space-lg animate-slideUp">
         
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-space-md bg-surface-container-lowest p-space-md lg:p-space-lg rounded-2xl shadow-xs border border-surface-container/60">
           <div className="flex flex-wrap items-center gap-space-sm">
@@ -159,7 +155,6 @@ export const BankingPage: React.FC = () => {
             </table>
           </div>
         </div>
-      </main>
 
       <AddBankingTransactionModal
         isOpen={isModalOpen}

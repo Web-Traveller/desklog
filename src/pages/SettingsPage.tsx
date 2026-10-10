@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useDesk } from "../context/DeskContext";
 import { check } from "@tauri-apps/plugin-updater";
+import { isTauriEnv } from "../api/tauri";
 
 interface SettingsPageProps {
   onOpenHelpModal?: () => void;
@@ -32,6 +33,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const handleCheckUpdates = async () => {
     setUpdateChecking(true);
     setUpdateStatus("Checking GitHub Releases...");
+
+    if (!isTauriEnv()) {
+      setTimeout(() => {
+        setUpdateStatus("DeskLog is up to date (Browser Dev Mode)");
+        showToast("DeskLog is up to date! (Browser environment)", "info");
+        setUpdateChecking(false);
+      }, 500);
+      return;
+    }
+
     try {
       const update = await check();
       if (update) {
