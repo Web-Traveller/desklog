@@ -119,6 +119,7 @@ impl Database {
         // Enable SQLite WAL (Write-Ahead Logging) mode and performance pragmas
         conn.execute_batch(
             "PRAGMA journal_mode = WAL;
+             PRAGMA busy_timeout = 5000;
              PRAGMA synchronous = NORMAL;
              PRAGMA foreign_keys = ON;"
         ).map_err(|e| format!("Failed to set database PRAGMAs: {}", e))?;
@@ -288,7 +289,8 @@ impl Database {
         }
 
         self.ensure_general_customer(&conn)?;
-        self.ensure_default_services(&conn)?;
+        // Clean up pre-added default services if present from earlier builds
+        let _ = conn.execute("DELETE FROM services WHERE id IN ('svc-pan', 'svc-aadhaar', 'svc-bank', 'svc-exam', 'svc-result');", []);
 
         Ok(())
     }
@@ -313,29 +315,6 @@ impl Database {
                  VALUES (?1, ?2, NULL, ?3, ?4, ?4, 1, 0, ?5, ?6);",
                 params![general_id, gen_name, gen_notes, gen_date, gen_initials, gen_color],
             )?;
-        }
-        Ok(())
-    }
-
-    fn ensure_default_services(&self, conn: &Connection) -> Result<()> {
-        let count: i64 = conn.query_row("SELECT COUNT(*) FROM services;", [], |row| row.get(0))?;
-        if count == 0 {
-            let now = chrono::Local::now().to_rfc3339();
-            let default_services = vec![
-                ("svc-pan", "PAN Card Application / Correction", 15000), // ₹150
-                ("svc-aadhaar", "Aadhaar Update / Linkage", 10000),        // ₹100
-                ("svc-bank", "Bank Account Linking / KYC", 10000),        // ₹100
-                ("svc-exam", "Online Exam / Form Fillup", 20000),         // ₹200
-                ("svc-result", "Result / Admit Card Download", 3000),     // ₹30
-            ];
-
-            for (id, name, price) in default_services {
-                conn.execute(
-                    "INSERT INTO services (id, name, default_price, is_active, created_at, updated_at)
-                     VALUES (?1, ?2, ?3, 1, ?4, ?4);",
-                    params![id, name, price, now],
-                )?;
-            }
         }
         Ok(())
     }
@@ -382,7 +361,13 @@ impl Database {
         let is_verified_int = customer.is_verified.map(|v| if v { 1 } else { 0 });
         conn.execute(
             "INSERT INTO customers (id, name, mobile, note, created_at, updated_at, is_active, is_verified, avatar_initials, avatar_color, aadhaar_number)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11);",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+             ON CONFLICT(id) DO UPDATE SET
+               name = excluded.name,
+               mobile = excluded.mobile,
+               note = excluded.note,
+               aadhaar_number = excluded.aadhaar_number,
+               updated_at = excluded.updated_at;",
             params![
                 customer.id,
                 customer.name,
@@ -480,7 +465,19 @@ impl Database {
         let conn = self.get_conn();
         conn.execute(
             "INSERT INTO tasks (id, customer_id, service_id, title, status, scheduled_date, scheduled_time, target_date, notes, billing_amount, cancellation_reason, created_at, updated_at, completed_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14);",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+             ON CONFLICT(id) DO UPDATE SET
+               title = excluded.title,
+               status = excluded.status,
+               service_id = excluded.service_id,
+               scheduled_date = excluded.scheduled_date,
+               scheduled_time = excluded.scheduled_time,
+               target_date = excluded.target_date,
+               notes = excluded.notes,
+               billing_amount = excluded.billing_amount,
+               cancellation_reason = excluded.cancellation_reason,
+               updated_at = excluded.updated_at,
+               completed_at = excluded.completed_at;",
             params![
                 task.id,
                 task.customer_id,

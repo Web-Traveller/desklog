@@ -4,33 +4,43 @@ import { CustomerCard } from '../components/CustomerCard';
 import { EmptyState } from '../components/EmptyState';
 
 export const CustomersPage: React.FC = () => {
-  const { customers, tasks, setIsAddCustomerOpen, customerPage, setCustomerPage, ITEMS_PER_PAGE } = useDesk();
+  const { customers, tasks, setIsAddCustomerOpen, confirmDeleteCustomer, navigateToCustomerProfile } = useDesk();
   const [customerSearch, setCustomerSearch] = useState<string>('');
+  const [page, setPage] = useState<number>(0);
+  const [pageSize, setPageSize] = useState<number>(18);
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
   const filteredCustomers = customers.filter((cust) => {
     if (!customerSearch.trim()) return true;
     const q = customerSearch.toLowerCase();
-    return cust.name.toLowerCase().includes(q) || (cust.mobile || "").includes(q);
+    return (
+      cust.name.toLowerCase().includes(q) ||
+      (cust.mobile || "").includes(q) ||
+      (cust.aadhaar_number || "").includes(q)
+    );
   });
 
-  const startIndex = customerPage * ITEMS_PER_PAGE;
-  const paginatedCustomers = filteredCustomers.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(filteredCustomers.length / pageSize) || 1;
+  const currentPageSafe = Math.min(page, totalPages - 1);
+  const startIndex = currentPageSafe * pageSize;
+  const paginatedCustomers = filteredCustomers.slice(startIndex, startIndex + pageSize);
 
   return (
-    <div className="w-full max-w-[1380px] mx-auto px-gutter py-space-lg flex flex-col gap-space-lg animate-slideUp">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-space-lg pb-space-xs border-b border-surface-container">
-        <div className="flex flex-col gap-space-xxs">
-          <h1 className="font-display-md text-display-md text-on-surface font-semibold tracking-tight">
+    <div className="w-full max-w-[1400px] mx-auto px-gutter py-space-md flex flex-col gap-4 animate-slideUp">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-surface-container">
+        <div>
+          <h1 className="font-display-md text-2xl text-on-surface font-semibold tracking-tight">
             Customer Directory
           </h1>
-          <p className="font-body text-body text-on-surface-variant max-w-2xl">
-            Browse and manage all {customers.length} registered customer profiles and phone records.
+          <p className="text-xs text-on-surface-variant">
+            Managing {customers.length} registered customer profiles
           </p>
         </div>
 
-        <div className="flex items-center gap-space-sm flex-wrap">
+        <div className="flex items-center gap-2">
           <button
-            className="flex items-center gap-space-xs px-space-md py-space-xs rounded-full bg-primary-container text-on-primary hover:bg-primary transition-all active:scale-95 font-button-utility text-button-utility shadow-sm"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-on-primary hover:bg-primary-container hover:text-on-primary-container transition-all active:scale-95 font-button-utility text-xs font-semibold shadow-sm"
             onClick={() => setIsAddCustomerOpen(true)}
             type="button"
           >
@@ -40,28 +50,28 @@ export const CustomersPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Filter & Search Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-space-md">
-        <div className="relative flex items-center w-full sm:w-96">
-          <span className="material-symbols-outlined absolute left-space-sm text-outline pointer-events-none text-xl">
+      {/* Control Bar: Search + View Mode Switcher + Items Per Page */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-surface-container-lowest p-3 rounded-2xl border border-surface-container/60 shadow-xs">
+        <div className="relative flex items-center w-full md:w-80">
+          <span className="material-symbols-outlined absolute left-3 text-outline pointer-events-none text-lg">
             search
           </span>
           <input
-            className="w-full pl-10 pr-space-md py-2.5 rounded-full bg-surface-container-lowest text-on-surface placeholder:text-outline font-button-utility text-button-utility transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-xs border border-surface-container/60"
-            placeholder="Search customers by name or mobile number..."
+            className="w-full pl-9 pr-8 py-2 rounded-xl bg-surface-container text-on-surface placeholder:text-outline text-xs transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 border-none"
+            placeholder="Search by name, phone, or Aadhaar..."
             type="text"
             value={customerSearch}
             onChange={(e) => {
               setCustomerSearch(e.target.value);
-              setCustomerPage(0);
+              setPage(0);
             }}
           />
           {customerSearch && (
             <button
-              className="absolute right-space-sm text-outline hover:text-on-surface text-sm"
+              className="absolute right-3 text-outline hover:text-on-surface text-xs"
               onClick={() => {
                 setCustomerSearch('');
-                setCustomerPage(0);
+                setPage(0);
               }}
             >
               ✕
@@ -69,14 +79,56 @@ export const CustomersPage: React.FC = () => {
           )}
         </div>
 
-        <div className="flex items-center gap-space-xs font-fine-print text-fine-print text-on-surface-variant">
-          <span>
-            Showing {filteredCustomers.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + ITEMS_PER_PAGE, filteredCustomers.length)} of {filteredCustomers.length} clients
-          </span>
+        <div className="flex items-center gap-3 justify-between md:justify-end flex-wrap">
+          {/* View Mode Toggle */}
+          <div className="flex items-center bg-surface-container p-1 rounded-xl gap-1 border border-surface-container-high/30">
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                viewMode === 'grid'
+                  ? 'bg-surface-container-lowest text-primary shadow-xs font-bold'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              <span className="material-symbols-outlined text-base">grid_view</span>
+              <span>Grid</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('table')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                viewMode === 'table'
+                  ? 'bg-surface-container-lowest text-primary shadow-xs font-bold'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              <span className="material-symbols-outlined text-base">table_rows</span>
+              <span>Table</span>
+            </button>
+          </div>
+
+          {/* Page Size Selector */}
+          <div className="flex items-center gap-1.5 text-xs text-on-surface-variant">
+            <span>Per page:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(0);
+              }}
+              className="px-2 py-1 bg-surface-container text-on-surface rounded-lg border-none text-xs focus:ring-1 focus:ring-primary/20"
+            >
+              <option value={12}>12</option>
+              <option value={18}>18</option>
+              <option value={30}>30</option>
+              <option value={60}>60</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Grid of Customer Cards */}
+      {/* Customer Listing Section */}
       {paginatedCustomers.length === 0 ? (
         <EmptyState
           icon="person_off"
@@ -85,8 +137,9 @@ export const CustomersPage: React.FC = () => {
           actionLabel="+ Add New Customer"
           onAction={() => setIsAddCustomerOpen(true)}
         />
-      ) : (
-        <div className="flex flex-col gap-space-md">
+      ) : viewMode === 'grid' ? (
+        /* Compact Responsive Grid */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-3.5">
           {paginatedCustomers.map((customer) => {
             const custTasks = tasks.filter((t) => t.customer_id === customer.id);
             const activeTasks = custTasks.filter((t) => t.status !== 'DELIVERED');
@@ -105,28 +158,129 @@ export const CustomersPage: React.FC = () => {
             );
           })}
         </div>
+      ) : (
+        /* Sleek Table View for High Volume */
+        <div className="bg-surface-container-lowest rounded-2xl border border-surface-container/60 overflow-hidden shadow-xs">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead className="bg-surface-container-low text-on-surface-variant border-b border-surface-container">
+                <tr>
+                  <th className="p-3 font-semibold">Customer Name</th>
+                  <th className="p-3 font-semibold">Mobile Number</th>
+                  <th className="p-3 font-semibold">Aadhaar</th>
+                  <th className="p-3 font-semibold">Active Tasks</th>
+                  <th className="p-3 font-semibold">Remarks</th>
+                  <th className="p-3 font-semibold text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedCustomers.map((customer) => {
+                  const custTasks = tasks.filter((t) => t.customer_id === customer.id);
+                  const activeTasks = custTasks.filter((t) => t.status !== 'DELIVERED');
+
+                  return (
+                    <tr
+                      key={customer.id}
+                      onClick={() => navigateToCustomerProfile(customer.id)}
+                      className="border-b border-surface-container/40 last:border-0 hover:bg-surface-container-low/50 cursor-pointer transition-colors"
+                    >
+                      <td className="p-3 font-semibold text-on-surface">
+                        {customer.name}
+                        {customer.id === 'cust-general' && (
+                          <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] bg-surface-container text-on-surface-variant font-bold">
+                            Default
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 font-mono text-on-surface-variant">{customer.mobile || '—'}</td>
+                      <td className="p-3 font-mono text-on-surface-variant">{customer.aadhaar_number || '—'}</td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] ${
+                          activeTasks.length > 0 ? 'bg-primary-container text-on-primary-container font-bold' : 'bg-surface-container text-on-surface-variant'
+                        }`}>
+                          {activeTasks.length} Active
+                        </span>
+                      </td>
+                      <td className="p-3 text-on-surface-variant truncate max-w-[200px]">{customer.note || '—'}</td>
+                      <td className="p-3 text-right">
+                        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => navigateToCustomerProfile(customer.id)}
+                            className="px-2.5 py-1 rounded-lg bg-surface-container hover:bg-primary-container hover:text-on-primary-container font-medium text-xs transition-colors"
+                          >
+                            Profile →
+                          </button>
+                          {customer.id !== 'cust-general' && (
+                            <button
+                              type="button"
+                              onClick={() => confirmDeleteCustomer(customer)}
+                              className="p-1 text-outline hover:text-error rounded-full transition-colors"
+                              title="Delete"
+                            >
+                              <span className="material-symbols-outlined text-base">delete</span>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
-      {/* Pagination Controls for 500+ scale */}
-        <div className="flex items-center justify-between pt-space-md border-t border-surface-container">
+      {/* Pagination Bar */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-surface-container">
+        <span className="text-xs text-on-surface-variant">
+          Showing {filteredCustomers.length > 0 ? startIndex + 1 : 0}-
+          {Math.min(startIndex + pageSize, filteredCustomers.length)} of {filteredCustomers.length} clients
+        </span>
+
+        {/* Numbered Page Buttons */}
+        <div className="flex items-center gap-1.5 flex-wrap">
           <button
-            className="px-space-md py-1.5 rounded-full bg-surface-container hover:bg-surface-container-high disabled:opacity-40 font-button-utility text-button-utility transition-all"
-            disabled={customerPage === 0}
-            onClick={() => setCustomerPage(Math.max(0, customerPage - 1))}
+            className="px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high disabled:opacity-40 text-xs font-medium transition-all"
+            disabled={currentPageSafe === 0}
+            onClick={() => setPage(Math.max(0, currentPageSafe - 1))}
           >
-            ← Previous Page
+            ← Prev
           </button>
-          <span className="font-caption text-caption text-on-surface font-medium">
-            Page {customerPage + 1}
-          </span>
+
+          {Array.from({ length: totalPages }, (_, i) => i)
+            .filter((p) => p === 0 || p === totalPages - 1 || Math.abs(p - currentPageSafe) <= 2)
+            .map((p, idx, arr) => {
+              const prev = arr[idx - 1];
+              const showEllipsis = prev !== undefined && p - prev > 1;
+              return (
+                <React.Fragment key={p}>
+                  {showEllipsis && <span className="px-1 text-xs text-outline">...</span>}
+                  <button
+                    type="button"
+                    onClick={() => setPage(p)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                      p === currentPageSafe
+                        ? 'bg-primary text-on-primary shadow-xs'
+                        : 'bg-surface-container hover:bg-surface-container-high text-on-surface'
+                    }`}
+                  >
+                    {p + 1}
+                  </button>
+                </React.Fragment>
+              );
+            })}
+
           <button
-            className="px-space-md py-1.5 rounded-full bg-surface-container hover:bg-surface-container-high disabled:opacity-40 font-button-utility text-button-utility transition-all"
-            disabled={(customerPage + 1) * ITEMS_PER_PAGE >= filteredCustomers.length}
-            onClick={() => setCustomerPage(customerPage + 1)}
+            className="px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high disabled:opacity-40 text-xs font-medium transition-all"
+            disabled={currentPageSafe >= totalPages - 1}
+            onClick={() => setPage(currentPageSafe + 1)}
           >
-            Next Page →
+            Next →
           </button>
         </div>
+      </div>
     </div>
   );
 };

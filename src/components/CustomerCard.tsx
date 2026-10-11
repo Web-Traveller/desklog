@@ -9,6 +9,7 @@ interface CustomerCardProps {
   completedTasksCount?: number;
   ongoingTaskTitle?: string;
   highlightQuery?: string;
+  isCompact?: boolean;
 }
 
 export const CustomerCard: React.FC<CustomerCardProps> = ({
@@ -40,92 +41,90 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({
   };
 
   return (
-    <div className="rounded-[18px] bg-surface-container-lowest p-space-lg flex flex-col gap-space-md transition-all hover:-translate-y-0.5 duration-200 border border-surface-container/60 shadow-[0_1px_6px_rgba(0,0,0,0.02)]">
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-space-md">
-        <div className="flex items-start gap-space-md">
+    <div
+      onClick={() => navigateToCustomerProfile(customer.id)}
+      className="group cursor-pointer rounded-xl bg-surface-container-lowest p-3.5 flex flex-col justify-between gap-2.5 transition-all hover:border-primary/40 hover:shadow-md border border-surface-container/60 shadow-xs relative"
+    >
+      {/* Top Header: Avatar + Info + Badges */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
           <CustomerAvatar
             colorClass={customer.avatar_color}
-            initials={customer.avatar_initials || 'DS'}
-            size="md"
+            initials={customer.avatar_initials || 'CU'}
+            size="sm"
           />
-          <div className="flex flex-col gap-1 min-w-0">
-            <div className="flex items-center gap-space-xs flex-wrap">
-              <h3 className="font-body-strong text-body-strong text-on-surface">
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <h3 className="font-semibold text-sm text-on-surface truncate group-hover:text-primary transition-colors">
                 {renderHighlightedName(customer.name, highlightQuery)}
               </h3>
               {customer.id === 'cust-general' && (
-                <span className="px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant font-fine-print text-fine-print font-bold">
-                  System Default Walk-in
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-surface-container text-on-surface-variant font-bold">
+                  Default
                 </span>
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-space-md gap-y-1 font-caption text-caption text-on-surface-variant">
-              <span className="flex items-center gap-1 font-mono">
-                <span className="material-symbols-outlined text-sm text-outline">call</span>
+            <div className="flex items-center gap-2 text-xs text-on-surface-variant font-mono">
+              <span className="flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px] text-outline">call</span>
                 {customer.mobile || "No Mobile"}
               </span>
               {customer.aadhaar_number && (
-                <span className="flex items-center gap-1 font-mono">
-                  <span className="material-symbols-outlined text-sm text-outline">badge</span>
-                  {customer.aadhaar_number}
+                <span className="hidden sm:flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[14px] text-outline">badge</span>
+                  {customer.aadhaar_number.slice(-4)}
                 </span>
               )}
-              <span className="flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm text-outline">event</span>
-                Enrolled {customer.created_at}
-              </span>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-space-xs self-start">
-          <span className="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface font-fine-print text-fine-print font-medium">
-            {activeTasksCount} Active {activeTasksCount === 1 ? 'Task' : 'Tasks'}
+        {/* Task Counts */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${
+            activeTasksCount > 0 ? 'bg-primary-container text-on-primary-container font-bold' : 'bg-surface-container text-on-surface-variant'
+          }`}>
+            {activeTasksCount} Active
           </span>
           {completedTasksCount > 0 && (
-            <span className="px-2.5 py-1 rounded-full bg-surface-container text-on-surface-variant font-fine-print text-fine-print">
-              {completedTasksCount} Completed
+            <span className="px-2 py-0.5 rounded-full text-[11px] bg-surface-container text-on-surface-variant">
+              {completedTasksCount} Done
             </span>
           )}
         </div>
       </div>
 
+      {/* Ongoing Task Banner if present */}
       {ongoingTaskTitle && (
-        <div className="rounded-xl bg-surface-container-low p-space-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-space-sm border border-surface-container-high/30">
-          <div className="flex items-center gap-space-xs min-w-0">
-            <span className="material-symbols-outlined text-primary text-base">hourglass_top</span>
-            <span className="font-caption-strong text-caption-strong text-on-surface">Ongoing:</span>
-            <span className="font-caption text-caption text-on-surface-variant truncate">
-              {ongoingTaskTitle}
-            </span>
+        <div className="rounded-lg bg-surface-container-low px-2.5 py-1 flex items-center justify-between gap-2 text-xs border border-surface-container-high/30">
+          <div className="flex items-center gap-1 min-w-0">
+            <span className="material-symbols-outlined text-primary text-[14px]">hourglass_top</span>
+            <span className="text-on-surface-variant truncate text-[11px] font-medium">{ongoingTaskTitle}</span>
           </div>
-          <span className="font-fine-print text-fine-print text-outline flex-shrink-0">Updated recently</span>
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-space-sm pt-space-xs border-t border-surface-container/40">
-        <span className="font-fine-print text-fine-print text-on-surface-variant">
-          {customer.note || 'Desk Client Profile'}
+      {/* Footer Actions */}
+      <div className="flex items-center justify-between pt-2 border-t border-surface-container/40 text-xs">
+        <span className="text-[11px] text-outline truncate max-w-[180px]">
+          {customer.note || "No remarks"}
         </span>
-        <div className="flex items-center gap-space-xs">
+
+        <div className="flex items-center gap-1">
           {customer.id !== 'cust-general' && (
             <button
-              className="px-space-sm py-space-xs rounded-full bg-surface-container hover:bg-tertiary-fixed text-on-surface hover:text-on-tertiary-fixed font-button-utility text-button-utility transition-transform active:scale-95"
+              className="p-1 rounded-full text-outline hover:text-error hover:bg-error-container/20 transition-colors"
               onClick={handleDeleteCustomer}
               title="Delete Customer"
               type="button"
             >
-              <span className="material-symbols-outlined text-base">delete</span>
+              <span className="material-symbols-outlined text-[16px]">delete</span>
             </button>
           )}
-          <button
-            className="px-space-md py-space-xs rounded-full bg-primary-container text-on-primary font-button-utility text-button-utility hover:bg-primary transition-transform active:scale-95 shadow-sm"
-            onClick={() => navigateToCustomerProfile(customer.id)}
-            type="button"
-          >
-            View Full Profile →
-          </button>
+          <span className="text-primary font-semibold text-[11px] flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+            Profile →
+          </span>
         </div>
       </div>
     </div>
