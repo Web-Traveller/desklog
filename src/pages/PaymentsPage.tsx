@@ -8,45 +8,60 @@ import { formatRupees } from '../utils/currencyUtils';
 export const PaymentsPage: React.FC = () => {
   const { tasks, payments, customers, navigateToCustomerTaskProfile } = useDesk();
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 15;
 
-  // Computations
-  let totalReceived = 0;
-  payments.forEach((p) => {
-    totalReceived += p.amount;
-  });
+  // Memoized Computations
+  const { totalReceived, totalDue, tasksWithDues } = React.useMemo(() => {
+    let received = 0;
+    payments.forEach((p) => {
+      received += p.amount;
+    });
 
-  let totalDue = 0;
-  let tasksWithDues = 0;
+    let due = 0;
+    let withDues = 0;
 
-  tasks.forEach((task) => {
-    if (task.billing_amount && task.billing_amount > 0) {
-      const paidForTask = payments
-        .filter((p) => p.task_id === task.id)
-        .reduce((acc, curr) => acc + curr.amount, 0);
-      const due = task.billing_amount - paidForTask;
-      if (due > 0) {
-        totalDue += due;
-        tasksWithDues++;
+    tasks.forEach((task) => {
+      if (task.billing_amount && task.billing_amount > 0) {
+        const paidForTask = payments
+          .filter((p) => p.task_id === task.id)
+          .reduce((acc, curr) => acc + curr.amount, 0);
+        const taskDue = task.billing_amount - paidForTask;
+        if (taskDue > 0) {
+          due += taskDue;
+          withDues++;
+        }
       }
-    }
-  });
+    });
 
-  const filteredPayments = payments
-    .map((pay) => {
-      const task = tasks.find((t) => t.id === pay.task_id);
-      const customer = customers.find((c) => c.id === task?.customer_id);
-      return { pay, task, customer };
-    })
-    .filter(({ task, customer }) => {
-      if (!searchTerm) return true;
-      const q = searchTerm.toLowerCase();
-      return (
-        task?.title.toLowerCase().includes(q) ||
-        customer?.name.toLowerCase().includes(q) ||
-        customer?.mobile?.includes(q)
-      );
-    })
-    .sort((a, b) => new Date(b.pay.created_at).getTime() - new Date(a.pay.created_at).getTime());
+    return { totalReceived: received, totalDue: due, tasksWithDues: withDues };
+  }, [payments, tasks]);
+
+  const filteredPayments = React.useMemo(() => {
+    return payments
+      .map((pay) => {
+        const task = tasks.find((t) => t.id === pay.task_id);
+        const customer = customers.find((c) => c.id === task?.customer_id);
+        return { pay, task, customer };
+      })
+      .filter(({ task, customer }) => {
+        if (!searchTerm) return true;
+        const q = searchTerm.toLowerCase();
+        return (
+          task?.title.toLowerCase().includes(q) ||
+          customer?.name.toLowerCase().includes(q) ||
+          customer?.mobile?.includes(q)
+        );
+      })
+      .sort((a, b) => new Date(b.pay.created_at).getTime() - new Date(a.pay.created_at).getTime());
+  }, [payments, tasks, customers, searchTerm]);
+
+  const totalPages = Math.ceil(filteredPayments.length / PAGE_SIZE) || 1;
+  const safePage = Math.min(page, totalPages - 1);
+  const paginatedPayments = React.useMemo(() => {
+    const start = safePage * PAGE_SIZE;
+    return filteredPayments.slice(start, start + PAGE_SIZE);
+  }, [filteredPayments, safePage, PAGE_SIZE]);
 
   return (
     <div className="w-full max-w-[1400px] mx-auto px-gutter py-space-xl flex flex-col gap-space-xl animate-slideUp">
@@ -135,7 +150,7 @@ export const PaymentsPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-container/60">
-                {filteredPayments.map(({ pay, task, customer }) => (
+                {paginatedPayments.map(({ pay, task, customer }) => (
                   <tr key={pay.id} className="hover:bg-surface-container-low transition-colors">
                     <td className="px-space-md py-space-sm whitespace-nowrap">
                       <div className="flex flex-col">
@@ -183,6 +198,34 @@ export const PaymentsPage: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Pagination Bar */}
+        {filteredPayments.length > PAGE_SIZE && (
+          <div className="flex items-center justify-between p-space-md border-t border-surface-container/60 bg-surface-container-lowest">
+            <span className="font-fine-print text-fine-print text-on-surface-variant">
+              Showing {safePage * PAGE_SIZE + 1} - {Math.min((safePage + 1) * PAGE_SIZE, filteredPayments.length)} of {filteredPayments.length} transactions
+            </span>
+            <div className="flex items-center gap-space-xs">
+              <button
+                className="px-space-md py-1.5 rounded-full border border-surface-container-high text-on-surface disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-container font-button-utility text-button-utility transition-all active:scale-95"
+                disabled={safePage === 0}
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+              >
+                Previous
+              </button>
+              <span className="font-caption text-caption text-on-surface px-space-xs">
+                {safePage + 1} / {totalPages}
+              </span>
+              <button
+                className="px-space-md py-1.5 rounded-full border border-surface-container-high text-on-surface disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-container font-button-utility text-button-utility transition-all active:scale-95"
+                disabled={safePage >= totalPages - 1}
+                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+              >
+                Next
+              </button>
+            </div>
           </div>
         )}
       </div>

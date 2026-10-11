@@ -26,48 +26,49 @@ export const TasksPage: React.FC = () => {
   const [overdueOnly, setOverdueOnly] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
 
-  const filteredTasks = tasks.filter((t) => {
-    // Status filter
-    if (statusFilter !== "ALL" && t.status !== statusFilter) {
-      return false;
-    }
+  const filteredTasks = React.useMemo(() => {
+    return tasks.filter((t) => {
+      // Status filter
+      if (statusFilter !== "ALL" && t.status !== statusFilter) {
+        return false;
+      }
 
-    // Payment status filter
-    if (paymentFilter !== "ALL") {
-      const taskPayments = payments.filter((p) => p.task_id === t.id);
-      const payStatus = calculatePaymentStatus(t.billing_amount, taskPayments);
-      if (payStatus !== paymentFilter) return false;
-    }
+      // Payment status filter
+      if (paymentFilter !== "ALL") {
+        const taskPayments = payments.filter((p) => p.task_id === t.id);
+        const payStatus = calculatePaymentStatus(t.billing_amount, taskPayments);
+        if (payStatus !== paymentFilter) return false;
+      }
 
-    // Service filter
-    if (serviceFilter !== "ALL" && t.service_id !== serviceFilter) {
-      return false;
-    }
+      // Service filter
+      if (serviceFilter !== "ALL" && t.service_id !== serviceFilter) {
+        return false;
+      }
 
-    // Overdue filter
-    if (overdueOnly && !isTaskOverdue(t)) {
-      return false;
-    }
+      // Overdue filter
+      if (overdueOnly && !isTaskOverdue(t)) {
+        return false;
+      }
 
-    // Search query
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase();
-      const cust = customers.find((c) => c.id === t.customer_id);
-      const titleMatch = t.title.toLowerCase().includes(q);
-      const custNameMatch = (cust?.name || "").toLowerCase().includes(q);
-      const custMobileMatch = (cust?.mobile || "").includes(q);
-      const noteMatch = (t.notes || "").toLowerCase().includes(q);
-      return titleMatch || custNameMatch || custMobileMatch || noteMatch;
-    }
+      // Search query
+      if (searchTerm.trim()) {
+        const q = searchTerm.toLowerCase();
+        const cust = customers.find((c) => c.id === t.customer_id);
+        const titleMatch = t.title.toLowerCase().includes(q);
+        const custNameMatch = (cust?.name || "").toLowerCase().includes(q);
+        const custMobileMatch = (cust?.mobile || "").includes(q);
+        const noteMatch = (t.notes || "").toLowerCase().includes(q);
+        return titleMatch || custNameMatch || custMobileMatch || noteMatch;
+      }
 
-    return true;
-  });
+      return true;
+    });
+  }, [tasks, statusFilter, paymentFilter, payments, serviceFilter, overdueOnly, searchTerm, customers]);
 
   const startIndex = taskPage * ITEMS_PER_PAGE;
-  const paginatedTasks = filteredTasks.slice(
-    startIndex,
-    startIndex + ITEMS_PER_PAGE,
-  );
+  const paginatedTasks = React.useMemo(() => {
+    return filteredTasks.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredTasks, startIndex, ITEMS_PER_PAGE]);
 
   return (
     <div className="w-full max-w-[1400px] mx-auto px-gutter py-space-xl flex flex-col gap-space-lg animate-slideUp">

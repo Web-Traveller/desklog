@@ -1,11 +1,11 @@
 import React, { useState } from "react";
-import { useDesk } from "../context/DeskContext";
+import { useTasks } from "../context/DeskContext";
 import { EmptyState } from "../components/EmptyState";
 import { Service } from "../types";
 import { formatRupees, rupeesToPaise, paiseToRupees } from "../utils/currencyUtils";
 
 export const ServicesPage: React.FC = () => {
-  const { services, addService, editService } = useDesk();
+  const { services, addService, editService } = useTasks();
 
   const [isAdding, setIsAdding] = useState(false);
   const [newServiceName, setNewServiceName] = useState("");

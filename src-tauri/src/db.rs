@@ -130,168 +130,179 @@ impl Database {
     }
 
     pub fn init_tables(&self) -> Result<()> {
-        let conn = self.get_conn();
+        let mut conn = self.get_conn();
 
-        // MIGRATION: Check if old customers table exists and needs migration
+        // 1. Get current schema version
+        let current_version: i32 = conn.query_row("PRAGMA user_version;", [], |row| row.get(0))?;
+
+        // 2. Backward compatibility: Check if old legacy schema exists from earliest alpha builds
         let mut old_customers_exist = false;
-        if let Ok(mut stmt) = conn.prepare("PRAGMA table_info(customers)") {
-            if let Ok(rows) = stmt.query_map([], |row| {
-                let name: String = row.get(1)?;
-                Ok(name)
-            }) {
-                for col in rows.flatten() {
-                    if col == "phone" {
-                        old_customers_exist = true;
-                        break;
+        if current_version == 0 {
+            if let Ok(mut stmt) = conn.prepare("PRAGMA table_info(customers)") {
+                if let Ok(rows) = stmt.query_map([], |row| {
+                    let name: String = row.get(1)?;
+                    Ok(name)
+                }) {
+                    for col in rows.flatten() {
+                        if col == "phone" {
+                            old_customers_exist = true;
+                            break;
+                        }
                     }
                 }
             }
+            if old_customers_exist {
+                conn.execute_batch(
+                    "ALTER TABLE customers RENAME TO old_customers;
+                     ALTER TABLE tasks RENAME TO old_tasks;
+                     ALTER TABLE activities RENAME TO old_activities;"
+                )?;
+            }
         }
-        
-        if old_customers_exist {
-            conn.execute_batch(
-                "ALTER TABLE customers RENAME TO old_customers;
-                 ALTER TABLE tasks RENAME TO old_tasks;
-                 ALTER TABLE activities RENAME TO old_activities;"
+
+        // 3. Define Versioned Migrations
+        // Each migration step runs sequentially within a transaction
+        if current_version < 1 {
+            let tx = conn.transaction()?;
+            tx.execute_batch(
+                "CREATE TABLE IF NOT EXISTS customers (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    mobile TEXT,
+                    note TEXT,
+                    aadhaar_number TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    is_active INTEGER NOT NULL DEFAULT 1,
+                    is_verified INTEGER DEFAULT 0,
+                    avatar_initials TEXT,
+                    avatar_color TEXT
+                );
+                CREATE TABLE IF NOT EXISTS services (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    default_price INTEGER,
+                    is_active INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id TEXT PRIMARY KEY,
+                    customer_id TEXT NOT NULL,
+                    service_id TEXT,
+                    title TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    scheduled_date TEXT,
+                    scheduled_time TEXT,
+                    target_date TEXT,
+                    notes TEXT,
+                    billing_amount INTEGER,
+                    cancellation_reason TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    completed_at TEXT,
+                    FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+                    FOREIGN KEY(service_id) REFERENCES services(id) ON DELETE SET NULL
+                );
+                CREATE TABLE IF NOT EXISTS payments (
+                    id TEXT PRIMARY KEY,
+                    task_id TEXT NOT NULL,
+                    amount INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
+                );
+                CREATE TABLE IF NOT EXISTS activities (
+                    id TEXT PRIMARY KEY,
+                    activity_type TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    task_id TEXT,
+                    customer_id TEXT,
+                    created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS banking_transactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    customer_id TEXT NOT NULL,
+                    transaction_type TEXT NOT NULL,
+                    payment_mode TEXT NOT NULL,
+                    amount INTEGER NOT NULL,
+                    transaction_ref_no TEXT,
+                    metadata TEXT,
+                    transaction_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    is_deleted BOOLEAN DEFAULT 0,
+                    FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE CASCADE
+                );
+                PRAGMA user_version = 1;"
             )?;
+
+            if old_customers_exist {
+                let _ = tx.execute(
+                    "INSERT INTO customers (id, name, mobile, note, created_at, updated_at, is_active, is_verified, avatar_initials, avatar_color)
+                     SELECT id, name, phone, notes, registered_date, registered_date, 1, is_verified, avatar_initials, avatar_color FROM old_customers",
+                    []
+                );
+                let _ = tx.execute(
+                    "INSERT INTO tasks (id, customer_id, title, status, scheduled_date, target_date, notes, billing_amount, created_at, updated_at)
+                     SELECT id, customer_id, title, UPPER(status), schedule_date, target_date, notes, billing_amount, created_date, COALESCE(updated_date, created_date) FROM old_tasks",
+                    []
+                );
+                let _ = tx.execute(
+                    "INSERT INTO payments (id, task_id, amount, created_at)
+                     SELECT id || '-pay', id, amount_paid, COALESCE(billing_date, created_date) FROM old_tasks WHERE amount_paid IS NOT NULL AND amount_paid > 0",
+                    []
+                );
+            }
+
+            tx.commit()?;
         }
 
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS customers (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                mobile TEXT,
-                note TEXT,
-                aadhaar_number TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                is_active INTEGER NOT NULL DEFAULT 1,
-                is_verified INTEGER DEFAULT 0,
-                avatar_initials TEXT,
-                avatar_color TEXT
-            );",
-            [],
-        )?;
-
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS services (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                default_price INTEGER,
-                is_active INTEGER NOT NULL DEFAULT 1,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );",
-            [],
-        )?;
-
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS tasks (
-                id TEXT PRIMARY KEY,
-                customer_id TEXT NOT NULL,
-                service_id TEXT,
-                title TEXT NOT NULL,
-                status TEXT NOT NULL,
-                scheduled_date TEXT,
-                scheduled_time TEXT,
-                target_date TEXT,
-                notes TEXT,
-                billing_amount INTEGER,
-                cancellation_reason TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                completed_at TEXT,
-                FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE CASCADE,
-                FOREIGN KEY(service_id) REFERENCES services(id) ON DELETE SET NULL
-            );",
-            [],
-        )?;
-
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS payments (
-                id TEXT PRIMARY KEY,
-                task_id TEXT NOT NULL,
-                amount INTEGER NOT NULL,
-                created_at TEXT NOT NULL,
-                FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
-            );",
-            [],
-        )?;
-
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS activities (
-                id TEXT PRIMARY KEY,
-                activity_type TEXT NOT NULL,
-                title TEXT NOT NULL,
-                description TEXT NOT NULL,
-                task_id TEXT,
-                customer_id TEXT,
-                created_at TEXT NOT NULL
-            );",
-            [],
-        )?;
-
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS settings (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL
-            );",
-            [],
-        )?;
-
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS banking_transactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                customer_id TEXT NOT NULL,
-                transaction_type TEXT NOT NULL,
-                payment_mode TEXT NOT NULL,
-                amount INTEGER NOT NULL,
-                transaction_ref_no TEXT,
-                metadata TEXT,
-                transaction_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-                is_deleted BOOLEAN DEFAULT 0,
-                FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE CASCADE
-            );",
-            [],
-        )?;
-
-        // Ensure new columns exist on existing tables if upgraded
-        let _ = conn.execute("ALTER TABLE customers ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1;", []);
-        let _ = conn.execute("ALTER TABLE tasks ADD COLUMN cancellation_reason TEXT;", []);
-
-        // MANDATORY DATABASE INDEXES 
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_customers_mobile ON customers(mobile);", [])?;
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name);", [])?;
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_customer_id ON tasks(customer_id);", [])?;
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);", [])?;
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_scheduled_date ON tasks(scheduled_date);", [])?;
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_tasks_target_date ON tasks(target_date);", [])?;
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_payments_task_id ON payments(task_id);", [])?;
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_activities_created_at ON activities(created_at);", [])?;
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_banking_transactions_customer_id ON banking_transactions(customer_id);", [])?;
-
-        if old_customers_exist {
-            conn.execute(
-                "INSERT INTO customers (id, name, mobile, note, created_at, updated_at, is_active, is_verified, avatar_initials, avatar_color)
-                 SELECT id, name, phone, notes, registered_date, registered_date, 1, is_verified, avatar_initials, avatar_color FROM old_customers",
-                []
+        // Migration v2: Mandatory Performance Indexes & Cleanups
+        let current_version: i32 = conn.query_row("PRAGMA user_version;", [], |row| row.get(0))?;
+        if current_version < 2 {
+            let tx = conn.transaction()?;
+            tx.execute_batch(
+                "CREATE INDEX IF NOT EXISTS idx_customers_mobile ON customers(mobile);
+                 CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name);
+                 CREATE INDEX IF NOT EXISTS idx_tasks_customer_id ON tasks(customer_id);
+                 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+                 CREATE INDEX IF NOT EXISTS idx_tasks_scheduled_date ON tasks(scheduled_date);
+                 CREATE INDEX IF NOT EXISTS idx_tasks_target_date ON tasks(target_date);
+                 CREATE INDEX IF NOT EXISTS idx_payments_task_id ON payments(task_id);
+                 CREATE INDEX IF NOT EXISTS idx_activities_created_at ON activities(created_at);
+                 CREATE INDEX IF NOT EXISTS idx_banking_transactions_customer_id ON banking_transactions(customer_id);
+                 DELETE FROM services WHERE id IN ('svc-pan', 'svc-aadhaar', 'svc-bank', 'svc-exam', 'svc-result');
+                 PRAGMA user_version = 2;"
             )?;
-            conn.execute(
-                "INSERT INTO tasks (id, customer_id, title, status, scheduled_date, target_date, notes, billing_amount, created_at, updated_at)
-                 SELECT id, customer_id, title, UPPER(status), schedule_date, target_date, notes, billing_amount, created_date, COALESCE(updated_date, created_date) FROM old_tasks",
-                []
-            )?;
-            conn.execute(
-                "INSERT INTO payments (id, task_id, amount, created_at)
-                 SELECT id || '-pay', id, amount_paid, COALESCE(billing_date, created_date) FROM old_tasks WHERE amount_paid IS NOT NULL AND amount_paid > 0",
-                []
-            )?;
+            tx.commit()?;
+        }
+
+        // Migration v3: Column synchronization for customers table (e.g. aadhaar_number from upgrades)
+        let current_version: i32 = conn.query_row("PRAGMA user_version;", [], |row| row.get(0))?;
+        if current_version < 3 {
+            let mut has_aadhaar = false;
+            if let Ok(mut stmt) = conn.prepare("PRAGMA table_info(customers);") {
+                if let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(1)) {
+                    for col in rows.flatten() {
+                        if col == "aadhaar_number" {
+                            has_aadhaar = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            let tx = conn.transaction()?;
+            if !has_aadhaar {
+                tx.execute_batch("ALTER TABLE customers ADD COLUMN aadhaar_number TEXT;")?;
+            }
+            tx.execute_batch("PRAGMA user_version = 3;")?;
+            tx.commit()?;
         }
 
         self.ensure_general_customer(&conn)?;
-        // Clean up pre-added default services if present from earlier builds
-        let _ = conn.execute("DELETE FROM services WHERE id IN ('svc-pan', 'svc-aadhaar', 'svc-bank', 'svc-exam', 'svc-result');", []);
-
         Ok(())
     }
 
@@ -811,7 +822,32 @@ impl Database {
              PRAGMA synchronous = NORMAL;
              PRAGMA foreign_keys = ON;"
         )?;
+        drop(dst_conn);
+
+        // Run migrations on restored database to ensure backward compatibility
+        self.init_tables()?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn verify_migration_v3_on_live_db() {
+        let path = "C:\\Users\\Ajinkya\\AppData\\Roaming\\com.desklog.manager\\desklog.db";
+        let db_path = PathBuf::from(path);
+        let app_dir = db_path.parent().unwrap().to_path_buf();
+        if let Ok(db) = Database::new(app_dir) {
+            let conn = db.get_conn();
+            let version: i32 = conn.query_row("PRAGMA user_version;", [], |row| row.get(0)).unwrap();
+            assert!(version >= 3);
+            let mut stmt = conn.prepare("PRAGMA table_info(customers);").unwrap();
+            let cols: Vec<String> = stmt.query_map([], |row| row.get::<_, String>(1)).unwrap().flatten().collect();
+            assert!(cols.contains(&"aadhaar_number".to_string()));
+            println!("Migration v3 verified successfully! Version is {}", version);
+        }
     }
 }

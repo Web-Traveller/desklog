@@ -53,36 +53,37 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             : 'border-surface-container-high/30'
         }`}
       >
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <span
-            className="font-caption-strong text-caption-strong text-on-surface hover:text-primary hover:underline cursor-pointer"
+            className="font-caption-strong text-caption-strong text-on-surface hover:text-primary hover:underline cursor-pointer truncate flex-1"
             onClick={handleTaskClick}
-            title="Click to view task in customer profile"
+            title={task.title}
           >
             {task.title}
           </span>
-          <span className="font-micro-legal text-micro-legal text-outline font-mono">
+          <span className="font-micro-legal text-micro-legal text-outline font-mono flex-shrink-0">
             {formatDisplayDate(task.created_at)}
           </span>
         </div>
 
-        <div className="flex items-center justify-between text-fine-print text-on-surface-variant">
-          <span>
+        <div className="flex items-center justify-between gap-2 text-fine-print text-on-surface-variant">
+          <span className="truncate flex-1 min-w-0">
             Customer:{' '}
             <button
-              className="font-semibold text-on-surface hover:text-primary hover:underline"
+              className="font-semibold text-on-surface hover:text-primary hover:underline truncate align-bottom max-w-[130px]"
               onClick={handleTaskClick}
+              title={customers.find(c => c.id === task.customer_id)?.name || ""}
             >
               {(customers.find(c => c.id === task.customer_id)?.name || "")}
             </button>
           </span>
-          <span className="font-mono text-xs">{(customers.find(c => c.id === task.customer_id)?.mobile || "")}</span>
+          <span className="font-mono text-xs flex-shrink-0">{(customers.find(c => c.id === task.customer_id)?.mobile || "")}</span>
         </div>
 
         {task.scheduled_date && (
           <div className="text-xs text-primary font-medium flex items-center gap-1">
             <span className="material-symbols-outlined text-[14px]">alarm</span>
-            {task.scheduled_date}
+            {formatDisplayDate(task.scheduled_date)}
           </div>
         )}
         {task.billing_amount !== undefined && (
@@ -155,15 +156,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   return (
     <div
       id={`task-card-${task.id}`}
-      className={`flex flex-col md:flex-row md:items-center justify-between p-space-md rounded-xl bg-surface-container-low hover:bg-surface-container transition-all gap-space-md border ${
+      className={`flex flex-col md:flex-row md:items-center justify-between px-space-md py-2.5 rounded-xl bg-surface-container-low hover:bg-surface-container transition-all gap-space-sm border ${
         activeHighlight
           ? 'ring-4 ring-primary bg-primary-container/20 border-primary shadow-lg scale-[1.01] duration-300'
           : 'border-surface-container-high/30'
       }`}
     >
-      <div className="flex items-start gap-space-md min-w-0 flex-1">
+      <div className="flex items-start gap-space-sm min-w-0 flex-1">
         <div
-          className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 cursor-pointer ${
+          className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 cursor-pointer ${
             task.status === 'PROCESSING'
               ? 'bg-primary-fixed text-primary'
               : task.status === 'READY'
@@ -210,14 +211,14 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           <div className="flex flex-wrap items-center gap-y-1 gap-x-space-md font-fine-print text-fine-print text-outline mt-1">
             <span className="flex items-center gap-1">
               <span className="material-symbols-outlined text-xs">schedule</span>
-              Created: <strong className="text-on-surface font-medium">{task.created_at}</strong>
+              Created: <strong className="text-on-surface font-medium">{formatDisplayDate(task.created_at)}</strong>
             </span>
             {task.updated_at && (
               <>
                 <span className="text-surface-dim">•</span>
                 <span className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-xs">update</span>
-                  Updated: <strong className="text-on-surface font-medium">{task.updated_at}</strong>
+                  Updated: <strong className="text-on-surface font-medium">{formatDisplayDate(task.updated_at)}</strong>
                 </span>
               </>
             )}
@@ -226,7 +227,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 <span className="text-surface-dim">•</span>
                 <span className="flex items-center gap-1 text-primary">
                   <span className="material-symbols-outlined text-xs">alarm</span>
-                  Scheduled: <strong className="font-medium">{task.scheduled_date}</strong>
+                  Scheduled: <strong className="font-medium">{formatDisplayDate(task.scheduled_date)}</strong>
                 </span>
               </>
             )}

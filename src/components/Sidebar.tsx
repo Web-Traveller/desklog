@@ -1,9 +1,9 @@
 import React from 'react';
-import { useDesk } from '../context/DeskContext';
+import { useUI } from '../context/DeskContext';
 import { ActivePage } from '../types';
 
 export const Sidebar: React.FC = () => {
-  const { currentPage, setCurrentPage } = useDesk();
+  const { currentPage, setCurrentPage } = useUI();
 
   const navItems: { id: ActivePage; label: string; icon: string }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },

@@ -8,44 +8,56 @@ export const SearchPage: React.FC = () => {
   const { searchQuery, customers, tasks } = useDesk();
   const [activeFilter, setActiveFilter] = useState<'all' | 'customers' | 'tasks'>('all');
   const [sortBy, setSortBy] = useState<'relevance' | 'recent' | 'name'>('relevance');
+  const [showAllCustomers, setShowAllCustomers] = useState(false);
+  const [showAllTasks, setShowAllTasks] = useState(false);
 
   const rawQ = searchQuery.trim().toLowerCase();
   const cleanQ = searchQuery.replace(/[\s-]/g, '').toLowerCase();
 
-  let matchingCustomers = customers.filter(
-    (c) =>
-      !rawQ ||
-      c.name.toLowerCase().includes(rawQ) ||
-      (c.mobile && c.mobile.replace(/[\s-]/g, '').includes(cleanQ)) ||
-      (c.aadhaar_number && c.aadhaar_number.replace(/[\s-]/g, '').includes(cleanQ)) ||
-      c.note?.toLowerCase().includes(rawQ)
-  );
-
-  let matchingTasks = tasks.filter((t) => {
-    if (!rawQ) return true;
-    if (t.title.toLowerCase().includes(rawQ)) return true;
-    const cust = customers.find((c) => c.id === t.customer_id);
-    if (!cust) return false;
-    return (
-      cust.name.toLowerCase().includes(rawQ) ||
-      (cust.mobile && cust.mobile.replace(/[\s-]/g, '').includes(cleanQ)) ||
-      (cust.aadhaar_number && cust.aadhaar_number.replace(/[\s-]/g, '').includes(cleanQ))
+  const { matchingCustomers, matchingTasks, totalMatches } = React.useMemo(() => {
+    let custs = customers.filter(
+      (c) =>
+        !rawQ ||
+        c.name.toLowerCase().includes(rawQ) ||
+        (c.mobile && c.mobile.replace(/[\s-]/g, '').includes(cleanQ)) ||
+        (c.aadhaar_number && c.aadhaar_number.replace(/[\s-]/g, '').includes(cleanQ)) ||
+        c.note?.toLowerCase().includes(rawQ)
     );
-  });
 
-  if (sortBy === 'name') {
-    matchingCustomers = [...matchingCustomers].sort((a, b) => a.name.localeCompare(b.name));
-    matchingTasks = [...matchingTasks].sort((a, b) => a.title.localeCompare(b.title));
-  } else if (sortBy === 'recent') {
-    matchingCustomers = [...matchingCustomers].sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
-    matchingTasks = [...matchingTasks].sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
-  }
+    let tsks = tasks.filter((t) => {
+      if (!rawQ) return true;
+      if (t.title.toLowerCase().includes(rawQ)) return true;
+      const cust = customers.find((c) => c.id === t.customer_id);
+      if (!cust) return false;
+      return (
+        cust.name.toLowerCase().includes(rawQ) ||
+        (cust.mobile && cust.mobile.replace(/[\s-]/g, '').includes(cleanQ)) ||
+        (cust.aadhaar_number && cust.aadhaar_number.replace(/[\s-]/g, '').includes(cleanQ))
+      );
+    });
 
-  const totalMatches = matchingCustomers.length + matchingTasks.length;
+    if (sortBy === 'name') {
+      custs = [...custs].sort((a, b) => a.name.localeCompare(b.name));
+      tsks = [...tsks].sort((a, b) => a.title.localeCompare(b.title));
+    } else if (sortBy === 'recent') {
+      custs = [...custs].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      tsks = [...tsks].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+    }
+
+    return { matchingCustomers: custs, matchingTasks: tsks, totalMatches: custs.length + tsks.length };
+  }, [customers, tasks, rawQ, cleanQ, sortBy]);
+
+  const visibleCustomers = React.useMemo(() => {
+    return showAllCustomers ? matchingCustomers : matchingCustomers.slice(0, 10);
+  }, [matchingCustomers, showAllCustomers]);
+
+  const visibleTasks = React.useMemo(() => {
+    return showAllTasks ? matchingTasks : matchingTasks.slice(0, 15);
+  }, [matchingTasks, showAllTasks]);
 
   return (
     <div className="w-full px-gutter py-space-lg max-w-[1240px] mx-auto flex flex-col gap-space-lg">
@@ -167,7 +179,7 @@ export const SearchPage: React.FC = () => {
               </div>
 
               <div className="flex flex-col gap-space-md">
-                {matchingCustomers.map((cust) => {
+                {visibleCustomers.map((cust) => {
                   const custTasks = tasks.filter((t) => t.customer_id === cust.id);
                   const activeCount = custTasks.filter((t) => t.status !== 'DELIVERED').length;
                   const completedCount = custTasks.filter((t) => t.status === 'DELIVERED').length;
@@ -185,6 +197,16 @@ export const SearchPage: React.FC = () => {
                   );
                 })}
               </div>
+
+              {matchingCustomers.length > 10 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllCustomers(v => !v)}
+                  className="self-center mt-2 px-4 py-2 rounded-full border border-surface-container-high text-xs font-semibold text-primary hover:bg-surface-container transition-all"
+                >
+                  {showAllCustomers ? 'Show Fewer Customers' : `Show All ${matchingCustomers.length} Customers`}
+                </button>
+              )}
             </section>
           )}
 
@@ -204,10 +226,20 @@ export const SearchPage: React.FC = () => {
               </div>
 
               <div className="flex flex-col gap-space-xs">
-                {matchingTasks.map((task) => (
+                {visibleTasks.map((task) => (
                   <TaskCard key={task.id} layout="list" task={task} />
                 ))}
               </div>
+
+              {matchingTasks.length > 15 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllTasks(v => !v)}
+                  className="self-center mt-2 px-4 py-2 rounded-full border border-surface-container-high text-xs font-semibold text-primary hover:bg-surface-container transition-all"
+                >
+                  {showAllTasks ? 'Show Fewer Tasks' : `Show All ${matchingTasks.length} Tasks`}
+                </button>
+              )}
             </section>
           )}
         </div>

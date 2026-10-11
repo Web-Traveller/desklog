@@ -18,11 +18,11 @@ export const ToastNotification: React.FC<ToastNotificationProps> = ({
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-[120] flex flex-col gap-3 max-w-sm w-full pointer-events-none">
+    <div className="fixed bottom-5 right-5 z-[120] flex flex-col gap-2 max-w-md w-auto pointer-events-none">
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`pointer-events-auto flex items-center justify-between gap-3 p-4 rounded-2xl shadow-xl border backdrop-blur-md animate-fadeIn transition-all ${
+          className={`pointer-events-auto flex items-center justify-between gap-3 px-3.5 py-2 rounded-xl shadow-lg border backdrop-blur-md animate-fadeIn transition-all ${
             toast.type === 'success'
               ? 'bg-secondary-container/95 text-on-secondary-container border-secondary/30'
               : toast.type === 'error'
@@ -32,8 +32,8 @@ export const ToastNotification: React.FC<ToastNotificationProps> = ({
               : 'bg-primary-container/95 text-on-primary-container border-primary/30'
           }`}
         >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="material-symbols-outlined text-xl flex-shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="material-symbols-outlined text-base flex-shrink-0">
               {toast.type === 'success'
                 ? 'check_circle'
                 : toast.type === 'error'
@@ -42,17 +42,18 @@ export const ToastNotification: React.FC<ToastNotificationProps> = ({
                 ? 'warning'
                 : 'info'}
             </span>
-            <span className="font-caption-strong text-caption-strong font-medium truncate">
+            <span className="font-button-utility text-xs font-medium truncate">
               {toast.message}
             </span>
           </div>
 
           <button
-            className="p-1 rounded-full hover:bg-black/10 transition-colors flex-shrink-0"
+            className="p-0.5 rounded-full hover:bg-black/10 transition-colors flex-shrink-0 opacity-70 hover:opacity-100"
             onClick={() => onDismiss(toast.id)}
             type="button"
+            title="Dismiss"
           >
-            <span className="material-symbols-outlined text-base">close</span>
+            <span className="material-symbols-outlined text-sm">close</span>
           </button>
         </div>
       ))}

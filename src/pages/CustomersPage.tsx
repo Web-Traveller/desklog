@@ -10,20 +10,24 @@ export const CustomersPage: React.FC = () => {
   const [pageSize, setPageSize] = useState<number>(18);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
-  const filteredCustomers = customers.filter((cust) => {
-    if (!customerSearch.trim()) return true;
+  const filteredCustomers = React.useMemo(() => {
+    if (!customerSearch.trim()) return customers;
     const q = customerSearch.toLowerCase();
-    return (
-      cust.name.toLowerCase().includes(q) ||
-      (cust.mobile || "").includes(q) ||
-      (cust.aadhaar_number || "").includes(q)
-    );
-  });
+    return customers.filter((cust) => {
+      return (
+        cust.name.toLowerCase().includes(q) ||
+        (cust.mobile || "").includes(q) ||
+        (cust.aadhaar_number || "").includes(q)
+      );
+    });
+  }, [customers, customerSearch]);
 
   const totalPages = Math.ceil(filteredCustomers.length / pageSize) || 1;
   const currentPageSafe = Math.min(page, totalPages - 1);
   const startIndex = currentPageSafe * pageSize;
-  const paginatedCustomers = filteredCustomers.slice(startIndex, startIndex + pageSize);
+  const paginatedCustomers = React.useMemo(() => {
+    return filteredCustomers.slice(startIndex, startIndex + pageSize);
+  }, [filteredCustomers, startIndex, pageSize]);
 
   return (
     <div className="w-full max-w-[1400px] mx-auto px-gutter py-space-md flex flex-col gap-4 animate-slideUp">

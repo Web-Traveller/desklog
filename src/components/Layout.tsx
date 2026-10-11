@@ -4,6 +4,7 @@ import { Sidebar } from './Sidebar';
 import { AddCustomerModal } from './AddCustomerModal';
 import { AddTaskModal } from './AddTaskModal';
 import { EditTaskModal } from './EditTaskModal';
+import { AddBankingTransactionModal } from './AddBankingTransactionModal';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 
 interface LayoutProps {
@@ -29,6 +30,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onOpenHelpModal }) => 
       <AddCustomerModal />
       <AddTaskModal />
       <EditTaskModal />
+      <AddBankingTransactionModal />
     </div>
   );
 };

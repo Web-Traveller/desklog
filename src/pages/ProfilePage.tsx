@@ -56,11 +56,21 @@ export const ProfilePage: React.FC = () => {
     }
   };
 
+  const [taskPage, setTaskPage] = useState(0);
+  const TASKS_PER_PAGE = 8;
+
   const filteredTasks = customerTasks.filter((t) => {
     if (taskFilter === "active") return t.status !== "DELIVERED";
     if (taskFilter === "DELIVERED") return t.status === "DELIVERED";
     return true;
   });
+
+  const totalTaskPages = Math.ceil(filteredTasks.length / TASKS_PER_PAGE) || 1;
+  const safeTaskPage = Math.min(taskPage, totalTaskPages - 1);
+  const paginatedTasks = filteredTasks.slice(
+    safeTaskPage * TASKS_PER_PAGE,
+    (safeTaskPage + 1) * TASKS_PER_PAGE
+  );
 
   useEffect(() => {
     if (highlightedTaskId) {
@@ -313,7 +323,7 @@ export const ProfilePage: React.FC = () => {
               description="No tasks logged matching the selected stage filter."
             />
           ) : (
-            filteredTasks.map((t) => (
+            paginatedTasks.map((t) => (
               <TaskCard
                 key={t.id}
                 isHighlighted={t.id === highlightedTaskId}
@@ -323,6 +333,34 @@ export const ProfilePage: React.FC = () => {
             ))
           )}
         </div>
+
+        {/* Task Pagination Controls */}
+        {filteredTasks.length > TASKS_PER_PAGE && (
+          <div className="flex items-center justify-between pt-space-xs border-t border-surface-container">
+            <span className="font-fine-print text-fine-print text-on-surface-variant">
+              Showing {safeTaskPage * TASKS_PER_PAGE + 1} - {Math.min((safeTaskPage + 1) * TASKS_PER_PAGE, filteredTasks.length)} of {filteredTasks.length} tasks
+            </span>
+            <div className="flex items-center gap-space-xs">
+              <button
+                className="px-space-md py-1.5 rounded-full border border-surface-container-high text-on-surface disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-container font-button-utility text-button-utility transition-all active:scale-95"
+                disabled={safeTaskPage === 0}
+                onClick={() => setTaskPage(p => Math.max(0, p - 1))}
+              >
+                Previous
+              </button>
+              <span className="font-caption text-caption text-on-surface px-space-xs">
+                {safeTaskPage + 1} / {totalTaskPages}
+              </span>
+              <button
+                className="px-space-md py-1.5 rounded-full border border-surface-container-high text-on-surface disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-container font-button-utility text-button-utility transition-all active:scale-95"
+                disabled={safeTaskPage >= totalTaskPages - 1}
+                onClick={() => setTaskPage(p => Math.min(totalTaskPages - 1, p + 1))}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
       )}
 

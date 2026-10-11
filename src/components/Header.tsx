@@ -1,5 +1,5 @@
 import React from "react";
-import { useDesk } from "../context/DeskContext";
+import { useUI } from "../context/DeskContext";
 
 interface HeaderProps {
   onOpenHelpModal?: () => void;
@@ -9,11 +9,9 @@ export const Header: React.FC<HeaderProps> = ({ onOpenHelpModal }) => {
   const {
     searchQuery,
     performSearch,
-    taskDateFilter,
-    setTaskDateFilter,
     setIsAddCustomerOpen,
     setIsAddTaskOpen,
-  } = useDesk();
+  } = useUI();
 
   return (
     <header className="fixed top-0 left-0 right-0 h-16 z-50 bg-surface/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-b border-surface-container/60">
@@ -81,23 +79,6 @@ export const Header: React.FC<HeaderProps> = ({ onOpenHelpModal }) => {
               <span>Hotkeys</span>
             </button>
           )}
-
-          {/* Task Date Filter */}
-          <div className="flex items-center gap-1 px-space-sm py-1.5 rounded-full bg-surface-container text-on-surface font-fine-print text-fine-print border border-surface-container-high/50">
-            <span className="material-symbols-outlined text-sm text-outline">
-              calendar_today
-            </span>
-            <span className="text-on-surface-variant">Tasks:</span>
-            <select
-              className="bg-transparent font-medium text-on-surface focus:outline-none cursor-pointer pr-1"
-              value={taskDateFilter}
-              onChange={(e) => setTaskDateFilter(e.target.value)}
-            >
-              <option value="Last 7 days">Last 7 days</option>
-              <option value="Last 3 days">Last 3 days</option>
-              <option value="Today">Today</option>
-            </select>
-          </div>
 
           {/* Quick Action Buttons */}
           <button

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import * as Sentry from '@sentry/react';
 import { Customer, GENERAL_CUSTOMER } from '../types';
 import {
   fetchTauriCustomers,
@@ -67,20 +68,30 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       avatar_color: color,
     };
 
-    const saved = (await saveTauriCustomer(newCustomer)) || newCustomer;
-    setCustomers(prev => [...prev, saved]);
-    showToast(`Customer "${saved.name}" added successfully.`, 'success');
+    try {
+      const saved = await saveTauriCustomer(newCustomer);
+      setCustomers(prev => [...prev, saved]);
+      showToast(`Customer "${saved.name}" added successfully.`, 'success');
 
-    const act = createActivityEvent({
-      type: 'customer_created',
-      title: `New customer registered: ${saved.name}`,
-      description: `Customer profile created with mobile ${saved.mobile || 'N/A'}.`,
-      customerId: saved.id,
-      customerName: saved.name,
-      customerPhone: saved.mobile,
-    });
-    await saveTauriActivity(act);
-    return saved;
+      const act = createActivityEvent({
+        type: 'customer_created',
+        title: `New customer registered: ${saved.name}`,
+        description: `Customer profile created with mobile ${saved.mobile || 'N/A'}.`,
+        customerId: saved.id,
+        customerName: saved.name,
+        customerPhone: saved.mobile,
+      });
+      await saveTauriActivity(act);
+      return saved;
+    } catch (err) {
+      console.error('Failed to add customer:', err);
+      Sentry.captureException(err, {
+        tags: { action: 'add_customer' },
+        extra: { customerName: newCustomer.name, customerMobile: newCustomer.mobile },
+      });
+      showToast(`Failed to add customer: ${err instanceof Error ? err.message : String(err)}`, 'error');
+      throw err;
+    }
   };
 
   const editCustomer = async (id: string, customerData: Partial<Customer>) => {
@@ -92,8 +103,8 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const note = customerData.note !== undefined ? customerData.note : target.note;
     const aadhaar_number = customerData.aadhaar_number !== undefined ? customerData.aadhaar_number : target.aadhaar_number;
 
-    const success = await updateTauriCustomer(id, name, mobile, note, aadhaar_number);
-    if (success) {
+    try {
+      await updateTauriCustomer(id, name, mobile, note, aadhaar_number);
       setCustomers(prev =>
         prev.map(c => (c.id === id ? { ...c, ...customerData, updated_at: new Date().toISOString() } : c))
       );
@@ -108,6 +119,10 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         customerPhone: mobile,
       });
       await saveTauriActivity(act);
+    } catch (err) {
+      console.error('Failed to update customer:', err);
+      Sentry.captureException(err, { tags: { action: 'update_customer' }, extra: { customerId: id } });
+      showToast(`Failed to update customer: ${err instanceof Error ? err.message : String(err)}`, 'error');
     }
   };
 
@@ -118,8 +133,8 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     const target = customers.find(c => c.id === id);
-    const success = await deleteTauriCustomer(id);
-    if (success) {
+    try {
+      await deleteTauriCustomer(id);
       setCustomers(prev => prev.filter(c => c.id !== id));
       if (selectedCustomerId === id) {
         setSelectedCustomerId('cust-general');
@@ -137,6 +152,10 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         });
         await saveTauriActivity(act);
       }
+    } catch (err) {
+      console.error('Failed to delete customer:', err);
+      Sentry.captureException(err, { tags: { action: 'delete_customer' }, extra: { customerId: id } });
+      showToast(`Failed to delete customer: ${err instanceof Error ? err.message : String(err)}`, 'error');
     }
   };
 

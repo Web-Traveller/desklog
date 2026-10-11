@@ -5,15 +5,17 @@ import { CustomerSearchPicker } from './CustomerSearchPicker';
 import { rupeesToPaise } from '../utils/currencyUtils';
 
 interface AddBankingTransactionModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
 export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProps> = ({
-  isOpen,
-  onClose,
+  isOpen: propIsOpen,
+  onClose: propOnClose,
 }) => {
-  const { customers, addBankingTransaction, showToast } = useDesk();
+  const { isAddBankingOpen, setIsAddBankingOpen, customers, addBankingTransaction, showToast } = useDesk();
+  const isOpen = propIsOpen !== undefined ? propIsOpen : isAddBankingOpen;
+  const onClose = propOnClose || (() => setIsAddBankingOpen(false));
   
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [transactionType, setTransactionType] = useState<'Transfer' | 'Withdrawal' | 'Deposit'>('Transfer');
@@ -282,7 +284,7 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-6">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-space-md pt-space-xs">
           
           <div className="flex flex-col gap-2">
             <label className="text-sm font-medium text-on-surface-variant">Customer Profile</label>

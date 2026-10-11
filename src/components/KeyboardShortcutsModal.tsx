@@ -18,8 +18,12 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
     { key: 'Esc', macKey: 'Esc', description: 'Close Modals / Clear Search' },
     { key: 'Ctrl + 1', macKey: '⌘1', description: 'Switch to Dashboard' },
     { key: 'Ctrl + 2', macKey: '⌘2', description: 'Switch to All Customers' },
-    { key: 'Ctrl + 3', macKey: '⌘3', description: 'Switch to Calendar Log' },
-    { key: 'Ctrl + 4', macKey: '⌘4', description: 'Switch to Settings' },
+    { key: 'Ctrl + 3', macKey: '⌘3', description: 'Switch to Tasks Register' },
+    { key: 'Ctrl + 4', macKey: '⌘4', description: 'Switch to Calendar Log' },
+    { key: 'Ctrl + 5', macKey: '⌘5', description: 'Switch to Payments' },
+    { key: 'Ctrl + 6', macKey: '⌘6', description: 'Switch to Banking' },
+    { key: 'Ctrl + 7', macKey: '⌘7', description: 'Switch to Services Catalog' },
+    { key: 'Ctrl + 8', macKey: '⌘8', description: 'Switch to Settings' },
     { key: '?', macKey: '?', description: 'Toggle Hotkeys Help Dialog' },
   ];
 

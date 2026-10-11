@@ -66,6 +66,8 @@ export interface DeskContextType {
   setIsEditTaskOpen: (open: boolean) => void;
   selectedTaskToEdit: Task | null;
   setSelectedTaskToEdit: (task: Task | null) => void;
+  isAddBankingOpen: boolean;
+  setIsAddBankingOpen: (open: boolean) => void;
 
   navigateToCustomerProfile: (customerId: string) => void;
   navigateToCustomerTaskProfile: (customerId: string, taskId: string) => void;

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useDesk } from "../context/DeskContext";
 import { CustomerSearchPicker } from "../components/CustomerSearchPicker";
 import { TaskCard } from "../components/TaskCard";
-import { dateMatchesCalendarDate, getFormattedToday } from "../utils/dateUtils";
+import { dateMatchesCalendarDate, getFormattedToday, toISODateString } from "../utils/dateUtils";
 import { formatRupees } from "../utils/currencyUtils";
 
 export const CalendarPage: React.FC = () => {
@@ -57,11 +57,13 @@ export const CalendarPage: React.FC = () => {
     e.preventDefault();
     if (!quickTitle.trim()) return;
 
+    const isoDate = toISODateString(year, month, selectedDayNum);
+
     await addTask({
       customer_id: quickCustId,
       title: quickTitle.trim(),
       status: "PENDING",
-      scheduled_date: selectedCalendarDate,
+      scheduled_date: isoDate,
       notes: `Scheduled for ${selectedCalendarDate}`,
     });
 
@@ -354,7 +356,7 @@ export const CalendarPage: React.FC = () => {
                 </span>
               </div>
             ) : (
-              <div className="flex flex-col gap-space-xs">
+              <div className="flex flex-col gap-space-xs max-h-[380px] overflow-y-auto pr-1">
                 {scheduledWorkForDate.map((task) => (
                   <TaskCard key={task.id} layout="list" task={task} />
                 ))}
@@ -384,11 +386,11 @@ export const CalendarPage: React.FC = () => {
                 <span>No operational activity logs recorded for this day.</span>
               </div>
             ) : (
-              <div className="flex flex-col gap-space-sm">
+              <div className="flex flex-col gap-space-xs max-h-[380px] overflow-y-auto pr-1">
                 {activitiesForDate.map((act) => (
                   <div
                     key={act.id}
-                    className="p-space-md rounded-xl bg-surface-container-low border border-surface-container-high/40 flex flex-col md:flex-row md:items-center justify-between gap-space-md transition-all hover:border-primary/30"
+                    className="p-space-sm rounded-xl bg-surface-container-low border border-surface-container-high/40 flex flex-col md:flex-row md:items-center justify-between gap-space-sm transition-all hover:border-primary/30"
                   >
                     <div className="flex items-start gap-space-md">
                       <div className="flex flex-col items-center justify-center min-w-[70px] pt-1">
@@ -452,11 +454,11 @@ export const CalendarPage: React.FC = () => {
                 <span>No banking transactions recorded for this day.</span>
               </div>
             ) : (
-              <div className="flex flex-col gap-space-sm">
+              <div className="flex flex-col gap-space-xs max-h-[380px] overflow-y-auto pr-1">
                 {bankingTransactionsForDate.map((tx) => (
                   <div
                     key={tx.id}
-                    className="p-space-md rounded-xl bg-surface-container-low border border-surface-container-high/40 flex flex-col md:flex-row md:items-center justify-between gap-space-md transition-all hover:border-tertiary/30"
+                    className="p-space-sm rounded-xl bg-surface-container-low border border-surface-container-high/40 flex flex-col md:flex-row md:items-center justify-between gap-space-sm transition-all hover:border-tertiary/30"
                   >
                     <div className="flex items-start gap-space-md">
                       <div className="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center text-tertiary flex-shrink-0">

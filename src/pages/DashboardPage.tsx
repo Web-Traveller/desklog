@@ -19,16 +19,25 @@ export const DashboardPage: React.FC = () => {
     ITEMS_PER_PAGE,
   } = useDesk();
 
-  const metrics = calculateDashboardMetrics(tasks, payments);
+  const metrics = React.useMemo(() => calculateDashboardMetrics(tasks, payments), [tasks, payments]);
 
-  const pendingTasks = tasks.filter((t) => t.status === "PENDING");
-  const processingTasks = tasks.filter((t) => t.status === "PROCESSING");
-  const readyTasks = tasks.filter((t) => t.status === "READY");
+  const pendingTasks = React.useMemo(() => tasks.filter((t) => t.status === "PENDING"), [tasks]);
+  const processingTasks = React.useMemo(() => tasks.filter((t) => t.status === "PROCESSING"), [tasks]);
+  const readyTasks = React.useMemo(() => tasks.filter((t) => t.status === "READY"), [tasks]);
+
+  // Sort customers by most recent registration date so recent walk-ins and customers appear first
+  const sortedRecentCustomers = React.useMemo(() => {
+    return [...customers].sort((a, b) => {
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return dateB - dateA;
+    });
+  }, [customers]);
 
   const custStartIdx = customerPage * ITEMS_PER_PAGE;
-  const paginatedCustomers = customers.slice(
-    custStartIdx,
-    custStartIdx + ITEMS_PER_PAGE,
+  const paginatedCustomers = React.useMemo(
+    () => sortedRecentCustomers.slice(custStartIdx, custStartIdx + ITEMS_PER_PAGE),
+    [sortedRecentCustomers, custStartIdx, ITEMS_PER_PAGE]
   );
 
   return (
@@ -118,8 +127,8 @@ export const DashboardPage: React.FC = () => {
               Date)
             </h3>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-space-sm">
-            {metrics.overdueTasks.slice(0, 3).map((task) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-space-sm max-h-[340px] overflow-y-auto pr-1">
+            {metrics.overdueTasks.map((task) => (
               <TaskCard key={task.id} layout="kanban" task={task} />
             ))}
           </div>
@@ -139,7 +148,7 @@ export const DashboardPage: React.FC = () => {
               </h2>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-space-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-space-sm max-h-[340px] overflow-y-auto pr-1">
             {metrics.todayScheduledTasks.map((task) => (
               <TaskCard key={task.id} layout="kanban" task={task} />
             ))}
@@ -177,7 +186,7 @@ export const DashboardPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex flex-col gap-space-xs min-h-[140px]">
+            <div className="flex flex-col gap-space-xs min-h-[140px] max-h-[460px] overflow-y-auto pr-1">
               {pendingTasks.length === 0 ? (
                 <div className="py-8 text-center text-fine-print text-outline font-caption flex flex-col items-center gap-1">
                   <span className="material-symbols-outlined text-2xl text-outline/50">
@@ -204,7 +213,7 @@ export const DashboardPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex flex-col gap-space-xs min-h-[140px]">
+            <div className="flex flex-col gap-space-xs min-h-[140px] max-h-[460px] overflow-y-auto pr-1">
               {processingTasks.length === 0 ? (
                 <div className="py-8 text-center text-fine-print text-outline font-caption flex flex-col items-center gap-1">
                   <span className="material-symbols-outlined text-2xl text-outline/50">
@@ -231,7 +240,7 @@ export const DashboardPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex flex-col gap-space-xs min-h-[140px]">
+            <div className="flex flex-col gap-space-xs min-h-[140px] max-h-[460px] overflow-y-auto pr-1">
               {readyTasks.length === 0 ? (
                 <div className="py-8 text-center text-fine-print text-outline font-caption flex flex-col items-center gap-1">
                   <span className="material-symbols-outlined text-2xl text-outline/50">

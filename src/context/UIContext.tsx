@@ -34,6 +34,8 @@ interface UIContextType {
   setIsEditTaskOpen: (open: boolean) => void;
   selectedTaskToEdit: Task | null;
   setSelectedTaskToEdit: (task: Task | null) => void;
+  isAddBankingOpen: boolean;
+  setIsAddBankingOpen: (open: boolean) => void;
 
   taskPage: number;
   setTaskPage: (page: number | ((prev: number) => number)) => void;
@@ -62,6 +64,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
   const [isEditTaskOpen, setIsEditTaskOpen] = useState(false);
   const [selectedTaskToEdit, setSelectedTaskToEdit] = useState<Task | null>(null);
+  const [isAddBankingOpen, setIsAddBankingOpen] = useState(false);
 
   const [taskPage, setTaskPage] = useState(0);
   const [customerPage, setCustomerPage] = useState(0);
@@ -147,6 +150,8 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         setIsEditTaskOpen,
         selectedTaskToEdit,
         setSelectedTaskToEdit,
+        isAddBankingOpen,
+        setIsAddBankingOpen,
         taskPage,
         setTaskPage,
         customerPage,
@@ -202,6 +207,8 @@ export const useUI = () => {
       setIsEditTaskOpen: () => {},
       selectedTaskToEdit: null,
       setSelectedTaskToEdit: () => {},
+      isAddBankingOpen: false,
+      setIsAddBankingOpen: () => {},
       taskPage: 0,
       setTaskPage: () => {},
       customerPage: 0,

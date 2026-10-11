@@ -57,7 +57,7 @@ export function useKeyboardShortcuts(onToggleHelpModal: () => void) {
         return;
       }
 
-      // 4. Ctrl/Cmd + 1..4 -> Navigation
+      // 4. Ctrl/Cmd + 1..8 -> Complete Navigation
       if (isControlOrCmd && !isInputActive) {
         if (e.key === '1') {
           e.preventDefault();
@@ -71,10 +71,30 @@ export function useKeyboardShortcuts(onToggleHelpModal: () => void) {
         }
         if (e.key === '3') {
           e.preventDefault();
-          setCurrentPage('calendar');
+          setCurrentPage('tasks');
           return;
         }
         if (e.key === '4') {
+          e.preventDefault();
+          setCurrentPage('calendar');
+          return;
+        }
+        if (e.key === '5') {
+          e.preventDefault();
+          setCurrentPage('payments');
+          return;
+        }
+        if (e.key === '6') {
+          e.preventDefault();
+          setCurrentPage('banking');
+          return;
+        }
+        if (e.key === '7') {
+          e.preventDefault();
+          setCurrentPage('services');
+          return;
+        }
+        if (e.key === '8') {
           e.preventDefault();
           setCurrentPage('settings');
           return;

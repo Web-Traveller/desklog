@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
-import { useDesk } from '../context/DeskContext';
-import { AddBankingTransactionModal } from '../components/AddBankingTransactionModal';
+import { useBanking, useCustomers, useUI } from '../context/DeskContext';
 import { EmptyState } from '../components/EmptyState';
 import { formatDisplayDate } from '../utils/dateUtils';
 import { formatRupees } from '../utils/currencyUtils';
 import { formatRefDetails } from '../utils/bankingUtils';
 
 export const BankingPage: React.FC = () => {
-  const { bankingTransactions, customers, deleteBankingTransaction, showConfirm } = useDesk();
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const { bankingTransactions, deleteBankingTransaction } = useBanking();
+  const { customers } = useCustomers();
+  const { showConfirm, setIsAddBankingOpen } = useUI();
   
   const [filterType, setFilterType] = useState('All');
   const [dateFilter, setDateFilter] = useState('All Time');
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 15;
 
   const filteredTransactions = (bankingTransactions || []).filter(tx => {
     if (filterType !== 'All' && tx.transaction_type !== filterType) return false;
@@ -31,6 +33,13 @@ export const BankingPage: React.FC = () => {
     }
     return true;
   });
+
+  const totalPages = Math.ceil(filteredTransactions.length / PAGE_SIZE) || 1;
+  const safePage = Math.min(page, totalPages - 1);
+  const paginatedTransactions = filteredTransactions.slice(
+    safePage * PAGE_SIZE,
+    (safePage + 1) * PAGE_SIZE
+  );
 
   const getCustomerName = (id: string) => {
     return customers.find(c => c.id === id)?.name || 'Unknown';
@@ -65,7 +74,7 @@ export const BankingPage: React.FC = () => {
           </div>
 
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => setIsAddBankingOpen(true)}
             className="px-space-md py-2.5 bg-primary hover:bg-primary-container text-on-primary rounded-full font-button-utility text-button-utility font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-sm whitespace-nowrap"
           >
             <span className="material-symbols-outlined text-lg">add</span>
@@ -100,10 +109,10 @@ export const BankingPage: React.FC = () => {
                         : 'Record your first bank transfer, AePS withdrawal, or deposit.'
                     }
                     actionLabel="+ New Transaction"
-                    onAction={() => setIsModalOpen(true)}
+                    onAction={() => setIsAddBankingOpen(true)}
                   />
                 ) : (
-                  filteredTransactions.map((tx) => (
+                  paginatedTransactions.map((tx) => (
                     <tr key={tx.id} className="border-b border-surface-container/40 last:border-0 hover:bg-surface-container-lowest/80 transition-colors group">
                       <td className="p-space-md text-sm text-on-surface whitespace-nowrap font-medium">
                         {formatDisplayDate(tx.transaction_date)}
@@ -154,12 +163,35 @@ export const BankingPage: React.FC = () => {
               </tbody>
             </table>
           </div>
-        </div>
 
-      <AddBankingTransactionModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
+          {/* Pagination Controls */}
+          {filteredTransactions.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between p-space-md border-t border-surface-container/60 bg-surface-container-lowest">
+              <span className="font-fine-print text-fine-print text-on-surface-variant">
+                Showing {safePage * PAGE_SIZE + 1} - {Math.min((safePage + 1) * PAGE_SIZE, filteredTransactions.length)} of {filteredTransactions.length} transactions
+              </span>
+              <div className="flex items-center gap-space-xs">
+                <button
+                  className="px-space-md py-1.5 rounded-full border border-surface-container-high text-on-surface disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-container font-button-utility text-button-utility transition-all active:scale-95"
+                  disabled={safePage === 0}
+                  onClick={() => setPage(p => Math.max(0, p - 1))}
+                >
+                  Previous
+                </button>
+                <span className="font-caption text-caption text-on-surface px-space-xs">
+                  {safePage + 1} / {totalPages}
+                </span>
+                <button
+                  className="px-space-md py-1.5 rounded-full border border-surface-container-high text-on-surface disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-container font-button-utility text-button-utility transition-all active:scale-95"
+                  disabled={safePage >= totalPages - 1}
+                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
     </div>
   );
 };

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import * as Sentry from '@sentry/react';
 import {
   Task,
   TaskStatus,
@@ -92,22 +93,25 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     reloadTaskData();
   }, []);
 
-  // Notifications check for overdue tasks
+  // Notifications check for overdue tasks with deduplication
+  const [notifiedTaskIds, setNotifiedTaskIds] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     if (tasks.length === 0) return;
     const checkInterval = setInterval(() => {
       tasks.forEach(t => {
-        if (isTaskOverdue(t)) {
+        if (isTaskOverdue(t) && !notifiedTaskIds.has(t.id)) {
           const cust = customers.find(c => c.id === t.customer_id);
           triggerDesktopNotification(
             `Task Overdue: ${t.title}`,
             `Task for ${cust ? cust.name : 'Customer'} is overdue.`
           );
+          setNotifiedTaskIds(prev => new Set(prev).add(t.id));
         }
       });
-    }, 1000 * 60 * 30);
+    }, 1000 * 60 * 5); // Check every 5 minutes
     return () => clearInterval(checkInterval);
-  }, [tasks, customers]);
+  }, [tasks, customers, notifiedTaskIds]);
 
   const addService = async (serviceData: Omit<Service, 'id' | 'created_at' | 'updated_at'>) => {
     const now = new Date().toISOString();
@@ -117,24 +121,35 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       created_at: now,
       updated_at: now,
     };
-    const saved = (await saveTauriService(newService)) || newService;
-    setServices(prev => [...prev, saved]);
-    showToast(`Service "${saved.name}" added.`, 'success');
+    try {
+      const saved = await saveTauriService(newService);
+      setServices(prev => [...prev, saved]);
+      showToast(`Service "${saved.name}" added.`, 'success');
+    } catch (err) {
+      console.error('Failed to add service:', err);
+      showToast(`Failed to add service: ${err instanceof Error ? err.message : String(err)}`, 'error');
+    }
   };
 
   const editService = async (service: Service) => {
-    const success = await updateTauriService(service);
-    if (success) {
+    try {
+      await updateTauriService(service);
       setServices(prev => prev.map(s => (s.id === service.id ? service : s)));
       showToast(`Service details updated.`, 'success');
+    } catch (err) {
+      console.error('Failed to update service:', err);
+      showToast(`Failed to update service: ${err instanceof Error ? err.message : String(err)}`, 'error');
     }
   };
 
   const deleteService = async (id: string) => {
-    const success = await deleteTauriService(id);
-    if (success) {
+    try {
+      await deleteTauriService(id);
       setServices(prev => prev.map(s => (s.id === id ? { ...s, is_active: false } : s)));
       showToast(`Service deactivated.`, 'info');
+    } catch (err) {
+      console.error('Failed to delete service:', err);
+      showToast(`Failed to delete service: ${err instanceof Error ? err.message : String(err)}`, 'error');
     }
   };
 
@@ -144,23 +159,28 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: `pay-${Date.now()}`,
       created_at: new Date().toISOString(),
     };
-    const saved = (await saveTauriPayment(newPayment)) || newPayment;
-    setPayments(prev => [...prev, saved]);
-    showToast(`Payment recorded successfully.`, 'success');
+    try {
+      const saved = await saveTauriPayment(newPayment);
+      setPayments(prev => [...prev, saved]);
+      showToast(`Payment recorded successfully.`, 'success');
 
-    const targetTask = tasks.find(t => t.id === saved.task_id);
-    const targetCustomer = targetTask ? customers.find(c => c.id === targetTask.customer_id) : undefined;
+      const targetTask = tasks.find(t => t.id === saved.task_id);
+      const targetCustomer = targetTask ? customers.find(c => c.id === targetTask.customer_id) : undefined;
 
-    const act = createActivityEvent({
-      type: 'payment_added',
-      title: `Payment received: ${formatRupees(saved.amount)}`,
-      description: `Payment recorded for task ${targetTask?.title || 'Desk Work'}.`,
-      taskId: saved.task_id,
-      customerId: targetCustomer?.id,
-      customerName: targetCustomer?.name,
-      customerPhone: targetCustomer?.mobile,
-    });
-    await saveTauriActivity(act);
+      const act = createActivityEvent({
+        type: 'payment_added',
+        title: `Payment received: ${formatRupees(saved.amount)}`,
+        description: `Payment recorded for task ${targetTask?.title || 'Desk Work'}.`,
+        taskId: saved.task_id,
+        customerId: targetCustomer?.id,
+        customerName: targetCustomer?.name,
+        customerPhone: targetCustomer?.mobile,
+      });
+      await saveTauriActivity(act);
+    } catch (err) {
+      console.error('Failed to add payment:', err);
+      showToast(`Failed to record payment: ${err instanceof Error ? err.message : String(err)}`, 'error');
+    }
   };
 
   const addTask = async (taskData: Omit<Task, 'id' | 'created_at' | 'updated_at'>) => {
@@ -172,21 +192,27 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updated_at: now,
     };
 
-    const saved = (await saveTauriTask(newTask)) || newTask;
-    setTasks(prev => [saved, ...prev]);
-    showToast(`Task "${saved.title}" created.`, 'success');
+    try {
+      const saved = await saveTauriTask(newTask);
+      setTasks(prev => [saved, ...prev]);
+      showToast(`Task "${saved.title}" created.`, 'success');
 
-    const cust = customers.find(c => c.id === saved.customer_id);
-    const act = createActivityEvent({
-      type: 'task_created',
-      title: `New task created: ${saved.title}`,
-      description: `Service request logged for ${cust ? cust.name : 'Client'}.`,
-      taskId: saved.id,
-      customerId: cust?.id,
-      customerName: cust?.name,
-      customerPhone: cust?.mobile,
-    });
-    await saveTauriActivity(act);
+      const cust = customers.find(c => c.id === saved.customer_id);
+      const act = createActivityEvent({
+        type: 'task_created',
+        title: `New task created: ${saved.title}`,
+        description: `Service request logged for ${cust ? cust.name : 'Client'}.`,
+        taskId: saved.id,
+        customerId: cust?.id,
+        customerName: cust?.name,
+        customerPhone: cust?.mobile,
+      });
+      await saveTauriActivity(act);
+    } catch (err) {
+      console.error('Failed to add task:', err);
+      Sentry.captureException(err, { tags: { action: 'add_task' }, extra: { taskTitle: newTask.title, customerId: newTask.customer_id } });
+      showToast(`Failed to create task: ${err instanceof Error ? err.message : String(err)}`, 'error');
+    }
   };
 
   const updateTaskStatus = async (
@@ -206,8 +232,8 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updated_at: new Date().toISOString(),
     };
 
-    const success = await updateTauriTask(updatedTask);
-    if (success) {
+    try {
+      await updateTauriTask(updatedTask);
       setTasks(prev => prev.map(t => (t.id === taskId ? updatedTask : t)));
       showToast(`Task status updated to ${newStatus}.`, 'info');
 
@@ -227,6 +253,9 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         customerPhone: cust?.mobile,
       });
       await saveTauriActivity(act);
+    } catch (err) {
+      console.error('Failed to update task status:', err);
+      showToast(`Failed to update status: ${err instanceof Error ? err.message : String(err)}`, 'error');
     }
   };
 
@@ -240,8 +269,8 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updated_at: new Date().toISOString(),
     };
 
-    const success = await updateTauriTask(updatedTask);
-    if (success) {
+    try {
+      await updateTauriTask(updatedTask);
       setTasks(prev => prev.map(t => (t.id === taskId ? updatedTask : t)));
       showToast(`Task updated successfully.`, 'success');
 
@@ -256,13 +285,16 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         customerPhone: cust?.mobile,
       });
       await saveTauriActivity(act);
+    } catch (err) {
+      console.error('Failed to update task:', err);
+      showToast(`Failed to update task: ${err instanceof Error ? err.message : String(err)}`, 'error');
     }
   };
 
   const deleteTask = async (taskId: string) => {
     const target = tasks.find(t => t.id === taskId);
-    const success = await deleteTauriTask(taskId);
-    if (success) {
+    try {
+      await deleteTauriTask(taskId);
       setTasks(prev => prev.filter(t => t.id !== taskId));
       showToast(`Task deleted.`, 'info');
 
@@ -279,6 +311,9 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         await saveTauriActivity(act);
       }
+    } catch (err) {
+      console.error('Failed to delete task:', err);
+      showToast(`Failed to delete task: ${err instanceof Error ? err.message : String(err)}`, 'error');
     }
   };
 

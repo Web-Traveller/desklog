@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import * as Sentry from '@sentry/react';
 import { BankingTransaction } from '../types';
 import {
   fetchTauriBankingTransactions,
@@ -39,16 +40,26 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       is_deleted: false,
       transaction_date: txData.transaction_date || new Date().toISOString(),
     };
-    const saved = (await saveTauriBankingTransaction(newTx)) || newTx;
-    setBankingTransactions(prev => [saved, ...prev]);
-    showToast('Banking transaction logged successfully.', 'success');
+    try {
+      const saved = await saveTauriBankingTransaction(newTx);
+      setBankingTransactions(prev => [saved, ...prev]);
+      showToast('Banking transaction logged successfully.', 'success');
+    } catch (err) {
+      console.error('Failed to log banking transaction:', err);
+      Sentry.captureException(err, { tags: { action: 'add_banking_transaction' }, extra: { txType: newTx.transaction_type, amount: newTx.amount } });
+      showToast(`Failed to log banking transaction: ${err instanceof Error ? err.message : String(err)}`, 'error');
+    }
   };
 
   const deleteBankingTransaction = async (id: number) => {
-    const success = await deleteTauriBankingTransaction(id);
-    if (success) {
+    try {
+      await deleteTauriBankingTransaction(id);
       setBankingTransactions(prev => prev.filter(tx => tx.id !== id));
       showToast('Banking transaction removed.', 'info');
+    } catch (err) {
+      console.error('Failed to delete banking transaction:', err);
+      Sentry.captureException(err, { tags: { action: 'delete_banking_transaction' }, extra: { transactionId: id } });
+      showToast(`Failed to delete transaction: ${err instanceof Error ? err.message : String(err)}`, 'error');
     }
   };
 
