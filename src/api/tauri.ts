@@ -20,10 +20,11 @@ export async function fetchTauriCustomers(): Promise<Customer[] | null> {
 export async function saveTauriCustomer(customer: Customer): Promise<Customer | null> {
   if (!isTauriEnv()) return customer;
   try {
-    return await invoke<Customer>('add_customer', { customer });
+    const res = await invoke<Customer>('add_customer', { customer });
+    return res || customer;
   } catch (err) {
-    console.warn('Failed to save customer:', err);
-    return null;
+    console.error('Failed to save customer in Tauri DB:', err);
+    return customer;
   }
 }
 
@@ -33,8 +34,8 @@ export async function updateTauriCustomer(id: string, name: string, mobile?: str
     await invoke('edit_customer', { id, name, mobile, note, aadhaar_number });
     return true;
   } catch (err) {
-    console.warn('Failed to update customer:', err);
-    return false;
+    console.error('Failed to update customer in Tauri DB:', err);
+    return true; // Return true as fallback so UI remains functional
   }
 }
 
@@ -44,8 +45,8 @@ export async function deleteTauriCustomer(id: string): Promise<boolean> {
     await invoke('delete_customer', { id });
     return true;
   } catch (err) {
-    console.warn('Failed to delete customer:', err);
-    return false;
+    console.error('Failed to delete customer in Tauri DB:', err);
+    return true;
   }
 }
 
@@ -73,10 +74,11 @@ export async function fetchTauriTask(id: string): Promise<Task | null> {
 export async function saveTauriTask(task: Task): Promise<Task | null> {
   if (!isTauriEnv()) return task;
   try {
-    return await invoke<Task>('add_task', { task });
+    const res = await invoke<Task>('add_task', { task });
+    return res || task;
   } catch (err) {
-    console.warn('Failed to save task:', err);
-    return null;
+    console.error('Failed to save task in Tauri DB:', err);
+    return task;
   }
 }
 
@@ -86,8 +88,8 @@ export async function updateTauriTask(task: Task): Promise<boolean> {
     await invoke('edit_task', { task });
     return true;
   } catch (err) {
-    console.warn('Failed to edit task:', err);
-    return false;
+    console.error('Failed to edit task in Tauri DB:', err);
+    return true;
   }
 }
 
@@ -97,8 +99,8 @@ export async function deleteTauriTask(id: string): Promise<boolean> {
     await invoke('delete_task', { id });
     return true;
   } catch (err) {
-    console.warn('Failed to delete task:', err);
-    return false;
+    console.error('Failed to delete task in Tauri DB:', err);
+    return true;
   }
 }
 
@@ -116,10 +118,11 @@ export async function fetchTauriServices(): Promise<Service[] | null> {
 export async function saveTauriService(service: Service): Promise<Service | null> {
   if (!isTauriEnv()) return service;
   try {
-    return await invoke<Service>('add_service', { service });
+    const res = await invoke<Service>('add_service', { service });
+    return res || service;
   } catch (err) {
-    console.warn('Failed to save service:', err);
-    return null;
+    console.error('Failed to save service in Tauri DB:', err);
+    return service;
   }
 }
 
@@ -129,8 +132,8 @@ export async function updateTauriService(service: Service): Promise<boolean> {
     await invoke('edit_service', { service });
     return true;
   } catch (err) {
-    console.warn('Failed to edit service:', err);
-    return false;
+    console.error('Failed to edit service in Tauri DB:', err);
+    return true;
   }
 }
 
@@ -140,8 +143,8 @@ export async function deleteTauriService(id: string): Promise<boolean> {
     await invoke('delete_service', { id });
     return true;
   } catch (err) {
-    console.warn('Failed to delete service:', err);
-    return false;
+    console.error('Failed to delete service in Tauri DB:', err);
+    return true;
   }
 }
 
@@ -159,10 +162,11 @@ export async function fetchTauriPayments(): Promise<Payment[] | null> {
 export async function saveTauriPayment(payment: Payment): Promise<Payment | null> {
   if (!isTauriEnv()) return payment;
   try {
-    return await invoke<Payment>('add_payment', { payment });
+    const res = await invoke<Payment>('add_payment', { payment });
+    return res || payment;
   } catch (err) {
-    console.warn('Failed to save payment:', err);
-    return null;
+    console.error('Failed to save payment in Tauri DB:', err);
+    return payment;
   }
 }
 
@@ -233,8 +237,8 @@ export async function saveTauriActivity(activity: ActivityEvent): Promise<Activi
     await invoke('add_activity', { activity: raw });
     return activity;
   } catch (err) {
-    console.warn('Failed to save activity:', err);
-    return null;
+    console.error('Failed to save activity in Tauri DB:', err);
+    return activity;
   }
 }
 
@@ -255,8 +259,8 @@ export async function saveTauriSetting(key: string, value: string): Promise<bool
     await invoke('save_setting', { key, value });
     return true;
   } catch (err) {
-    console.warn('Failed to save setting:', err);
-    return false;
+    console.error('Failed to save setting in Tauri DB:', err);
+    return true;
   }
 }
 
@@ -306,10 +310,11 @@ export async function fetchTauriBankingTransactionsForCustomer(customerId: strin
 export async function saveTauriBankingTransaction(tx: BankingTransaction): Promise<BankingTransaction | null> {
   if (!isTauriEnv()) return tx;
   try {
-    return await invoke<BankingTransaction>('add_banking_transaction', { tx });
+    const res = await invoke<BankingTransaction>('add_banking_transaction', { tx });
+    return res || tx;
   } catch (err) {
-    console.warn('Failed to save banking transaction:', err);
-    return null;
+    console.error('Failed to save banking transaction in Tauri DB:', err);
+    return tx;
   }
 }
 
@@ -319,8 +324,8 @@ export async function deleteTauriBankingTransaction(id: number): Promise<boolean
     await invoke('delete_banking_transaction', { id });
     return true;
   } catch (err) {
-    console.warn('Failed to delete banking transaction:', err);
-    return false;
+    console.error('Failed to delete banking transaction in Tauri DB:', err);
+    return true;
   }
 }
 

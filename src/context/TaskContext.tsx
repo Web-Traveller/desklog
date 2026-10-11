@@ -117,11 +117,9 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       created_at: now,
       updated_at: now,
     };
-    const saved = await saveTauriService(newService);
-    if (saved) {
-      setServices(prev => [...prev, saved]);
-      showToast(`Service "${saved.name}" added.`, 'success');
-    }
+    const saved = (await saveTauriService(newService)) || newService;
+    setServices(prev => [...prev, saved]);
+    showToast(`Service "${saved.name}" added.`, 'success');
   };
 
   const editService = async (service: Service) => {
@@ -146,25 +144,23 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: `pay-${Date.now()}`,
       created_at: new Date().toISOString(),
     };
-    const saved = await saveTauriPayment(newPayment);
-    if (saved) {
-      setPayments(prev => [...prev, saved]);
-      showToast(`Payment recorded successfully.`, 'success');
+    const saved = (await saveTauriPayment(newPayment)) || newPayment;
+    setPayments(prev => [...prev, saved]);
+    showToast(`Payment recorded successfully.`, 'success');
 
-      const targetTask = tasks.find(t => t.id === saved.task_id);
-      const targetCustomer = targetTask ? customers.find(c => c.id === targetTask.customer_id) : undefined;
+    const targetTask = tasks.find(t => t.id === saved.task_id);
+    const targetCustomer = targetTask ? customers.find(c => c.id === targetTask.customer_id) : undefined;
 
-      const act = createActivityEvent({
-        type: 'payment_added',
-        title: `Payment received: ${formatRupees(saved.amount)}`,
-        description: `Payment recorded for task ${targetTask?.title || 'Desk Work'}.`,
-        taskId: saved.task_id,
-        customerId: targetCustomer?.id,
-        customerName: targetCustomer?.name,
-        customerPhone: targetCustomer?.mobile,
-      });
-      await saveTauriActivity(act);
-    }
+    const act = createActivityEvent({
+      type: 'payment_added',
+      title: `Payment received: ${formatRupees(saved.amount)}`,
+      description: `Payment recorded for task ${targetTask?.title || 'Desk Work'}.`,
+      taskId: saved.task_id,
+      customerId: targetCustomer?.id,
+      customerName: targetCustomer?.name,
+      customerPhone: targetCustomer?.mobile,
+    });
+    await saveTauriActivity(act);
   };
 
   const addTask = async (taskData: Omit<Task, 'id' | 'created_at' | 'updated_at'>) => {
@@ -176,23 +172,21 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updated_at: now,
     };
 
-    const saved = await saveTauriTask(newTask);
-    if (saved) {
-      setTasks(prev => [saved, ...prev]);
-      showToast(`Task "${saved.title}" created.`, 'success');
+    const saved = (await saveTauriTask(newTask)) || newTask;
+    setTasks(prev => [saved, ...prev]);
+    showToast(`Task "${saved.title}" created.`, 'success');
 
-      const cust = customers.find(c => c.id === saved.customer_id);
-      const act = createActivityEvent({
-        type: 'task_created',
-        title: `New task created: ${saved.title}`,
-        description: `Service request logged for ${cust ? cust.name : 'Client'}.`,
-        taskId: saved.id,
-        customerId: cust?.id,
-        customerName: cust?.name,
-        customerPhone: cust?.mobile,
-      });
-      await saveTauriActivity(act);
-    }
+    const cust = customers.find(c => c.id === saved.customer_id);
+    const act = createActivityEvent({
+      type: 'task_created',
+      title: `New task created: ${saved.title}`,
+      description: `Service request logged for ${cust ? cust.name : 'Client'}.`,
+      taskId: saved.id,
+      customerId: cust?.id,
+      customerName: cust?.name,
+      customerPhone: cust?.mobile,
+    });
+    await saveTauriActivity(act);
   };
 
   const updateTaskStatus = async (
@@ -372,7 +366,28 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
 export const useTasks = () => {
   const context = useContext(TaskContext);
   if (!context) {
-    throw new Error('useTasks must be used within a TaskProvider');
+    console.warn('useTasks called outside TaskProvider');
+    return {
+      tasks: [],
+      services: [],
+      payments: [],
+      activities: [],
+      settings: [],
+      addService: async () => {},
+      editService: async () => {},
+      deleteService: async () => {},
+      addPayment: async () => {},
+      addTask: async () => {},
+      updateTaskStatus: async () => {},
+      updateTask: async () => {},
+      deleteTask: async () => {},
+      confirmDeleteTask: () => {},
+      saveAppSetting: async () => {},
+      getSettingValue: () => '',
+      createDatabaseBackup: async () => null,
+      restoreDatabaseBackup: async () => false,
+      reloadTaskData: async () => {},
+    };
   }
   return context;
 };

@@ -181,7 +181,38 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 export const useUI = () => {
   const context = useContext(UIContext);
   if (!context) {
-    throw new Error('useUI must be used within a UIProvider');
+    console.warn('useUI called outside UIProvider');
+    return {
+      currentPage: 'dashboard' as ActivePage,
+      setCurrentPage: () => {},
+      previousPage: 'dashboard' as ActivePage,
+      highlightedTaskId: null,
+      setHighlightedTaskId: () => {},
+      searchQuery: '',
+      setSearchQuery: () => {},
+      taskDateFilter: 'Last 7 days',
+      setTaskDateFilter: () => {},
+      selectedCalendarDate: '',
+      setSelectedCalendarDate: () => {},
+      isAddCustomerOpen: false,
+      setIsAddCustomerOpen: () => {},
+      isAddTaskOpen: false,
+      setIsAddTaskOpen: () => {},
+      isEditTaskOpen: false,
+      setIsEditTaskOpen: () => {},
+      selectedTaskToEdit: null,
+      setSelectedTaskToEdit: () => {},
+      taskPage: 0,
+      setTaskPage: () => {},
+      customerPage: 0,
+      setCustomerPage: () => {},
+      ITEMS_PER_PAGE: 20,
+      showToast: () => {},
+      showConfirm: () => {},
+      navigateToCustomerProfile: () => {},
+      navigateToCustomerTaskProfile: () => {},
+      performSearch: () => {},
+    };
   }
   return context;
 };

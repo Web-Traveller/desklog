@@ -13,7 +13,7 @@ export const BankingPage: React.FC = () => {
   const [filterType, setFilterType] = useState('All');
   const [dateFilter, setDateFilter] = useState('All Time');
 
-  const filteredTransactions = bankingTransactions.filter(tx => {
+  const filteredTransactions = (bankingTransactions || []).filter(tx => {
     if (filterType !== 'All' && tx.transaction_type !== filterType) return false;
     
     if (dateFilter !== 'All Time') {

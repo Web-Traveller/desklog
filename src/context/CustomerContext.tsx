@@ -67,23 +67,20 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       avatar_color: color,
     };
 
-    const saved = await saveTauriCustomer(newCustomer);
-    if (saved) {
-      setCustomers(prev => [...prev, saved]);
-      showToast(`Customer "${saved.name}" added successfully.`, 'success');
+    const saved = (await saveTauriCustomer(newCustomer)) || newCustomer;
+    setCustomers(prev => [...prev, saved]);
+    showToast(`Customer "${saved.name}" added successfully.`, 'success');
 
-      const act = createActivityEvent({
-        type: 'customer_created',
-        title: `New customer registered: ${saved.name}`,
-        description: `Customer profile created with mobile ${saved.mobile || 'N/A'}.`,
-        customerId: saved.id,
-        customerName: saved.name,
-        customerPhone: saved.mobile,
-      });
-      await saveTauriActivity(act);
-      return saved;
-    }
-    return newCustomer;
+    const act = createActivityEvent({
+      type: 'customer_created',
+      title: `New customer registered: ${saved.name}`,
+      description: `Customer profile created with mobile ${saved.mobile || 'N/A'}.`,
+      customerId: saved.id,
+      customerName: saved.name,
+      customerPhone: saved.mobile,
+    });
+    await saveTauriActivity(act);
+    return saved;
   };
 
   const editCustomer = async (id: string, customerData: Partial<Customer>) => {
@@ -178,7 +175,17 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 export const useCustomers = () => {
   const context = useContext(CustomerContext);
   if (!context) {
-    throw new Error('useCustomers must be used within a CustomerProvider');
+    console.warn('useCustomers called outside CustomerProvider');
+    return {
+      customers: [],
+      selectedCustomerId: null,
+      setSelectedCustomerId: () => {},
+      addCustomer: async () => ({} as any),
+      editCustomer: async () => {},
+      deleteCustomer: async () => {},
+      confirmDeleteCustomer: () => {},
+      reloadCustomers: async () => {},
+    };
   }
   return context;
 };

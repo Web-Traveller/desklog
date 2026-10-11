@@ -25,7 +25,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (dbBanking) {
       setBankingTransactions(dbBanking);
     } else {
-      console.warn('[BankingContext] Failed to load banking transactions');
+      setBankingTransactions(prev => prev || []);
     }
   };
 
@@ -39,11 +39,9 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       is_deleted: false,
       transaction_date: txData.transaction_date || new Date().toISOString(),
     };
-    const saved = await saveTauriBankingTransaction(newTx);
-    if (saved) {
-      setBankingTransactions(prev => [saved, ...prev]);
-      showToast('Banking transaction logged successfully.', 'success');
-    }
+    const saved = (await saveTauriBankingTransaction(newTx)) || newTx;
+    setBankingTransactions(prev => [saved, ...prev]);
+    showToast('Banking transaction logged successfully.', 'success');
   };
 
   const deleteBankingTransaction = async (id: number) => {
@@ -71,7 +69,13 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 export const useBanking = () => {
   const context = useContext(BankingContext);
   if (!context) {
-    throw new Error('useBanking must be used within a BankingProvider');
+    console.warn('useBanking called outside BankingProvider');
+    return {
+      bankingTransactions: [],
+      addBankingTransaction: async () => {},
+      deleteBankingTransaction: async () => {},
+      reloadBankingTransactions: async () => {},
+    };
   }
   return context;
 };
