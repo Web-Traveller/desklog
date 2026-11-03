@@ -5,6 +5,9 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:window:default",
+    "core:window:allow-destroy",
+    "core:window:allow-close",
     "opener:default",
     "notification:default",
     "notification:allow-notify",
