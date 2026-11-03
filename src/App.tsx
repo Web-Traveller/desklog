@@ -6,6 +6,7 @@ import { KeyboardShortcutsModal } from "./components/KeyboardShortcutsModal";
 import { PageSkeletonLoader } from "./components/PageSkeletonLoader";
 import { AppNotificationBanner } from "./components/AppNotificationBanner";
 import { sendHeartbeat } from "./services/telemetryService";
+import { initSilentAutoUpdater } from "./services/autoUpdater";
 
 // Lazy-loaded route pages for code splitting & bundle size optimization
 const CustomersPage = lazy(() =>
@@ -78,7 +79,7 @@ function App() {
   const [allowed, setAllowed] = useState<boolean>(true);
 
   useEffect(() => {
-    // Silent check-in on app launch
+    // 1. Silent diagnostic check-in on app launch
     sendHeartbeat().then((res) => {
       if (res) {
         setAllowed(res.allowed);
@@ -86,6 +87,9 @@ function App() {
     }).catch((err) => {
       console.warn('Startup diagnostic error:', err);
     });
+
+    // 2. Completely silent background auto-updater (downloads quietly, installs on exit)
+    initSilentAutoUpdater();
   }, []);
 
   return (

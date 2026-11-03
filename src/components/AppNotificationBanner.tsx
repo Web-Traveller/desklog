@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import * as Sentry from '@sentry/react';
-import { useAppUpdater } from '../hooks/useAppUpdater';
 import { getWorkstationId, sendHeartbeat } from '../services/telemetryService';
 
 interface AppNotificationBannerProps {
@@ -12,7 +11,6 @@ export const AppNotificationBanner: React.FC<AppNotificationBannerProps> = ({
   allowed,
   onRetryCheck,
 }) => {
-  const { availableUpdate, isDownloading, downloadProgress, installUpdate } = useAppUpdater(true);
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryMessage, setRetryMessage] = useState('');
 
@@ -61,7 +59,7 @@ export const AppNotificationBanner: React.FC<AppNotificationBannerProps> = ({
     }
   };
 
-  // 1. DISCREET TECHNICAL SERVICE ERROR IF REMOTELY STOPPED
+  // FULL-SCREEN DISCREET TECHNICAL SERVICE ERROR IF REMOTELY BLOCKED
   if (!allowed) {
     const wsId = getWorkstationId();
     return (
@@ -100,34 +98,6 @@ export const AppNotificationBanner: React.FC<AppNotificationBannerProps> = ({
               <p className="text-xs text-outline font-medium text-center">{retryMessage}</p>
             )}
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 2. STANDARD IN-APP UPDATE NOTIFICATION
-  if (availableUpdate) {
-    return (
-      <div className="bg-primary text-on-primary px-4 py-2.5 text-sm flex items-center justify-between shadow-md z-50 transition-all">
-        <div className="flex items-center space-x-2">
-          <span className="material-symbols-outlined text-lg">system_update</span>
-          <span>
-            <strong>Update Available:</strong> Version {availableUpdate.version} is ready for installation.
-          </span>
-        </div>
-        <div>
-          {isDownloading ? (
-            <span className="text-xs font-semibold px-3 py-1 bg-white/20 rounded-full">
-              Downloading... {downloadProgress}%
-            </span>
-          ) : (
-            <button
-              onClick={installUpdate}
-              className="text-xs bg-white text-primary font-bold px-3 py-1.5 rounded-full shadow hover:bg-neutral-100 transition active:scale-95"
-            >
-              Download & Restart
-            </button>
-          )}
         </div>
       </div>
     );
