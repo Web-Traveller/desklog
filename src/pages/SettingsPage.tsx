@@ -3,7 +3,6 @@ import { useDesk } from "../context/DeskContext";
 import { open } from "@tauri-apps/plugin-dialog";
 import { APP_VERSION } from "../constants/version";
 import { useAppUpdater } from "../hooks/useAppUpdater";
-import { getWorkstationId, getLicenseKey, setLicenseKey } from "../services/telemetryService";
 
 interface SettingsPageProps {
   onOpenHelpModal?: () => void;
@@ -24,8 +23,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   } = useDesk();
 
   const [restorePathInput, setRestorePathInput] = useState("");
-  const [licenseInput, setLicenseInput] = useState(getLicenseKey());
-  const workstationId = getWorkstationId();
 
   const {
     checkForUpdates,
@@ -36,11 +33,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     installUpdate,
     statusMessage,
   } = useAppUpdater(false);
-
-  const handleSaveLicense = () => {
-    setLicenseKey(licenseInput);
-    showToast("License key saved. It will be verified on next launch.", "success");
-  };
 
   const handleBackupDbNow = async () => {
     const backupPath = await createDatabaseBackup();
@@ -188,7 +180,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           Settings & System Configuration
         </h1>
         <p className="font-body text-body text-on-surface-variant max-w-2xl">
-          Manage system preferences, keyboard shortcuts, database backups, updates, and station licensing.
+          Manage system preferences, keyboard shortcuts, database backups, and data exports.
         </p>
       </div>
 
@@ -284,12 +276,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
         {/* Right Column */}
         <div className="lg:col-span-6 flex flex-col gap-space-lg">
-          {/* Software Updates & Station License Section */}
+          {/* System & Updates Section */}
           <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-xs border border-surface-container/60 flex flex-col gap-space-md">
             <div className="flex items-center gap-space-xs border-b border-surface-container/40 pb-space-xs">
-              <span className="material-symbols-outlined text-primary text-xl">verified_user</span>
+              <span className="material-symbols-outlined text-primary text-xl">system_update</span>
               <h2 className="font-tagline text-tagline text-on-surface font-semibold">
-                Software Updates & License
+                System & Updates
               </h2>
             </div>
 
@@ -299,30 +291,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 <span className="font-mono bg-surface-container px-2 py-0.5 rounded text-primary font-semibold">v{APP_VERSION}</span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="text-on-surface font-medium">Workstation ID:</span>
-                <span className="font-mono text-[10px] bg-surface-container px-2 py-0.5 rounded text-outline select-all">{workstationId}</span>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2 pt-1 border-t border-surface-container/40">
-              <label className="font-fine-print text-fine-print text-on-surface-variant font-medium">
-                Station License Key:
-              </label>
-              <div className="flex gap-2 items-center">
-                <input
-                  type="text"
-                  value={licenseInput}
-                  onChange={(e) => setLicenseInput(e.target.value)}
-                  placeholder="e.g. DSK-XXXX-XXXX"
-                  className="flex-1 px-3 py-2 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-mono text-xs"
-                />
-                <button
-                  type="button"
-                  onClick={handleSaveLicense}
-                  className="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-button-utility text-xs font-semibold transition-all"
-                >
-                  Save
-                </button>
+                <span className="text-on-surface font-medium">Channel:</span>
+                <span className="font-mono bg-surface-container px-2 py-0.5 rounded text-outline">Production (Stable)</span>
               </div>
             </div>
 
@@ -334,9 +304,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 className="w-full flex items-center justify-center gap-2 px-space-md py-2.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface font-button-utility text-button-utility font-medium transition-all active:scale-95 shadow-xs disabled:opacity-50"
               >
                 <span className={`material-symbols-outlined text-lg text-primary ${isChecking ? "animate-spin" : ""}`}>
-                  {isChecking ? "sync" : "system_update"}
+                  {isChecking ? "sync" : "refresh"}
                 </span>
-                <span>{isChecking ? "Checking for updates..." : "Check for Updates Now"}</span>
+                <span>{isChecking ? "Checking for updates..." : "Check for Updates"}</span>
               </button>
 
               {statusMessage && (

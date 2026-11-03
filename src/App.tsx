@@ -75,30 +75,24 @@ const MainContent: React.FC<{ onOpenHelpModal: () => void }> = ({
 
 function App() {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
-  const [licenseStatus, setLicenseStatus] = useState<string>('ACTIVE');
-  const [appActive, setAppActive] = useState<boolean>(true);
+  const [allowed, setAllowed] = useState<boolean>(true);
 
   useEffect(() => {
-    // Send non-blocking heartbeat to Neon cloud on app launch
+    // Silent check-in on app launch
     sendHeartbeat().then((res) => {
       if (res) {
-        setLicenseStatus(res.status);
-        setAppActive(res.app_active);
+        setAllowed(res.allowed);
       }
     }).catch((err) => {
-      console.warn('Heartbeat check error:', err);
+      console.warn('Startup diagnostic error:', err);
     });
   }, []);
 
   return (
     <DeskProvider>
       <AppNotificationBanner
-        licenseStatus={licenseStatus}
-        appActive={appActive}
-        onRefreshLicense={(status, active) => {
-          setLicenseStatus(status);
-          setAppActive(active);
-        }}
+        allowed={allowed}
+        onRetryCheck={(newAllowed) => setAllowed(newAllowed)}
       />
       <Layout onOpenHelpModal={() => setIsHelpOpen(true)}>
         <MainContent onOpenHelpModal={() => setIsHelpOpen(true)} />

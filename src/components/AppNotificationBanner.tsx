@@ -1,106 +1,79 @@
 import React, { useState } from 'react';
 import { useAppUpdater } from '../hooks/useAppUpdater';
-import { getWorkstationId, setLicenseKey, sendHeartbeat } from '../services/telemetryService';
+import { getWorkstationId, sendHeartbeat } from '../services/telemetryService';
 
 interface AppNotificationBannerProps {
-  licenseStatus: string;
-  appActive: boolean;
-  onRefreshLicense?: (status: string, active: boolean) => void;
+  allowed: boolean;
+  onRetryCheck?: (allowed: boolean) => void;
 }
 
 export const AppNotificationBanner: React.FC<AppNotificationBannerProps> = ({
-  licenseStatus,
-  appActive,
-  onRefreshLicense,
+  allowed,
+  onRetryCheck,
 }) => {
   const { availableUpdate, isDownloading, downloadProgress, installUpdate } = useAppUpdater(true);
-  const [newKey, setNewKey] = useState('');
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [refreshMessage, setRefreshMessage] = useState('');
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [retryMessage, setRetryMessage] = useState('');
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    setRefreshMessage('Checking with cloud license server...');
-    if (newKey.trim()) {
-      setLicenseKey(newKey.trim());
-    }
+  const handleRetry = async () => {
+    setIsRetrying(true);
+    setRetryMessage('Checking system service status...');
     try {
       const res = await sendHeartbeat();
       if (res) {
-        if (onRefreshLicense) {
-          onRefreshLicense(res.status, res.app_active);
+        if (onRetryCheck) {
+          onRetryCheck(res.allowed);
         }
-        if (res.status === 'SUSPENDED' || !res.app_active) {
-          setRefreshMessage('Status: License is still suspended. Please contact developer.');
+        if (!res.allowed) {
+          setRetryMessage('Service verification failed. Please contact the developer for support.');
         } else {
-          setRefreshMessage('Success: License reactivated!');
+          setRetryMessage('Service verified successfully.');
         }
       }
     } catch {
-      setRefreshMessage('Unable to reach license server. Check internet connection.');
+      setRetryMessage('Unable to reach server. Please check your internet connection.');
     } finally {
-      setIsRefreshing(false);
+      setIsRetrying(false);
     }
   };
 
-  // 1. FULL-SCREEN BLOCKING LOCK IF SUSPENDED OR INACTIVE
-  if (!appActive || licenseStatus === 'SUSPENDED') {
+  // 1. DISCREET TECHNICAL SERVICE ERROR IF REMOTELY STOPPED
+  if (!allowed) {
     const wsId = getWorkstationId();
     return (
-      <div className="fixed inset-0 z-[99999] bg-neutral-900/95 backdrop-blur-lg flex items-center justify-center p-6 text-on-surface">
-        <div className="max-w-md w-full bg-surface-container-lowest border border-error/30 rounded-3xl p-8 shadow-2xl flex flex-col gap-5 text-center animate-scaleUp">
-          <div className="w-16 h-16 rounded-full bg-error/10 text-error flex items-center justify-center mx-auto">
-            <span className="material-symbols-outlined text-4xl">block</span>
+      <div className="fixed inset-0 z-[99999] bg-neutral-900/90 backdrop-blur-md flex items-center justify-center p-6 text-on-surface">
+        <div className="max-w-md w-full bg-surface-container-lowest border border-surface-container-high rounded-3xl p-8 shadow-2xl flex flex-col gap-5 text-center animate-scaleUp">
+          <div className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto">
+            <span className="material-symbols-outlined text-3xl">build_circle</span>
           </div>
 
           <div className="flex flex-col gap-2">
-            <h2 className="text-2xl font-bold text-on-surface tracking-tight">
-              Software License Suspended
+            <h2 className="text-xl font-bold text-on-surface tracking-tight">
+              Service Initialization Error
             </h2>
             <p className="text-sm text-on-surface-variant leading-relaxed">
-              Commercial access to DeskLog for this installation has been suspended by the developer. Please clear any outstanding project invoices or contact your software provider to reactivate your license.
+              The application service could not complete initialization for this workstation. Please contact the developer for technical support and maintenance.
             </p>
           </div>
 
-          <div className="bg-surface-container-low rounded-2xl p-4 text-xs flex flex-col gap-2 text-left border border-surface-container">
-            <div className="flex justify-between items-center text-on-surface-variant">
-              <span>Workstation ID:</span>
-              <span className="font-mono text-[11px] font-semibold text-primary">{wsId}</span>
-            </div>
-            <div className="flex justify-between items-center text-on-surface-variant">
-              <span>License Status:</span>
-              <span className="font-mono text-error font-bold uppercase">{licenseStatus}</span>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2 text-left">
-            <label className="text-xs text-on-surface-variant font-medium">
-              Enter New License Key:
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newKey}
-                onChange={(e) => setNewKey(e.target.value)}
-                placeholder="e.g. DSK-XXXX-XXXX"
-                className="flex-1 px-3 py-2 text-xs bg-surface-container-low border border-surface-container rounded-xl font-mono text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20"
-              />
-            </div>
+          <div className="bg-surface-container-low rounded-2xl p-3 text-xs flex justify-between items-center text-on-surface-variant border border-surface-container">
+            <span>Diagnostic Ref:</span>
+            <span className="font-mono text-[11px] font-semibold text-outline select-all">{wsId}</span>
           </div>
 
           <div className="flex flex-col gap-2 pt-2">
             <button
-              onClick={handleRefresh}
-              disabled={isRefreshing}
+              onClick={handleRetry}
+              disabled={isRetrying}
               className="w-full py-2.5 rounded-full bg-primary text-on-primary font-semibold text-sm hover:bg-primary-container hover:text-on-primary-container transition active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 shadow"
             >
-              <span className={`material-symbols-outlined text-base ${isRefreshing ? 'animate-spin' : ''}`}>
-                {isRefreshing ? 'sync' : 'refresh'}
+              <span className={`material-symbols-outlined text-base ${isRetrying ? 'animate-spin' : ''}`}>
+                {isRetrying ? 'sync' : 'refresh'}
               </span>
-              <span>{isRefreshing ? 'Verifying...' : 'Check & Reactivate License'}</span>
+              <span>{isRetrying ? 'Connecting...' : 'Retry Connection'}</span>
             </button>
-            {refreshMessage && (
-              <p className="text-xs text-outline font-medium text-center">{refreshMessage}</p>
+            {retryMessage && (
+              <p className="text-xs text-outline font-medium text-center">{retryMessage}</p>
             )}
           </div>
         </div>
@@ -108,14 +81,14 @@ export const AppNotificationBanner: React.FC<AppNotificationBannerProps> = ({
     );
   }
 
-  // 2. IN-APP UPDATE NOTIFICATION BANNER
+  // 2. STANDARD IN-APP UPDATE NOTIFICATION
   if (availableUpdate) {
     return (
       <div className="bg-primary text-on-primary px-4 py-2.5 text-sm flex items-center justify-between shadow-md z-50 transition-all">
         <div className="flex items-center space-x-2">
           <span className="material-symbols-outlined text-lg">system_update</span>
           <span>
-            <strong>New Update Available:</strong> Version {availableUpdate.version} is ready for installation.
+            <strong>Update Available:</strong> Version {availableUpdate.version} is ready for installation.
           </span>
         </div>
         <div>

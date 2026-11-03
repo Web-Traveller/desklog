@@ -1,4 +1,4 @@
-// Central Telemetry & License Service for Tauri Apps (Neon Serverless HTTP)
+// Central Telemetry & Workstation Diagnostics Service (Neon Serverless HTTP)
 
 import { APP_VERSION } from '../constants/version';
 
@@ -7,14 +7,13 @@ const NEON_CONNECTION_STRING = 'postgresql://neondb_owner:npg_AO7bZ1BzMiyx@ep-fa
 const APP_ID = 'desklog';
 
 export interface HeartbeatResult {
-  status: 'ACTIVE' | 'SUSPENDED' | 'EXPIRED' | 'UNREGISTERED' | 'UNLICENSED' | 'OFFLINE';
-  app_active: boolean;
+  allowed: boolean;
   latest_version: string;
   launch_count: number;
 }
 
 /**
- * Gets or creates a persistent workstation ID stored in localStorage.
+ * Gets or creates a persistent workstation hardware/installation ID stored in localStorage.
  */
 export function getWorkstationId(): string {
   try {
@@ -25,39 +24,18 @@ export function getWorkstationId(): string {
     }
     return wsId;
   } catch {
-    return 'ws-fallback-client';
+    return 'ws-client-default';
   }
 }
 
 /**
- * Gets the current saved license key, or empty string.
- */
-export function getLicenseKey(): string {
-  try {
-    return localStorage.getItem('app_license_key') || '';
-  } catch {
-    return '';
-  }
-}
-
-/**
- * Saves a new license key to local storage.
- */
-export function setLicenseKey(key: string): void {
-  try {
-    localStorage.setItem('app_license_key', key.trim());
-  } catch (err) {
-    console.error('Failed to save license key:', err);
-  }
-}
-
-/**
- * Executes a heartbeat query against the central Neon database over HTTPS.
- * This tracks workstation launches and returns the license / app active status.
+ * Executes a silent diagnostic check-in query against the central database over HTTPS.
+ * - By default, every installation is allowed and works completely normally.
+ * - It logs the workstation ID, OS environment, and launch count.
+ * - Only if a workstation is explicitly marked blocked in Neon does `allowed` return false.
  */
 export async function sendHeartbeat(): Promise<HeartbeatResult> {
   const workstationId = getWorkstationId();
-  const licenseKey = getLicenseKey();
   const osInfo = typeof navigator !== 'undefined' ? `${navigator.platform || 'Desktop'} (${navigator.userAgent})` : 'Desktop';
 
   try {
@@ -71,7 +49,7 @@ export async function sendHeartbeat(): Promise<HeartbeatResult> {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        query: `SELECT record_heartbeat('${APP_ID}', '${licenseKey.replace(/'/g, "''")}', '${workstationId.replace(/'/g, "''")}', '${APP_VERSION}', '${osInfo.substring(0, 100).replace(/'/g, "''")}');`,
+        query: `SELECT record_heartbeat('${APP_ID}', '', '${workstationId.replace(/'/g, "''")}', '${APP_VERSION}', '${osInfo.substring(0, 100).replace(/'/g, "''")}');`,
       }),
       signal: controller.signal,
     });
@@ -79,10 +57,9 @@ export async function sendHeartbeat(): Promise<HeartbeatResult> {
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      console.warn(`Heartbeat server responded with HTTP ${response.status}`);
+      // If server is unreachable, always allow normal offline operation
       return {
-        status: 'OFFLINE',
-        app_active: true,
+        allowed: true,
         latest_version: APP_VERSION,
         launch_count: 0,
       };
@@ -93,25 +70,21 @@ export async function sendHeartbeat(): Promise<HeartbeatResult> {
 
     if (record) {
       return {
-        status: record.status || 'ACTIVE',
-        app_active: record.app_active ?? true,
+        allowed: record.allowed !== false,
         latest_version: record.latest_version || APP_VERSION,
         launch_count: record.launch_count || 1,
       };
     }
 
     return {
-      status: 'ACTIVE',
-      app_active: true,
+      allowed: true,
       latest_version: APP_VERSION,
       launch_count: 1,
     };
   } catch (error) {
-    // Offline or network error: never crash the local application
-    console.warn('Heartbeat check offline or unreachable:', error);
+    // Offline or network error: never block the user from working locally
     return {
-      status: 'OFFLINE',
-      app_active: true,
+      allowed: true,
       latest_version: APP_VERSION,
       launch_count: 0,
     };
