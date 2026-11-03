@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import * as Sentry from '@sentry/react';
 import { useAppUpdater } from '../hooks/useAppUpdater';
 import { getWorkstationId, sendHeartbeat } from '../services/telemetryService';
 
@@ -15,6 +16,24 @@ export const AppNotificationBanner: React.FC<AppNotificationBannerProps> = ({
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryMessage, setRetryMessage] = useState('');
 
+  // Trigger Sentry alert when a blocked workstation attempts to access the app
+  useEffect(() => {
+    if (!allowed) {
+      const wsId = getWorkstationId();
+      Sentry.captureMessage(`Workstation access blocked: ${wsId}`, {
+        level: 'warning',
+        tags: {
+          event: 'workstation_blocked',
+          workstation_id: wsId,
+        },
+        extra: {
+          diagnostic_ref: wsId,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }
+  }, [allowed]);
+
   const handleRetry = async () => {
     setIsRetrying(true);
     setRetryMessage('Checking system service status...');
@@ -25,6 +44,11 @@ export const AppNotificationBanner: React.FC<AppNotificationBannerProps> = ({
           onRetryCheck(res.allowed);
         }
         if (!res.allowed) {
+          const wsId = getWorkstationId();
+          Sentry.captureMessage(`Blocked workstation retry attempted: ${wsId}`, {
+            level: 'info',
+            tags: { event: 'retry_blocked_workstation', workstation_id: wsId },
+          });
           setRetryMessage('Service verification failed. Please contact the developer for support.');
         } else {
           setRetryMessage('Service verified successfully.');
