@@ -32,7 +32,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     downloadProgress,
     installUpdate,
     statusMessage,
-  } = useAppUpdater(false);
+  } = useAppUpdater();
 
   const handleBackupDbNow = async () => {
     const backupPath = await createDatabaseBackup();

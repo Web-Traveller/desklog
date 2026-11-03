@@ -1,6 +1,6 @@
 [package]
 name = "desklog"
-version = "1.0.7"
+version = "1.0.8"
 description = "DeskLog Manager Desktop App"
 authors = ["you"]
 edition = "2021"

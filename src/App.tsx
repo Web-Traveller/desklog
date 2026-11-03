@@ -89,7 +89,10 @@ function App() {
     });
 
     // 2. Completely silent background auto-updater (downloads quietly, installs on exit)
-    initSilentAutoUpdater();
+    const cleanupUpdater = initSilentAutoUpdater();
+    return () => {
+      cleanupUpdater();
+    };
   }, []);
 
   return (

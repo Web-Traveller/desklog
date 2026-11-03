@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { check, Update } from '@tauri-apps/plugin-updater';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { isTauriEnv } from '../api/tauri';
 import { APP_VERSION } from '../constants/version';
 
@@ -12,7 +13,19 @@ export interface UpdaterState {
   statusMessage: string;
 }
 
-export function useAppUpdater(autoCheck: boolean = true) {
+/**
+ * Manual update checker for the Settings page.
+ *
+ * Design: The background autoUpdater (autoUpdater.ts) handles silent download-on-close.
+ * This hook handles the *manual* "Check for Updates" button — it checks and shows the
+ * user what version is available. The "Install & Restart" button downloads and installs
+ * immediately (user-initiated, with progress). No autoCheck to avoid double-polling.
+ *
+ * NOTE: If the silent updater has already armed the close hook with a downloaded update,
+ * the user clicking "Install & Restart" here will perform a fresh download+install, which
+ * is fine — NSIS is idempotent and the Tauri plugin handles overlapping installs safely.
+ */
+export function useAppUpdater() {
   const [state, setState] = useState<UpdaterState>({
     isChecking: false,
     isDownloading: false,
@@ -59,9 +72,9 @@ export function useAppUpdater(autoCheck: boolean = true) {
         }));
         return null;
       }
-    } catch (err: any) {
-      console.warn('Update check failed:', err);
-      const errMsg = err?.message || String(err);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn('[useAppUpdater] Update check failed:', err);
       setState(prev => ({
         ...prev,
         isChecking: false,
@@ -86,7 +99,8 @@ export function useAppUpdater(autoCheck: boolean = true) {
       let totalBytes = 0;
       let downloadedBytes = 0;
 
-      await state.availableUpdate.downloadAndInstall((event) => {
+      // Download with progress tracking
+      await state.availableUpdate.download((event) => {
         if (event.event === 'Started') {
           totalBytes = event.data.contentLength || 0;
         } else if (event.event === 'Progress') {
@@ -103,30 +117,41 @@ export function useAppUpdater(autoCheck: boolean = true) {
           setState(prev => ({
             ...prev,
             downloadProgress: 100,
-            statusMessage: 'Update installed! Restarting...',
+            statusMessage: 'Installing update...',
           }));
         }
       });
-    } catch (err: any) {
-      console.error('Update install failed:', err);
+
+      // Install immediately (user-initiated — they clicked the button intentionally).
+      // tauri.conf.json windows.installMode = "quiet" ensures NSIS runs with /S.
+      // The Tauri plugin exits the app after launching the installer on Windows.
+      await state.availableUpdate.install({ restartAfterInstall: true });
+
+      // On Windows, install() exits the process. Code below here is unreachable on Windows
+      // but kept as a clean fallback for other platforms.
       setState(prev => ({
         ...prev,
         isDownloading: false,
-        error: err?.message || String(err),
-        statusMessage: `Failed to install update: ${err?.message || err}`,
+        statusMessage: 'Update installed. Please restart the app.',
       }));
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error('[useAppUpdater] Install failed:', err);
+      setState(prev => ({
+        ...prev,
+        isDownloading: false,
+        error: errMsg,
+        statusMessage: `Failed to install update: ${errMsg}`,
+      }));
+
+      // Safety: ensure window is still usable after a failed install
+      try {
+        await getCurrentWindow().destroy();
+      } catch {
+        // ignore if destroy also fails
+      }
     }
   }, [state.availableUpdate]);
-
-  useEffect(() => {
-    if (autoCheck) {
-      // Small delay on app boot to ensure main UI is loaded first
-      const timer = setTimeout(() => {
-        checkForUpdates(false);
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [autoCheck, checkForUpdates]);
 
   return {
     ...state,

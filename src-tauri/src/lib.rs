@@ -156,6 +156,55 @@ fn send_desktop_notification(title: String, body: String, app_handle: tauri::App
     Ok(())
 }
 
+fn execute_neon_heartbeat(workstation_id: &str, app_version: &str, os_info: &str) -> Result<String, String> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    let body = serde_json::json!({
+        "query": "SELECT record_heartbeat($1, $2, $3, $4, $5)",
+        "params": ["desklog", "", workstation_id, app_version, os_info]
+    });
+    let body_bytes = serde_json::to_vec(&body).map_err(|e| e.to_string())?;
+
+    let mut child = Command::new("curl.exe")
+        .args([
+            "-s",
+            "-X", "POST",
+            "https://ep-falling-heart-aztfzlgo.c-3.ap-southeast-1.aws.neon.tech/sql",
+            "-H", "Neon-Connection-String: postgresql://neondb_owner:npg_AO7bZ1BzMiyx@ep-falling-heart-aztfzlgo.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require",
+            "-H", "Content-Type: application/json",
+            "--data-binary", "@-"
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn curl: {}", e))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin.write_all(&body_bytes).map_err(|e| format!("Failed to write to stdin: {}", e))?;
+    }
+
+    let output = child.wait_with_output().map_err(|e| format!("Failed to read curl output: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!("curl failed with status: {:?}", output.status.code()));
+    }
+
+    let res = String::from_utf8(output.stdout).map_err(|e| format!("Invalid UTF-8 from curl: {}", e))?;
+    
+    // Write debug log
+    let log_file = std::env::temp_dir().join("desklog_telemetry.log");
+    let _ = std::fs::write(&log_file, format!("Heartbeat response: {}\n", res));
+
+    Ok(res)
+}
+
+#[tauri::command]
+fn send_heartbeat_native(workstation_id: String, app_version: String, os_info: String) -> Result<String, String> {
+    execute_neon_heartbeat(&workstation_id, &app_version, &os_info)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -168,11 +217,39 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .unwrap_or_else(|_| std::path::PathBuf::from("./desklog_data"));
-            let database = Database::new(app_dir)
+            let database = Database::new(app_dir.clone())
                 .map_err(|e| Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)) as Box<dyn std::error::Error>)?;
             app.manage(AppState {
                 db: Mutex::new(database),
             });
+
+            // Automatic startup heartbeat in Rust thread (100% native, bypasses webview)
+            let app_dir_clone = app_dir.clone();
+            std::thread::spawn(move || {
+                let ws_file = app_dir_clone.join("workstation_id.txt");
+                let ws_id = if ws_file.exists() {
+                    std::fs::read_to_string(&ws_file).unwrap_or_default().trim().to_string()
+                } else {
+                    String::new()
+                };
+
+                let ws_id = if ws_id.is_empty() {
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis();
+                    let new_id = format!("ws-{}", now);
+                    let _ = std::fs::write(&ws_file, &new_id);
+                    new_id
+                } else {
+                    ws_id
+                };
+
+                let os_info = format!("Windows Desktop ({})", std::env::consts::ARCH);
+                let app_version = env!("CARGO_PKG_VERSION");
+                let _ = execute_neon_heartbeat(&ws_id, app_version, &os_info);
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -201,7 +278,8 @@ pub fn run() {
             get_banking_transactions_for_customer,
             add_banking_transaction,
             delete_banking_transaction,
-            send_desktop_notification
+            send_desktop_notification,
+            send_heartbeat_native
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
