@@ -16,10 +16,49 @@ export interface HeartbeatResult {
 }
 
 /**
- * Gets or creates a persistent workstation installation ID stored in localStorage.
- * UUID is generated once on first launch and reused forever.
+ * Checks if this machine has previously been marked as blocked.
+ */
+export function isDeviceBlockedLocally(): boolean {
+  try {
+    return localStorage.getItem('desklog_blocked') === 'true';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Gets the persistent workstation installation ID stored in localStorage.
  */
 export function getWorkstationId(): string {
+  try {
+    const cached = localStorage.getItem('app_workstation_id');
+    if (cached && cached.trim()) {
+      return cached.trim();
+    }
+  } catch {}
+  return 'ws-client-default';
+}
+
+/**
+ * Synchronizes workstation ID with Rust's native workstation_id.txt.
+ */
+export async function syncWorkstationId(): Promise<string> {
+  if (isTauriEnv()) {
+    try {
+      const nativeId = await invoke<string>('get_workstation_id');
+      if (nativeId && nativeId.trim()) {
+        const cleanId = nativeId.trim();
+        try {
+          localStorage.setItem('app_workstation_id', cleanId);
+        } catch {}
+        return cleanId;
+      }
+    } catch (e) {
+      console.warn('[TELEMETRY] Failed to fetch native workstation id:', e);
+    }
+  }
+
+  // Fallback if web or native command failed
   try {
     let wsId = localStorage.getItem('app_workstation_id');
     if (!wsId) {
@@ -37,39 +76,41 @@ export function getWorkstationId(): string {
 }
 
 /**
- * Builds a stable OS identifier string truncated to 120 chars.
+ * Builds a clean, compact OS identifier string strictly truncated to 80 chars.
+ * Ensures PostgreSQL varchar column constraints are NEVER violated.
  */
 function getOsInfo(): string {
   try {
-    const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
     const platform = typeof navigator !== 'undefined' ? navigator.platform || 'Desktop' : 'Desktop';
-    return `${platform} (${ua})`.substring(0, 120);
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+    const raw = `${platform} (${ua})`.replace(/\s+/g, ' ').trim();
+    return raw.substring(0, 80);
   } catch {
-    return 'Desktop';
+    return 'Windows Desktop';
   }
 }
 
 /**
  * Executes a silent diagnostic check-in against Neon over HTTPS.
  *
- * Primary: Native Rust subprocess via Tauri IPC (`send_heartbeat_native`)
+ * Primary: Native Rust subprocess with CREATE_NO_WINDOW (zero console popups)
  * -> Bypasses WebView2 CORS, CSP, and web security limitations.
  *
- * Fallback: Browser `fetch()` with credentials: 'omit' and mode: 'cors'.
+ * Fallback: Browser fetch with credentials: 'omit' and mode: 'cors'.
  *
- * Offline-first: If network is unreachable, always returns allowed: true.
+ * Offline-first: If network is unreachable, defaults to allowed: true unless locally blocked.
  */
 export async function sendHeartbeat(): Promise<HeartbeatResult> {
-  const workstationId = getWorkstationId();
+  const workstationId = await syncWorkstationId();
   const osInfo = getOsInfo();
 
   const FALLBACK: HeartbeatResult = {
-    allowed: true,
+    allowed: !isDeviceBlockedLocally(),
     latest_version: APP_VERSION,
     launch_count: 0,
   };
 
-  // 1. Primary: Native Rust Command (Windows OS curl pipe)
+  // 1. Primary: Native Rust Command (Windows OS curl with CREATE_NO_WINDOW)
   if (isTauriEnv()) {
     try {
       console.log(`[TELEMETRY] Calling native Rust heartbeat for: ${workstationId}...`);
@@ -85,16 +126,26 @@ export async function sendHeartbeat(): Promise<HeartbeatResult> {
       const data = JSON.parse(rawJson);
       console.log('[TELEMETRY] Native response:', data);
 
-      const record = data?.rows?.[0]?.record_heartbeat;
+      const rawRecord = data?.rows?.[0]?.record_heartbeat;
+      const record = typeof rawRecord === 'string' ? JSON.parse(rawRecord) : rawRecord;
+
       if (record && typeof record === 'object') {
+        const isAllowed = record.allowed !== false;
         const result: HeartbeatResult = {
-          allowed: record.allowed !== false,
+          allowed: isAllowed,
           latest_version: record.latest_version || APP_VERSION,
           launch_count: Number(record.launch_count) || 1,
         };
+
         try {
+          if (!isAllowed) {
+            localStorage.setItem('desklog_blocked', 'true');
+          } else {
+            localStorage.removeItem('desklog_blocked');
+          }
           localStorage.setItem('telemetry_last_success', JSON.stringify({ result, time: new Date().toISOString() }));
         } catch {}
+
         return result;
       }
     } catch (nativeErr) {
@@ -105,7 +156,7 @@ export async function sendHeartbeat(): Promise<HeartbeatResult> {
   // 2. Fallback: Browser Fetch
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
     const response = await fetch(NEON_SQL_ENDPOINT, {
       method: 'POST',
@@ -126,13 +177,26 @@ export async function sendHeartbeat(): Promise<HeartbeatResult> {
 
     if (response.ok) {
       const data = await response.json();
-      const record = data?.rows?.[0]?.record_heartbeat;
+      const rawRecord = data?.rows?.[0]?.record_heartbeat;
+      const record = typeof rawRecord === 'string' ? JSON.parse(rawRecord) : rawRecord;
+
       if (record && typeof record === 'object') {
-        return {
-          allowed: record.allowed !== false,
+        const isAllowed = record.allowed !== false;
+        const result: HeartbeatResult = {
+          allowed: isAllowed,
           latest_version: record.latest_version || APP_VERSION,
           launch_count: Number(record.launch_count) || 1,
         };
+
+        try {
+          if (!isAllowed) {
+            localStorage.setItem('desklog_blocked', 'true');
+          } else {
+            localStorage.removeItem('desklog_blocked');
+          }
+        } catch {}
+
+        return result;
       }
     }
   } catch (webErr) {

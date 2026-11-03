@@ -5,7 +5,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { KeyboardShortcutsModal } from "./components/KeyboardShortcutsModal";
 import { PageSkeletonLoader } from "./components/PageSkeletonLoader";
 import { AppNotificationBanner } from "./components/AppNotificationBanner";
-import { sendHeartbeat } from "./services/telemetryService";
+import { sendHeartbeat, isDeviceBlockedLocally } from "./services/telemetryService";
 import { initSilentAutoUpdater } from "./services/autoUpdater";
 
 // Lazy-loaded route pages for code splitting & bundle size optimization
@@ -76,7 +76,7 @@ const MainContent: React.FC<{ onOpenHelpModal: () => void }> = ({
 
 function App() {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
-  const [allowed, setAllowed] = useState<boolean>(true);
+  const [allowed, setAllowed] = useState<boolean>(() => !isDeviceBlockedLocally());
 
   useEffect(() => {
     // 1. Silent diagnostic check-in on app launch

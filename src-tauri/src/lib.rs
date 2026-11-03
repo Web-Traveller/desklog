@@ -156,19 +156,35 @@ fn send_desktop_notification(title: String, body: String, app_handle: tauri::App
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 fn execute_neon_heartbeat(workstation_id: &str, app_version: &str, os_info: &str) -> Result<String, String> {
     use std::io::Write;
     use std::process::{Command, Stdio};
 
+    let safe_ws_id: String = workstation_id.chars().take(80).collect();
+    let safe_os_info: String = os_info.chars().take(80).collect();
+
     let body = serde_json::json!({
         "query": "SELECT record_heartbeat($1, $2, $3, $4, $5)",
-        "params": ["desklog", "", workstation_id, app_version, os_info]
+        "params": ["desklog", "", safe_ws_id, app_version, safe_os_info]
     });
     let body_bytes = serde_json::to_vec(&body).map_err(|e| e.to_string())?;
 
-    let mut child = Command::new("curl.exe")
+    let mut cmd = Command::new("curl.exe");
+
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let mut child = cmd
         .args([
             "-s",
+            "--connect-timeout", "4",
+            "--max-time", "8",
             "-X", "POST",
             "https://ep-falling-heart-aztfzlgo.c-3.ap-southeast-1.aws.neon.tech/sql",
             "-H", "Neon-Connection-String: postgresql://neondb_owner:npg_AO7bZ1BzMiyx@ep-falling-heart-aztfzlgo.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require",
@@ -193,11 +209,37 @@ fn execute_neon_heartbeat(workstation_id: &str, app_version: &str, os_info: &str
 
     let res = String::from_utf8(output.stdout).map_err(|e| format!("Invalid UTF-8 from curl: {}", e))?;
     
-    // Write debug log
+    // Write debug log for local verification
     let log_file = std::env::temp_dir().join("desklog_telemetry.log");
     let _ = std::fs::write(&log_file, format!("Heartbeat response: {}\n", res));
 
     Ok(res)
+}
+
+#[tauri::command]
+fn get_workstation_id(app_handle: tauri::AppHandle) -> Result<String, String> {
+    let app_dir = app_handle
+        .path()
+        .app_data_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("./desklog_data"));
+    let _ = std::fs::create_dir_all(&app_dir);
+    let ws_file = app_dir.join("workstation_id.txt");
+    if ws_file.exists() {
+        if let Ok(id) = std::fs::read_to_string(&ws_file) {
+            let trimmed = id.trim().to_string();
+            if !trimmed.is_empty() {
+                return Ok(trimmed);
+            }
+        }
+    }
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let new_id = format!("ws-{}", now);
+    let _ = std::fs::write(&ws_file, &new_id);
+    Ok(new_id)
 }
 
 #[tauri::command]
@@ -223,32 +265,15 @@ pub fn run() {
                 db: Mutex::new(database),
             });
 
-            // Automatic startup heartbeat in Rust thread (100% native, bypasses webview)
-            let app_dir_clone = app_dir.clone();
-            std::thread::spawn(move || {
-                let ws_file = app_dir_clone.join("workstation_id.txt");
-                let ws_id = if ws_file.exists() {
-                    std::fs::read_to_string(&ws_file).unwrap_or_default().trim().to_string()
-                } else {
-                    String::new()
-                };
-
-                let ws_id = if ws_id.is_empty() {
-                    let now = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_millis();
-                    let new_id = format!("ws-{}", now);
-                    let _ = std::fs::write(&ws_file, &new_id);
-                    new_id
-                } else {
-                    ws_id
-                };
-
-                let os_info = format!("Windows Desktop ({})", std::env::consts::ARCH);
-                let app_version = env!("CARGO_PKG_VERSION");
-                let _ = execute_neon_heartbeat(&ws_id, app_version, &os_info);
-            });
+            // Ensure workstation ID is initialized once on disk
+            let ws_file = app_dir.join("workstation_id.txt");
+            if !ws_file.exists() {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis();
+                let _ = std::fs::write(&ws_file, format!("ws-{}", now));
+            }
 
             Ok(())
         })
@@ -279,6 +304,7 @@ pub fn run() {
             add_banking_transaction,
             delete_banking_transaction,
             send_desktop_notification,
+            get_workstation_id,
             send_heartbeat_native
         ])
         .run(tauri::generate_context!())
