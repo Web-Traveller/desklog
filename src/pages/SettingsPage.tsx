@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { useDesk } from "../context/DeskContext";
 import { open } from "@tauri-apps/plugin-dialog";
 import { APP_VERSION } from "../constants/version";
+import { useAppUpdater } from "../hooks/useAppUpdater";
+import { getWorkstationId, getLicenseKey, setLicenseKey } from "../services/telemetryService";
 
 interface SettingsPageProps {
   onOpenHelpModal?: () => void;
@@ -22,6 +24,23 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   } = useDesk();
 
   const [restorePathInput, setRestorePathInput] = useState("");
+  const [licenseInput, setLicenseInput] = useState(getLicenseKey());
+  const workstationId = getWorkstationId();
+
+  const {
+    checkForUpdates,
+    isChecking,
+    availableUpdate,
+    isDownloading,
+    downloadProgress,
+    installUpdate,
+    statusMessage,
+  } = useAppUpdater(false);
+
+  const handleSaveLicense = () => {
+    setLicenseKey(licenseInput);
+    showToast("License key saved. It will be verified on next launch.", "success");
+  };
 
   const handleBackupDbNow = async () => {
     const backupPath = await createDatabaseBackup();
@@ -169,7 +188,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
           Settings & System Configuration
         </h1>
         <p className="font-body text-body text-on-surface-variant max-w-2xl">
-          Manage system preferences, keyboard shortcuts, database backups, and CSV data exports.
+          Manage system preferences, keyboard shortcuts, database backups, updates, and station licensing.
         </p>
       </div>
 
@@ -234,10 +253,117 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Keyboard Shortcuts Section */}
+          <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-xs border border-surface-container/60 flex flex-col gap-space-md">
+            <div className="flex items-center gap-space-xs border-b border-surface-container/40 pb-space-xs">
+              <span className="material-symbols-outlined text-primary text-xl">keyboard</span>
+              <h2 className="font-tagline text-tagline text-on-surface font-semibold">
+                Keyboard Hotkeys
+              </h2>
+            </div>
+
+            <p className="font-caption text-caption text-on-surface-variant">
+              Accelerate daily desk operations using global keyboard shortcuts for creating tasks, adding customers, searching, and quick navigation.
+            </p>
+
+            <div className="flex flex-wrap items-center gap-space-sm pt-space-xs">
+              {onOpenHelpModal && (
+                <button
+                  className="w-full flex justify-center items-center gap-2 px-space-md py-2 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface font-button-utility text-button-utility font-medium transition-all active:scale-95 shadow-xs"
+                  onClick={onOpenHelpModal}
+                  type="button"
+                >
+                  <span className="material-symbols-outlined text-lg text-primary">keyboard_command_key</span>
+                  <span>View All Keyboard Shortcuts (?)</span>
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Right Column */}
         <div className="lg:col-span-6 flex flex-col gap-space-lg">
+          {/* Software Updates & Station License Section */}
+          <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-xs border border-surface-container/60 flex flex-col gap-space-md">
+            <div className="flex items-center gap-space-xs border-b border-surface-container/40 pb-space-xs">
+              <span className="material-symbols-outlined text-primary text-xl">verified_user</span>
+              <h2 className="font-tagline text-tagline text-on-surface font-semibold">
+                Software Updates & License
+              </h2>
+            </div>
+
+            <div className="flex flex-col gap-2 text-caption text-on-surface-variant">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-on-surface font-medium">Installed Version:</span>
+                <span className="font-mono bg-surface-container px-2 py-0.5 rounded text-primary font-semibold">v{APP_VERSION}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-on-surface font-medium">Workstation ID:</span>
+                <span className="font-mono text-[10px] bg-surface-container px-2 py-0.5 rounded text-outline select-all">{workstationId}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-1 border-t border-surface-container/40">
+              <label className="font-fine-print text-fine-print text-on-surface-variant font-medium">
+                Station License Key:
+              </label>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="text"
+                  value={licenseInput}
+                  onChange={(e) => setLicenseInput(e.target.value)}
+                  placeholder="e.g. DSK-XXXX-XXXX"
+                  className="flex-1 px-3 py-2 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-mono text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveLicense}
+                  className="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-button-utility text-xs font-semibold transition-all"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-surface-container/40 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => checkForUpdates(true)}
+                disabled={isChecking || isDownloading}
+                className="w-full flex items-center justify-center gap-2 px-space-md py-2.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface font-button-utility text-button-utility font-medium transition-all active:scale-95 shadow-xs disabled:opacity-50"
+              >
+                <span className={`material-symbols-outlined text-lg text-primary ${isChecking ? "animate-spin" : ""}`}>
+                  {isChecking ? "sync" : "system_update"}
+                </span>
+                <span>{isChecking ? "Checking for updates..." : "Check for Updates Now"}</span>
+              </button>
+
+              {statusMessage && (
+                <p className="text-xs text-center text-outline font-medium pt-1">
+                  {statusMessage}
+                </p>
+              )}
+
+              {availableUpdate && (
+                <div className="bg-primary/10 border border-primary/20 rounded-xl p-3 flex flex-col gap-2 mt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-primary">
+                      New update v{availableUpdate.version} ready
+                    </span>
+                    <button
+                      onClick={installUpdate}
+                      disabled={isDownloading}
+                      className="px-3 py-1 bg-primary text-on-primary rounded-full text-xs font-bold hover:bg-primary-container transition"
+                    >
+                      {isDownloading ? `Downloading (${downloadProgress}%)` : "Install & Restart"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Native SQLite Database Backup & Restore */}
           <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-xs border border-surface-container/60 flex flex-col gap-space-md">
             <div className="flex items-center gap-space-xs border-b border-surface-container/40 pb-space-xs">
@@ -305,33 +431,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   A safe automatic backup snapshot of your current database will always be saved before restore.
                 </p>
               </div>
-            </div>
-          </div>
-
-          {/* Keyboard Shortcuts Section */}
-          <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-xs border border-surface-container/60 flex flex-col gap-space-md">
-            <div className="flex items-center gap-space-xs border-b border-surface-container/40 pb-space-xs">
-              <span className="material-symbols-outlined text-primary text-xl">keyboard</span>
-              <h2 className="font-tagline text-tagline text-on-surface font-semibold">
-                Keyboard Hotkeys
-              </h2>
-            </div>
-
-            <p className="font-caption text-caption text-on-surface-variant">
-              Accelerate daily desk operations using global keyboard shortcuts for creating tasks, adding customers, searching, and quick navigation.
-            </p>
-
-            <div className="flex flex-wrap items-center gap-space-sm pt-space-xs">
-              {onOpenHelpModal && (
-                <button
-                  className="w-full flex justify-center items-center gap-2 px-space-md py-2 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface font-button-utility text-button-utility font-medium transition-all active:scale-95 shadow-xs"
-                  onClick={onOpenHelpModal}
-                  type="button"
-                >
-                  <span className="material-symbols-outlined text-lg text-primary">keyboard_command_key</span>
-                  <span>View All Keyboard Shortcuts (?)</span>
-                </button>
-              )}
             </div>
           </div>
         </div>

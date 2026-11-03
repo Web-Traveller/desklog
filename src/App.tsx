@@ -1,9 +1,11 @@
-import React, { useState, Suspense, lazy } from "react";
+import React, { useState, useEffect, Suspense, lazy } from "react";
 import { DeskProvider, useDesk } from "./context/DeskContext";
 import { Layout } from "./components/Layout";
 import { DashboardPage } from "./pages/DashboardPage";
 import { KeyboardShortcutsModal } from "./components/KeyboardShortcutsModal";
 import { PageSkeletonLoader } from "./components/PageSkeletonLoader";
+import { AppNotificationBanner } from "./components/AppNotificationBanner";
+import { sendHeartbeat } from "./services/telemetryService";
 
 // Lazy-loaded route pages for code splitting & bundle size optimization
 const CustomersPage = lazy(() =>
@@ -73,9 +75,31 @@ const MainContent: React.FC<{ onOpenHelpModal: () => void }> = ({
 
 function App() {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [licenseStatus, setLicenseStatus] = useState<string>('ACTIVE');
+  const [appActive, setAppActive] = useState<boolean>(true);
+
+  useEffect(() => {
+    // Send non-blocking heartbeat to Neon cloud on app launch
+    sendHeartbeat().then((res) => {
+      if (res) {
+        setLicenseStatus(res.status);
+        setAppActive(res.app_active);
+      }
+    }).catch((err) => {
+      console.warn('Heartbeat check error:', err);
+    });
+  }, []);
 
   return (
     <DeskProvider>
+      <AppNotificationBanner
+        licenseStatus={licenseStatus}
+        appActive={appActive}
+        onRefreshLicense={(status, active) => {
+          setLicenseStatus(status);
+          setAppActive(active);
+        }}
+      />
       <Layout onOpenHelpModal={() => setIsHelpOpen(true)}>
         <MainContent onOpenHelpModal={() => setIsHelpOpen(true)} />
         <KeyboardShortcutsModal
