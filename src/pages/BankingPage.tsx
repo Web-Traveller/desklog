@@ -4,7 +4,11 @@ import { EmptyState } from '../components/EmptyState';
 import { MetricCard } from '../components/MetricCard';
 import { formatDisplayDate } from '../utils/dateUtils';
 import { formatRupees } from '../utils/currencyUtils';
-import { WORK_TYPES } from '../constants/bankingData';
+import {
+  BANKING_MODE_KEYS,
+  BANKING_MODES,
+  BankingModeId,
+} from '../constants/bankingData';
 
 export const BankingPage: React.FC = () => {
   const { bankingTransactions, deleteBankingTransaction } = useBanking();
@@ -27,11 +31,20 @@ export const BankingPage: React.FC = () => {
     return map;
   }, [customers]);
 
+  // Mode counts for the tab strip
+  const modeCounts = useMemo(() => {
+    const counts: Record<string, number> = { All: bankingTransactions?.length || 0 };
+    (bankingTransactions || []).forEach((t) => {
+      counts[t.transaction_type] = (counts[t.transaction_type] || 0) + 1;
+    });
+    return counts;
+  }, [bankingTransactions]);
+
   const getCustomerDisplayName = (tx: any) => {
     if (tx.customer_name && tx.customer_name.trim()) {
       return tx.customer_name.trim();
     }
-    return customerMap.get(tx.customer_id) || 'Walk-in Counter';
+    return customerMap.get(tx.customer_id) || 'Walk-in Customer';
   };
 
   // Filtered transactions
@@ -89,25 +102,20 @@ export const BankingPage: React.FC = () => {
     });
   }, [bankingTransactions, filterType, statusFilter, dateFilter, searchQuery, customerMap]);
 
-  // Aggregate Metrics
-  const { totalVolume, totalTransactions, totalCharges, successfulCount } = useMemo(() => {
+  // Aggregate Metrics - KISS (Only 3 essential numbers)
+  const { totalVolume, totalTransactions, totalCharges } = useMemo(() => {
     let vol = 0;
     let chg = 0;
-    let success = 0;
 
     filteredTransactions.forEach((tx) => {
       vol += tx.amount || 0;
       chg += tx.charges || 0;
-      if (!tx.status || tx.status === 'SUCCESS') {
-        success++;
-      }
     });
 
     return {
       totalVolume: vol,
       totalTransactions: filteredTransactions.length,
       totalCharges: chg,
-      successfulCount: success,
     };
   }, [filteredTransactions]);
 
@@ -118,30 +126,49 @@ export const BankingPage: React.FC = () => {
     (safePage + 1) * PAGE_SIZE
   );
 
+  const handleDelete = (id: number) => {
+    showConfirm({
+      title: 'Delete Transaction Record',
+      message: 'Are you sure you want to remove this transaction from the ledger?',
+      confirmText: 'Delete Record',
+      variant: 'danger',
+      onConfirm: async () => {
+        await deleteBankingTransaction(id);
+      },
+    });
+  };
+
+  const getModeBadgeClass = (mode: string) => {
+    const cfg = BANKING_MODES[mode as BankingModeId];
+    if (cfg?.badgeClass) return cfg.badgeClass;
+    return 'bg-surface-container-high text-on-surface';
+  };
+
   return (
-    <div className="w-full max-w-[1400px] mx-auto px-gutter py-space-xl flex flex-col gap-space-lg animate-slideUp">
+    <div className="w-full max-w-[1400px] mx-auto px-gutter py-space-md flex flex-col gap-4 animate-slideUp">
       
-      {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-space-md border-b border-surface-container pb-space-xs">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-surface-container">
         <div>
-          <h1 className="font-display-md text-display-md text-on-surface tracking-tight font-semibold">
+          <h1 className="font-display-md text-2xl text-on-surface font-semibold tracking-tight">
             Banking & Counter Ledger
           </h1>
-          <p className="font-body text-body text-on-surface-variant">
-            Counter money transfers (DMT), AePS cash withdrawals, UPI, and utility payments.
+          <p className="text-xs text-on-surface-variant">
+            Counter money transfers, AePS cash, UPI, and bill payments
           </p>
         </div>
+
         <button
           onClick={() => setIsAddBankingOpen(true)}
-          className="px-space-md py-2.5 bg-primary hover:bg-primary-container text-on-primary rounded-full font-button-utility text-button-utility font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-sm whitespace-nowrap self-start md:self-auto"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-on-primary hover:bg-primary-container hover:text-on-primary-container transition-all active:scale-95 font-button-utility text-xs font-semibold shadow-sm self-start sm:self-auto"
         >
-          <span className="material-symbols-outlined text-lg">add</span>
-          New Transaction
+          <span className="material-symbols-outlined text-base">add</span>
+          <span>+ New Transaction</span>
         </button>
       </div>
 
-      {/* Summary Metrics Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-space-sm">
+      {/* Metrics Row - Simple 3-card layout */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <MetricCard
           icon="account_balance"
           title="Total Volume"
@@ -150,94 +177,101 @@ export const BankingPage: React.FC = () => {
         />
         <MetricCard
           icon="receipt_long"
-          title="Transactions"
+          title="Total Transactions"
           value={totalTransactions}
           subtitle="Counter operations"
         />
         <MetricCard
           icon="payments"
           iconColorClass="text-secondary"
-          title="Charges Collected"
+          title="Customer Fees"
           value={formatRupees(totalCharges)}
-          subtitle="Counter fees earned"
-        />
-        <MetricCard
-          icon="check_circle"
-          iconColorClass="text-primary"
-          title="Success Rate"
-          value={totalTransactions > 0 ? `${Math.round((successfulCount / totalTransactions) * 100)}%` : '100%'}
-          subtitle={`${successfulCount} Successful`}
+          subtitle="Total fees collected"
         />
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-space-sm bg-surface-container-lowest p-space-md rounded-2xl shadow-xs border border-surface-container/60">
-        
-        {/* Search Input */}
-        <div className="relative flex-1 max-w-md">
+      {/* Mode Filter Strip (Clickable Pills) */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+        <button
+          onClick={() => { setFilterType('All'); setPage(0); }}
+          className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+            filterType === 'All'
+              ? 'bg-primary text-on-primary shadow-xs'
+              : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+          }`}
+        >
+          All <span className="opacity-70 font-mono text-[10px]">({modeCounts['All'] || 0})</span>
+        </button>
+        {BANKING_MODE_KEYS.map((key) => {
+          const isSelected = filterType === key;
+          const count = modeCounts[key] || 0;
+          return (
+            <button
+              key={key}
+              onClick={() => { setFilterType(key); setPage(0); }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                isSelected
+                  ? 'bg-primary text-on-primary shadow-xs'
+                  : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+              }`}
+            >
+              {key} {count > 0 && <span className="opacity-70 font-mono text-[10px]">({count})</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Control Bar: Search + Status + Date Range */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-surface-container-lowest p-3 rounded-2xl border border-surface-container/60 shadow-xs">
+        <div className="relative flex items-center w-full sm:w-80">
+          <span className="material-symbols-outlined absolute left-3 text-outline pointer-events-none text-base">
+            search
+          </span>
           <input
+            className="w-full pl-9 pr-8 py-2 rounded-xl bg-surface-container text-on-surface placeholder:text-outline text-xs transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 border-none"
+            placeholder="Search by customer, phone, bank, portal..."
             type="text"
-            placeholder="Search by customer, phone, bank, portal, account..."
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
               setPage(0);
             }}
-            className="w-full pl-9 pr-space-md py-2 bg-surface-container text-on-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility border-none"
           />
-          <span className="material-symbols-outlined absolute left-2.5 top-2.5 text-outline text-base">
-            search
-          </span>
           {searchQuery && (
             <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-2.5 text-outline hover:text-on-surface text-xs"
+              className="absolute right-3 text-outline hover:text-on-surface text-xs"
+              onClick={() => {
+                setSearchQuery('');
+                setPage(0);
+              }}
             >
-              <span className="material-symbols-outlined text-sm">cancel</span>
+              ✕
             </button>
           )}
         </div>
 
-        {/* Filter Dropdowns */}
-        <div className="flex flex-wrap items-center gap-space-xs">
-          {/* Work Type Filter */}
-          <select
-            value={filterType}
-            onChange={(e) => {
-              setFilterType(e.target.value);
-              setPage(0);
-            }}
-            className="px-3 py-2 bg-surface-container text-on-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility border-none text-xs"
-          >
-            <option value="All">All Types</option>
-            {WORK_TYPES.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-
-          {/* Status Filter */}
+        <div className="flex items-center gap-2 justify-end">
           <select
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value);
               setPage(0);
             }}
-            className="px-3 py-2 bg-surface-container text-on-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility border-none text-xs"
+            className="px-2.5 py-1.5 bg-surface-container text-on-surface rounded-xl focus:outline-none text-xs font-medium border-none"
           >
             <option value="All">All Status</option>
-            <option value="SUCCESS">SUCCESS</option>
-            <option value="FAILD">FAILD</option>
-            <option value="IN PROGRESS">IN PROGRESS</option>
+            <option value="SUCCESS">Success</option>
+            <option value="IN PROGRESS">In Progress</option>
+            <option value="FAILD">Failed</option>
           </select>
 
-          {/* Date Range Filter */}
           <select
             value={dateFilter}
             onChange={(e) => {
               setDateFilter(e.target.value);
               setPage(0);
             }}
-            className="px-3 py-2 bg-surface-container text-on-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility border-none text-xs"
+            className="px-2.5 py-1.5 bg-surface-container text-on-surface rounded-xl focus:outline-none text-xs font-medium border-none"
           >
             <option value="All Time">All Time</option>
             <option value="Today">Today</option>
@@ -247,29 +281,27 @@ export const BankingPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Ledger Table */}
-      <div className="bg-surface-container-lowest rounded-2xl shadow-xs border border-surface-container/60 overflow-hidden flex-1 flex flex-col">
-        <div className="overflow-x-auto h-full p-space-xs">
+      {/* Main Ledger Table — Simple & Spacious */}
+      <div className="bg-surface-container-lowest rounded-2xl shadow-xs border border-surface-container/60 overflow-hidden flex flex-col">
+        <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
-            <thead className="bg-surface-container-low/60 sticky top-0 z-10 rounded-xl">
+            <thead className="bg-surface-container-low/70 border-b border-surface-container/60">
               <tr>
-                <th className="p-space-md font-semibold text-outline rounded-l-xl whitespace-nowrap">Date</th>
-                <th className="p-space-md font-semibold text-outline">Type</th>
-                <th className="p-space-md font-semibold text-outline">Portal / Company</th>
-                <th className="p-space-md font-semibold text-outline">Customer & Phone</th>
-                <th className="p-space-md font-semibold text-outline">Bank Name</th>
-                <th className="p-space-md font-semibold text-outline">Account / Aadhaar</th>
-                <th className="p-space-md font-semibold text-outline text-right">Amount</th>
-                <th className="p-space-md font-semibold text-outline text-right">Charges</th>
-                <th className="p-space-md font-semibold text-outline text-center">Status</th>
-                <th className="p-space-md font-semibold text-outline text-center rounded-r-xl">Actions</th>
+                <th className="py-3 px-4 font-semibold text-outline whitespace-nowrap">Date</th>
+                <th className="py-3 px-3 font-semibold text-outline whitespace-nowrap">Mode</th>
+                <th className="py-3 px-4 font-semibold text-outline">Customer & Ref</th>
+                <th className="py-3 px-4 font-semibold text-outline">Service & Portal</th>
+                <th className="py-3 px-4 font-semibold text-outline text-right">Amount</th>
+                <th className="py-3 px-4 font-semibold text-outline text-right">Fee (₹)</th>
+                <th className="py-3 px-3 font-semibold text-outline text-center">Status</th>
+                <th className="py-3 px-3 font-semibold text-outline text-center w-12"></th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-surface-container/40">
               {filteredTransactions.length === 0 ? (
                 <EmptyState
                   isTableRow
-                  colSpan={10}
+                  colSpan={8}
                   icon="account_balance_wallet"
                   title="No banking records found"
                   description={
@@ -283,105 +315,92 @@ export const BankingPage: React.FC = () => {
               ) : (
                 paginatedTransactions.map((tx) => {
                   const txStatus = tx.status || 'SUCCESS';
+                  const isSuccess = txStatus === 'SUCCESS';
+                  const isFailed = txStatus === 'FAILD';
+                  const identifier = tx.account_or_aadhaar || tx.transaction_ref_no || '';
+
                   return (
                     <tr
                       key={tx.id}
-                      className="border-b border-surface-container/40 last:border-0 hover:bg-surface-container-lowest/80 transition-colors group"
+                      className="hover:bg-surface-container-lowest/90 transition-colors group"
                     >
                       {/* Date */}
-                      <td className="p-space-md whitespace-nowrap font-medium text-on-surface">
+                      <td className="py-3 px-4 whitespace-nowrap text-on-surface-variant font-medium">
                         {formatDisplayDate(tx.transaction_date)}
                       </td>
 
-                      {/* Work Type Badge */}
-                      <td className="p-space-md whitespace-nowrap">
+                      {/* Mode Badge */}
+                      <td className="py-3 px-3 whitespace-nowrap">
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                            tx.transaction_type === 'DMT'
-                              ? 'bg-primary/10 text-primary border border-primary/20'
-                              : tx.transaction_type === 'AEPS'
-                              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
-                              : tx.transaction_type === 'UPI'
-                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                              : 'bg-surface-container-high text-on-surface'
-                          }`}
+                          className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold border ${getModeBadgeClass(tx.transaction_type)}`}
                         >
                           {tx.transaction_type}
                         </span>
                       </td>
 
-                      {/* Company Name */}
-                      <td className="p-space-md whitespace-nowrap font-medium text-on-surface">
-                        {tx.company_name || '-'}
-                      </td>
-
-                      {/* Customer & Mobile */}
-                      <td className="p-space-md">
+                      {/* Customer & Identifier */}
+                      <td className="py-3 px-4">
                         <div className="font-semibold text-on-surface">
                           {getCustomerDisplayName(tx)}
                         </div>
-                        {tx.customer_mobile && (
-                          <div className="text-[11px] text-outline font-mono">
-                            {tx.customer_mobile}
+                        <div className="text-[11px] text-outline font-mono flex items-center gap-1.5 pt-0.5">
+                          {identifier && <span>{identifier}</span>}
+                          {identifier && tx.customer_mobile && <span>&middot;</span>}
+                          {tx.customer_mobile && <span>{tx.customer_mobile}</span>}
+                        </div>
+                      </td>
+
+                      {/* Bank / Biller & Portal */}
+                      <td className="py-3 px-4">
+                        <div className="font-medium text-on-surface">
+                          {tx.bank_name || '-'}
+                        </div>
+                        {tx.company_name && (
+                          <div className="text-[10px] text-outline font-medium pt-0.5">
+                            via {tx.company_name}
                           </div>
                         )}
                       </td>
 
-                      {/* Bank Name */}
-                      <td className="p-space-md whitespace-nowrap text-on-surface-variant font-medium">
-                        {tx.bank_name || '-'}
-                      </td>
-
-                      {/* Account / Aadhaar */}
-                      <td className="p-space-md whitespace-nowrap font-mono text-outline">
-                        {tx.account_or_aadhaar || tx.transaction_ref_no || '-'}
-                      </td>
-
                       {/* Amount */}
-                      <td className="p-space-md text-right font-bold text-on-surface font-mono text-sm">
+                      <td className="py-3 px-4 text-right font-bold text-on-surface font-mono text-sm whitespace-nowrap">
                         {formatRupees(tx.amount)}
                       </td>
 
-                      {/* Charges */}
-                      <td className="p-space-md text-right font-mono text-secondary font-medium">
-                        {tx.charges && tx.charges > 0 ? formatRupees(tx.charges) : '-'}
+                      {/* Customer Fee Only */}
+                      <td className="py-3 px-4 text-right font-mono text-on-surface-variant font-medium whitespace-nowrap">
+                        {tx.charges && tx.charges > 0 ? formatRupees(tx.charges) : '₹0'}
                       </td>
 
-                      {/* Status Badge */}
-                      <td className="p-space-md text-center whitespace-nowrap">
+                      {/* Status */}
+                      <td className="py-3 px-3 whitespace-nowrap text-center">
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            txStatus === 'SUCCESS'
-                              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                              : txStatus === 'FAILD'
-                              ? 'bg-error/15 text-error'
-                              : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                            isSuccess
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                              : isFailed
+                              ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                              : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
                           }`}
                         >
-                          {txStatus}
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              isSuccess ? 'bg-emerald-500' : isFailed ? 'bg-rose-500' : 'bg-amber-500'
+                            }`}
+                          />
+                          {isSuccess ? 'Success' : isFailed ? 'Failed' : 'Pending'}
                         </span>
                       </td>
 
                       {/* Actions */}
-                      <td className="p-space-md text-center">
+                      <td className="py-3 px-3 whitespace-nowrap text-center">
                         <button
-                          onClick={() => {
-                            if (tx.id) {
-                              showConfirm({
-                                title: 'Delete Banking Transaction',
-                                message: `Are you sure you want to delete this ${tx.transaction_type} transaction of ${formatRupees(
-                                  tx.amount
-                                )}? This action cannot be undone.`,
-                                confirmText: 'Delete Record',
-                                variant: 'danger',
-                                onConfirm: () => deleteBankingTransaction(tx.id!),
-                              });
-                            }
-                          }}
-                          className="p-1.5 text-error hover:bg-error-container hover:text-on-error-container rounded-full transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                          onClick={() => tx.id && handleDelete(tx.id)}
+                          className="p-1 rounded-lg text-outline hover:text-error hover:bg-error/10 transition-colors opacity-0 group-hover:opacity-100"
                           title="Delete Record"
+                          type="button"
                         >
-                          <span className="material-symbols-outlined text-[18px]">delete</span>
+                          <span className="material-symbols-outlined text-base">delete</span>
                         </button>
                       </td>
                     </tr>
@@ -392,27 +411,29 @@ export const BankingPage: React.FC = () => {
           </table>
         </div>
 
-        {/* Pagination Controls */}
+        {/* Pagination Bar */}
         {filteredTransactions.length > PAGE_SIZE && (
-          <div className="flex items-center justify-between p-space-md border-t border-surface-container/60 bg-surface-container-lowest">
-            <span className="font-fine-print text-fine-print text-on-surface-variant">
-              Showing {safePage * PAGE_SIZE + 1} - {Math.min((safePage + 1) * PAGE_SIZE, filteredTransactions.length)} of {filteredTransactions.length} records
+          <div className="flex items-center justify-between px-4 py-3 border-t border-surface-container/40 bg-surface-container-low/20">
+            <span className="text-xs text-outline">
+              Showing {safePage * PAGE_SIZE + 1} to{' '}
+              {Math.min((safePage + 1) * PAGE_SIZE, filteredTransactions.length)} of{' '}
+              {filteredTransactions.length} records
             </span>
-            <div className="flex items-center gap-space-xs">
+            <div className="flex items-center gap-1">
               <button
-                className="px-space-md py-1.5 rounded-full border border-surface-container-high text-on-surface disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-container font-button-utility text-button-utility transition-all active:scale-95"
-                disabled={safePage === 0}
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={safePage === 0}
+                className="px-2.5 py-1 text-xs rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface disabled:opacity-40 transition"
               >
                 Previous
               </button>
-              <span className="font-caption text-caption text-on-surface px-space-xs">
+              <span className="px-2 text-xs text-on-surface-variant font-mono">
                 {safePage + 1} / {totalPages}
               </span>
               <button
-                className="px-space-md py-1.5 rounded-full border border-surface-container-high text-on-surface disabled:opacity-40 disabled:cursor-not-allowed hover:bg-surface-container font-button-utility text-button-utility transition-all active:scale-95"
-                disabled={safePage >= totalPages - 1}
                 onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={safePage >= totalPages - 1}
+                className="px-2.5 py-1 text-xs rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface disabled:opacity-40 transition"
               >
                 Next
               </button>

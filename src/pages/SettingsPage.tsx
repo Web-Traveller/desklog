@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import * as Sentry from "@sentry/react";
 import { useDesk } from "../context/DeskContext";
 import { open } from "@tauri-apps/plugin-dialog";
 import { APP_VERSION } from "../constants/version";
@@ -24,27 +23,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   } = useDesk();
 
   const [restorePathInput, setRestorePathInput] = useState("");
-  const [isSentryTesting, setIsSentryTesting] = useState(false);
-  const [sentryTestResult, setSentryTestResult] = useState<string | null>(null);
 
-  const handleTriggerTestError = () => {
-    setIsSentryTesting(true);
+  const openExternal = async (url: string) => {
     try {
-      const testErr = new Error(`DeskLog Sentry Diagnostics Verification: Test error triggered on v${APP_VERSION}`);
-      const eventId = Sentry.captureException(testErr, {
-        level: "error",
-        tags: {
-          event: "manual_sentry_test",
-          app_version: APP_VERSION,
-          timestamp: new Date().toISOString(),
-        },
-      });
-      setSentryTestResult(`Test error logged! ID: ${eventId.slice(0, 8)}...`);
-    } catch (err: any) {
-      setSentryTestResult(`Send failed: ${err?.message || "error"}`);
-    } finally {
-      setIsSentryTesting(false);
-      setTimeout(() => setSentryTestResult(null), 5000);
+      const { openUrl } = await import('@tauri-apps/plugin-opener');
+      await openUrl(url);
+    } catch {
+      window.open(url, '_blank');
     }
   };
 
@@ -300,77 +285,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
 
         {/* Right Column */}
         <div className="lg:col-span-6 flex flex-col gap-space-lg">
-          {/* System & Updates Section */}
-          <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-xs border border-surface-container/60 flex flex-col gap-space-md">
-            <div className="flex items-center gap-space-xs border-b border-surface-container/40 pb-space-xs">
-              <span className="material-symbols-outlined text-primary text-xl">system_update</span>
-              <h2 className="font-tagline text-tagline text-on-surface font-semibold">
-                System & Updates
-              </h2>
-            </div>
-
-            <div className="flex flex-col gap-2 text-caption text-on-surface-variant">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-on-surface font-medium">Installed Version:</span>
-                <span className="font-mono bg-surface-container px-2 py-0.5 rounded text-primary font-semibold">v{APP_VERSION}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-on-surface font-medium">Channel:</span>
-                <span className="font-mono bg-surface-container px-2 py-0.5 rounded text-outline">Production (Stable)</span>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-surface-container/40 flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => checkForUpdates(true)}
-                disabled={isChecking || isDownloading}
-                className="w-full flex items-center justify-center gap-2 px-space-md py-2.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface font-button-utility text-button-utility font-medium transition-all active:scale-95 shadow-xs disabled:opacity-50"
-              >
-                <span className={`material-symbols-outlined text-lg text-primary ${isChecking ? "animate-spin" : ""}`}>
-                  {isChecking ? "sync" : "refresh"}
-                </span>
-                <span>{isChecking ? "Checking for updates..." : "Check for Updates"}</span>
-              </button>
-
-              {statusMessage && (
-                <p className="text-xs text-center text-outline font-medium pt-1">
-                  {statusMessage}
-                </p>
-              )}
-
-              {availableUpdate && (
-                <div className="bg-primary/10 border border-primary/20 rounded-xl p-3 flex flex-col gap-2 mt-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-primary">
-                      New update v{availableUpdate.version} ready
-                    </span>
-                    <button
-                      onClick={installUpdate}
-                      disabled={isDownloading}
-                      className="px-3 py-1 bg-primary text-on-primary rounded-full text-xs font-bold hover:bg-primary-container transition"
-                    >
-                      {isDownloading ? `Downloading (${downloadProgress}%)` : "Install & Restart"}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div className="pt-2 border-t border-surface-container/40 flex items-center justify-between">
-                <span className="text-xs text-on-surface-variant font-medium">Sentry Diagnostics:</span>
-                <button
-                  type="button"
-                  onClick={handleTriggerTestError}
-                  disabled={isSentryTesting}
-                  className="px-3 py-1 text-xs font-semibold rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface transition active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
-                >
-                  <span className="material-symbols-outlined text-sm text-amber-500">bug_report</span>
-                  <span>{sentryTestResult || (isSentryTesting ? "Sending..." : "Test Sentry Logging")}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
           {/* Native SQLite Database Backup & Restore */}
           <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-xs border border-surface-container/60 flex flex-col gap-space-md">
             <div className="flex items-center gap-space-xs border-b border-surface-container/40 pb-space-xs">
@@ -437,6 +351,74 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 <p className="font-micro-legal text-micro-legal text-on-surface-variant/70">
                   A safe automatic backup snapshot of your current database will always be saved before restore.
                 </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Minimal Version & Update Status (Unobtrusive 1-line strip) */}
+          <div className="bg-surface-container-lowest rounded-2xl p-3.5 shadow-xs border border-surface-container/60 flex flex-col gap-2">
+            <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span className="font-semibold text-on-surface">DeskLog v{APP_VERSION}</span>
+                <span className="text-outline">&middot; Production</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => checkForUpdates(true)}
+                disabled={isChecking || isDownloading}
+                className="text-xs text-primary hover:underline font-semibold disabled:opacity-50"
+              >
+                {isChecking ? "Checking..." : "Check update"}
+              </button>
+            </div>
+
+            {statusMessage && (
+              <p className="text-[11px] text-center text-outline">
+                {statusMessage}
+              </p>
+            )}
+
+            {availableUpdate && (
+              <div className="bg-primary/10 border border-primary/20 rounded-xl p-2.5 flex items-center justify-between mt-1">
+                <span className="text-xs font-semibold text-primary">
+                  New update v{availableUpdate.version} ready
+                </span>
+                <button
+                  onClick={installUpdate}
+                  disabled={isDownloading}
+                  className="px-3 py-1 bg-primary text-on-primary rounded-full text-xs font-bold hover:bg-primary-container transition"
+                >
+                  {isDownloading ? `Downloading (${downloadProgress}%)` : "Install"}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Developer Contact Card (Similar to Update Card) */}
+          <div className="bg-surface-container-lowest rounded-2xl p-3.5 shadow-xs border border-surface-container/60 flex flex-col gap-2">
+            <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-primary/70"></span>
+                <span className="font-semibold text-on-surface">Developer Contact</span>
+                <span className="text-outline">&middot; Direct Support</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => openExternal(`https://wa.me/918975805393?text=Hi%20Ajinkya%2C%20I%20am%20using%20DeskLog%20v${APP_VERSION}%20and%20need%20assistance.`)}
+                  className="text-xs text-primary hover:underline font-semibold"
+                >
+                  WhatsApp
+                </button>
+                <span className="text-outline/40">·</span>
+                <button
+                  type="button"
+                  onClick={() => openExternal('tel:+918975805393')}
+                  className="text-xs text-on-surface hover:text-primary font-mono transition-colors"
+                >
+                  +91 8975805393
+                </button>
               </div>
             </div>
           </div>

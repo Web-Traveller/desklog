@@ -5,6 +5,7 @@ import {
   fetchTauriBankingTransactions,
   saveTauriBankingTransaction,
   deleteTauriBankingTransaction,
+  isTauriEnv,
 } from '../api/tauri';
 import { useUI } from './UIContext';
 
@@ -25,8 +26,19 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const dbBanking = await fetchTauriBankingTransactions();
     if (dbBanking) {
       setBankingTransactions(dbBanking);
+    } else if (!isTauriEnv()) {
+      try {
+        const cached = localStorage.getItem('desklog_banking_records');
+        if (cached) {
+          setBankingTransactions(JSON.parse(cached));
+        } else {
+          setBankingTransactions([]);
+        }
+      } catch {
+        setBankingTransactions([]);
+      }
     } else {
-      setBankingTransactions(prev => prev || []);
+      setBankingTransactions([]);
     }
   };
 
@@ -41,21 +53,36 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       transaction_date: txData.transaction_date || new Date().toISOString(),
     };
     try {
-      const saved = await saveTauriBankingTransaction(newTx);
+      let saved = await saveTauriBankingTransaction(newTx);
+      if (!isTauriEnv()) {
+        saved = { ...newTx, id: Date.now() };
+        const updated = [saved, ...bankingTransactions];
+        try {
+          localStorage.setItem('desklog_banking_records', JSON.stringify(updated));
+        } catch {}
+      }
       setBankingTransactions(prev => [saved, ...prev]);
-      showToast('Banking transaction logged successfully.', 'success');
+      showToast('Banking transaction saved.', 'success');
     } catch (err) {
       console.error('Failed to log banking transaction:', err);
       Sentry.captureException(err, { tags: { action: 'add_banking_transaction' }, extra: { txType: newTx.transaction_type, amount: newTx.amount } });
-      showToast(`Failed to log banking transaction: ${err instanceof Error ? err.message : String(err)}`, 'error');
+      showToast(`Failed to log transaction: ${err instanceof Error ? err.message : String(err)}`, 'error');
     }
   };
 
   const deleteBankingTransaction = async (id: number) => {
     try {
       await deleteTauriBankingTransaction(id);
-      setBankingTransactions(prev => prev.filter(tx => tx.id !== id));
-      showToast('Banking transaction removed.', 'info');
+      setBankingTransactions(prev => {
+        const filtered = prev.filter(tx => tx.id !== id);
+        if (!isTauriEnv()) {
+          try {
+            localStorage.setItem('desklog_banking_records', JSON.stringify(filtered));
+          } catch {}
+        }
+        return filtered;
+      });
+      showToast('Transaction removed.', 'info');
     } catch (err) {
       console.error('Failed to delete banking transaction:', err);
       Sentry.captureException(err, { tags: { action: 'delete_banking_transaction' }, extra: { transactionId: id } });
