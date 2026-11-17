@@ -152,7 +152,7 @@ export function parseBankingMetadata(metadataStr?: string): Record<string, strin
 export interface BankingTransaction {
   id?: number;
   customer_id: string;
-  transaction_type: 'Transfer' | 'Withdrawal' | 'Deposit';
+  transaction_type: 'Transfer' | 'Withdrawal' | 'Deposit' | 'DMT' | 'AEPS' | 'UPI' | 'BILL' | 'CREDIT' | 'SIM' | 'NEPAL' | 'CSC' | string;
   payment_mode: 'AePS' | 'UPI' | 'Bank Transfer' | 'Card' | 'Cash' | 'Cash to Bank Account' | 'Cash to UPI' | 'Debit Card / Mini ATM' | 'UPI Cash-out' | string;
   /** Stored in integer paise, 1 INR = 100 Paise */
   amount: number;
@@ -160,6 +160,17 @@ export interface BankingTransaction {
   metadata?: string; // Serialized BankingMetadata JSON string
   transaction_date: string;
   is_deleted: boolean;
+  company_name?: string;
+  customer_name?: string;
+  customer_mobile?: string;
+  account_or_aadhaar?: string;
+  bank_name?: string;
+  /** Stored in integer paise, 1 INR = 100 Paise */
+  charges?: number;
+  /** Stored in integer paise, 1 INR = 100 Paise */
+  commission?: number;
+  status?: 'SUCCESS' | 'FAILD' | 'IN PROGRESS' | string;
+  remark?: string;
 }
 
 export type ActivePage =

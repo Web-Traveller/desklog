@@ -91,6 +91,24 @@ pub struct BankingTransaction {
     pub metadata: Option<String>,
     pub transaction_date: String,
     pub is_deleted: bool,
+    #[serde(default)]
+    pub company_name: Option<String>,
+    #[serde(default)]
+    pub customer_name: Option<String>,
+    #[serde(default)]
+    pub customer_mobile: Option<String>,
+    #[serde(default)]
+    pub account_or_aadhaar: Option<String>,
+    #[serde(default)]
+    pub bank_name: Option<String>,
+    #[serde(default)]
+    pub charges: Option<i64>,
+    #[serde(default)]
+    pub commission: Option<i64>,
+    #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub remark: Option<String>,
 }
 
 pub struct Database {
@@ -299,6 +317,51 @@ impl Database {
                 tx.execute_batch("ALTER TABLE customers ADD COLUMN aadhaar_number TEXT;")?;
             }
             tx.execute_batch("PRAGMA user_version = 3;")?;
+            tx.commit()?;
+        }
+
+        // Migration v4: Client Spreadsheet Banking Expansion & Custom Walk-in Fields
+        let current_version: i32 = conn.query_row("PRAGMA user_version;", [], |row| row.get(0))?;
+        if current_version < 4 {
+            let tx = conn.transaction()?;
+            let mut existing_cols = Vec::new();
+            if let Ok(mut stmt) = tx.prepare("PRAGMA table_info(banking_transactions);") {
+                if let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(1)) {
+                    existing_cols = rows.flatten().collect();
+                }
+            }
+            if !existing_cols.contains(&"company_name".to_string()) {
+                tx.execute_batch("ALTER TABLE banking_transactions ADD COLUMN company_name TEXT;")?;
+            }
+            if !existing_cols.contains(&"customer_name".to_string()) {
+                tx.execute_batch("ALTER TABLE banking_transactions ADD COLUMN customer_name TEXT;")?;
+            }
+            if !existing_cols.contains(&"customer_mobile".to_string()) {
+                tx.execute_batch("ALTER TABLE banking_transactions ADD COLUMN customer_mobile TEXT;")?;
+            }
+            if !existing_cols.contains(&"account_or_aadhaar".to_string()) {
+                tx.execute_batch("ALTER TABLE banking_transactions ADD COLUMN account_or_aadhaar TEXT;")?;
+            }
+            if !existing_cols.contains(&"bank_name".to_string()) {
+                tx.execute_batch("ALTER TABLE banking_transactions ADD COLUMN bank_name TEXT;")?;
+            }
+            if !existing_cols.contains(&"charges".to_string()) {
+                tx.execute_batch("ALTER TABLE banking_transactions ADD COLUMN charges INTEGER DEFAULT 0;")?;
+            }
+            if !existing_cols.contains(&"commission".to_string()) {
+                tx.execute_batch("ALTER TABLE banking_transactions ADD COLUMN commission INTEGER DEFAULT 0;")?;
+            }
+            if !existing_cols.contains(&"status".to_string()) {
+                tx.execute_batch("ALTER TABLE banking_transactions ADD COLUMN status TEXT DEFAULT 'SUCCESS';")?;
+            }
+            if !existing_cols.contains(&"remark".to_string()) {
+                tx.execute_batch("ALTER TABLE banking_transactions ADD COLUMN remark TEXT;")?;
+            }
+            tx.execute_batch(
+                "CREATE INDEX IF NOT EXISTS idx_banking_tx_date ON banking_transactions(transaction_date);
+                 CREATE INDEX IF NOT EXISTS idx_banking_customer_mobile ON banking_transactions(customer_mobile);
+                 PRAGMA user_version = 4;"
+            )?;
             tx.commit()?;
         }
 
@@ -668,13 +731,15 @@ impl Database {
 
     pub fn fetch_banking_transactions(&self) -> Result<Vec<BankingTransaction>> {
         let conn = self.get_conn();
-        let mut stmt = conn.prepare_cached("SELECT id, customer_id, transaction_type, payment_mode, amount, transaction_ref_no, metadata, transaction_date, is_deleted FROM banking_transactions WHERE is_deleted = 0 ORDER BY transaction_date DESC;")?;
+        let mut stmt = conn.prepare_cached(
+            "SELECT id, customer_id, transaction_type, payment_mode, amount, transaction_ref_no, metadata, transaction_date, is_deleted,
+                    company_name, customer_name, customer_mobile, account_or_aadhaar, bank_name, charges, commission, status, remark
+             FROM banking_transactions WHERE is_deleted = 0 ORDER BY transaction_date DESC;"
+        )?;
         let iter = stmt.query_map([], |row| {
             let amount: i64 = match row.get::<_, i64>(4) {
                 Ok(val) => val,
                 Err(_) => {
-                    // Migration shim: Some older DB versions stored amount as REAL (f64)
-                    // before the integer paise migration. We gracefully parse and convert it here.
                     let float_val: f64 = row.get(4)?;
                     (float_val * 100.0).round() as i64
                 }
@@ -689,6 +754,15 @@ impl Database {
                 metadata: row.get(6)?,
                 transaction_date: row.get(7)?,
                 is_deleted: row.get(8)?,
+                company_name: row.get(9)?,
+                customer_name: row.get(10)?,
+                customer_mobile: row.get(11)?,
+                account_or_aadhaar: row.get(12)?,
+                bank_name: row.get(13)?,
+                charges: row.get(14)?,
+                commission: row.get(15)?,
+                status: row.get(16)?,
+                remark: row.get(17)?,
             })
         })?;
         let mut txs = Vec::new();
@@ -700,13 +774,15 @@ impl Database {
     
     pub fn fetch_banking_transactions_for_customer(&self, customer_id: &str) -> Result<Vec<BankingTransaction>> {
         let conn = self.get_conn();
-        let mut stmt = conn.prepare_cached("SELECT id, customer_id, transaction_type, payment_mode, amount, transaction_ref_no, metadata, transaction_date, is_deleted FROM banking_transactions WHERE customer_id = ?1 AND is_deleted = 0 ORDER BY transaction_date DESC;")?;
+        let mut stmt = conn.prepare_cached(
+            "SELECT id, customer_id, transaction_type, payment_mode, amount, transaction_ref_no, metadata, transaction_date, is_deleted,
+                    company_name, customer_name, customer_mobile, account_or_aadhaar, bank_name, charges, commission, status, remark
+             FROM banking_transactions WHERE customer_id = ?1 AND is_deleted = 0 ORDER BY transaction_date DESC;"
+        )?;
         let iter = stmt.query_map(params![customer_id], |row| {
             let amount: i64 = match row.get::<_, i64>(4) {
                 Ok(val) => val,
                 Err(_) => {
-                    // Migration shim: Some older DB versions stored amount as REAL (f64)
-                    // before the integer paise migration. We gracefully parse and convert it here.
                     let float_val: f64 = row.get(4)?;
                     (float_val * 100.0).round() as i64
                 }
@@ -721,6 +797,15 @@ impl Database {
                 metadata: row.get(6)?,
                 transaction_date: row.get(7)?,
                 is_deleted: row.get(8)?,
+                company_name: row.get(9)?,
+                customer_name: row.get(10)?,
+                customer_mobile: row.get(11)?,
+                account_or_aadhaar: row.get(12)?,
+                bank_name: row.get(13)?,
+                charges: row.get(14)?,
+                commission: row.get(15)?,
+                status: row.get(16)?,
+                remark: row.get(17)?,
             })
         })?;
         let mut txs = Vec::new();
@@ -737,35 +822,49 @@ impl Database {
                 Some("Transaction amount must be positive".to_string()),
             ));
         }
-        if tx.customer_id.trim().is_empty() {
-            return Err(rusqlite::Error::SqliteFailure(
-                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT),
-                Some("Customer ID is required".to_string()),
-            ));
-        }
+        let cust_id = if tx.customer_id.trim().is_empty() {
+            "cust-general".to_string()
+        } else {
+            tx.customer_id.trim().to_string()
+        };
         let date = if tx.transaction_date.is_empty() {
             chrono::Local::now().to_rfc3339()
         } else {
             tx.transaction_date.clone()
         };
+        let status = tx.status.clone().unwrap_or_else(|| "SUCCESS".to_string());
         let conn = self.get_conn();
         conn.execute(
-            "INSERT INTO banking_transactions (customer_id, transaction_type, payment_mode, amount, transaction_ref_no, metadata, transaction_date, is_deleted)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0);",
+            "INSERT INTO banking_transactions (
+                customer_id, transaction_type, payment_mode, amount, transaction_ref_no, metadata, transaction_date, is_deleted,
+                company_name, customer_name, customer_mobile, account_or_aadhaar, bank_name, charges, commission, status, remark
+             )
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16);",
             params![
-                tx.customer_id,
+                cust_id,
                 tx.transaction_type,
                 tx.payment_mode,
                 tx.amount,
                 tx.transaction_ref_no,
                 tx.metadata,
-                date
+                date,
+                tx.company_name,
+                tx.customer_name,
+                tx.customer_mobile,
+                tx.account_or_aadhaar,
+                tx.bank_name,
+                tx.charges.unwrap_or(0),
+                tx.commission.unwrap_or(0),
+                status,
+                tx.remark
             ],
         )?;
         let id = conn.last_insert_rowid();
         let mut inserted = tx.clone();
         inserted.id = Some(id);
+        inserted.customer_id = cust_id;
         inserted.transaction_date = date;
+        inserted.status = Some(status);
         inserted.is_deleted = false;
         Ok(inserted)
     }

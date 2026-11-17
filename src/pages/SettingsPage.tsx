@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import * as Sentry from "@sentry/react";
 import { useDesk } from "../context/DeskContext";
 import { open } from "@tauri-apps/plugin-dialog";
 import { APP_VERSION } from "../constants/version";
@@ -23,6 +24,29 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   } = useDesk();
 
   const [restorePathInput, setRestorePathInput] = useState("");
+  const [isSentryTesting, setIsSentryTesting] = useState(false);
+  const [sentryTestResult, setSentryTestResult] = useState<string | null>(null);
+
+  const handleTriggerTestError = () => {
+    setIsSentryTesting(true);
+    try {
+      const testErr = new Error(`DeskLog Sentry Diagnostics Verification: Test error triggered on v${APP_VERSION}`);
+      const eventId = Sentry.captureException(testErr, {
+        level: "error",
+        tags: {
+          event: "manual_sentry_test",
+          app_version: APP_VERSION,
+          timestamp: new Date().toISOString(),
+        },
+      });
+      setSentryTestResult(`Test error logged! ID: ${eventId.slice(0, 8)}...`);
+    } catch (err: any) {
+      setSentryTestResult(`Send failed: ${err?.message || "error"}`);
+    } finally {
+      setIsSentryTesting(false);
+      setTimeout(() => setSentryTestResult(null), 5000);
+    }
+  };
 
   const {
     checkForUpdates,
@@ -331,6 +355,19 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   </div>
                 </div>
               )}
+
+              <div className="pt-2 border-t border-surface-container/40 flex items-center justify-between">
+                <span className="text-xs text-on-surface-variant font-medium">Sentry Diagnostics:</span>
+                <button
+                  type="button"
+                  onClick={handleTriggerTestError}
+                  disabled={isSentryTesting}
+                  className="px-3 py-1 text-xs font-semibold rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface transition active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-sm text-amber-500">bug_report</span>
+                  <span>{sentryTestResult || (isSentryTesting ? "Sending..." : "Test Sentry Logging")}</span>
+                </button>
+              </div>
             </div>
           </div>
 

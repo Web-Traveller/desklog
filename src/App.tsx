@@ -7,6 +7,8 @@ import { PageSkeletonLoader } from "./components/PageSkeletonLoader";
 import { AppNotificationBanner } from "./components/AppNotificationBanner";
 import { sendHeartbeat, isDeviceBlockedLocally } from "./services/telemetryService";
 import { initSilentAutoUpdater } from "./services/autoUpdater";
+import * as Sentry from "@sentry/react";
+import { APP_VERSION } from "./constants/version";
 
 // Lazy-loaded route pages for code splitting & bundle size optimization
 const CustomersPage = lazy(() =>
@@ -79,6 +81,25 @@ function App() {
   const [allowed, setAllowed] = useState<boolean>(() => !isDeviceBlockedLocally());
 
   useEffect(() => {
+    // 0. Log version startup / update event to Sentry
+    const prevVersion = localStorage.getItem('desklog_installed_version');
+    if (prevVersion !== APP_VERSION) {
+      localStorage.setItem('desklog_installed_version', APP_VERSION);
+      Sentry.captureMessage(
+        prevVersion
+          ? `[UPDATE_INSTALLED] DeskLog successfully updated from v${prevVersion} to v${APP_VERSION}`
+          : `[INITIAL_INSTALL] DeskLog installed at v${APP_VERSION}`,
+        {
+          level: 'info',
+          tags: {
+            event: prevVersion ? 'update_installed' : 'initial_install',
+            previous_version: prevVersion || 'none',
+            current_version: APP_VERSION,
+          },
+        }
+      );
+    }
+
     // 1. Silent diagnostic check-in on app launch
     sendHeartbeat().then((res) => {
       if (res) {

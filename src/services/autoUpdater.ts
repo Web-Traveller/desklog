@@ -4,6 +4,7 @@
 
 import { check, Update } from '@tauri-apps/plugin-updater';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import * as Sentry from '@sentry/react';
 import { isTauriEnv } from '../api/tauri';
 
 // Module-level singletons — persist across React StrictMode double-mounts
@@ -39,6 +40,10 @@ async function checkAndDownloadUpdate(): Promise<void> {
     isDownloading = false;
 
     console.log(`[UPDATER] v${update.version} downloaded and ready on disk. Arming close hook...`);
+    Sentry.captureMessage(`[UPDATER] Update v${update.version} downloaded silently. Armed for installation on app close.`, {
+      level: 'info',
+      tags: { event: 'update_downloaded', version: update.version },
+    });
 
     // Only arm the close listener once — at this point downloadedUpdate is guaranteed non-null
     isHookAttached = true;
@@ -50,6 +55,10 @@ async function checkAndDownloadUpdate(): Promise<void> {
 
         try {
           console.log('[UPDATER] User closed app. Running silent NSIS installer (/S)...');
+          Sentry.captureMessage(`[UPDATER] User closed app. Launching silent NSIS installer for v${downloadedUpdate?.version}...`, {
+            level: 'info',
+            tags: { event: 'update_installing', version: downloadedUpdate?.version || 'unknown' },
+          });
           // install() with quiet installMode (tauri.conf.json) runs NSIS with /S flag.
           // restartAfterInstall: false — NSIS finishes, then we destroy the window cleanly.
           const installPromise = downloadedUpdate!.install({ restartAfterInstall: false });
@@ -58,6 +67,9 @@ async function checkAndDownloadUpdate(): Promise<void> {
           await Promise.race([installPromise, safetyTimeout]);
         } catch (installErr) {
           console.warn('[UPDATER] Silent install error (non-fatal):', installErr);
+          Sentry.captureException(installErr, {
+            tags: { event: 'silent_install_error', version: downloadedUpdate?.version || 'unknown' },
+          });
         } finally {
           // GUARANTEED window destruction under ALL conditions — no more hang-on-close
           try {
