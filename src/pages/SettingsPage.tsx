@@ -16,6 +16,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     tasks,
     payments,
     services,
+    bankingTransactions,
     createDatabaseBackup,
     restoreDatabaseBackup,
     showConfirm,
@@ -23,6 +24,21 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   } = useDesk();
 
   const [restorePathInput, setRestorePathInput] = useState("");
+  const [dateFormat, setDateFormat] = useState<string>(() => {
+    try {
+      return localStorage.getItem('desklog_date_format') || 'DD MMM YYYY';
+    } catch {
+      return 'DD MMM YYYY';
+    }
+  });
+
+  const handleDateFormatChange = (newFormat: string) => {
+    setDateFormat(newFormat);
+    try {
+      localStorage.setItem('desklog_date_format', newFormat);
+      showToast(`Date format set to ${newFormat}`, 'info');
+    } catch {}
+  };
 
   const openExternal = async (url: string) => {
     try {
@@ -182,6 +198,39 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     downloadCSV(`desklog_payments_${new Date().toISOString().slice(0, 10)}.csv`, csv);
   };
 
+  const exportBankingCSV = () => {
+    const headers = [
+      "ID",
+      "Date",
+      "Mode",
+      "Customer Name",
+      "Mobile",
+      "Account / Aadhaar / Ref",
+      "Bank / Biller",
+      "Portal / Company",
+      "Amount (₹)",
+      "Customer Fee (₹)",
+      "Status",
+      "Remark",
+    ];
+    const rows = bankingTransactions.map((tx) => [
+      cleanCSVCell(tx.id || ""),
+      cleanCSVCell(tx.transaction_date || ""),
+      cleanCSVCell(tx.transaction_type || ""),
+      cleanCSVCell(tx.customer_name || ""),
+      cleanCSVCell(tx.customer_mobile || ""),
+      cleanCSVCell(tx.account_or_aadhaar || tx.transaction_ref_no || ""),
+      cleanCSVCell(tx.bank_name || ""),
+      cleanCSVCell(tx.company_name || ""),
+      cleanCSVCell(Math.floor((tx.amount || 0) / 100)),
+      cleanCSVCell(Math.floor((tx.charges || 0) / 100)),
+      cleanCSVCell(tx.status || "SUCCESS"),
+      cleanCSVCell(tx.remark || ""),
+    ]);
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    downloadCSV(`desklog_banking_ledger_${new Date().toISOString().slice(0, 10)}.csv`, csv);
+  };
+
   return (
     <div className="w-full max-w-[1400px] mx-auto px-gutter py-space-xl flex flex-col gap-space-xl animate-slideUp">
       <div className="flex flex-col gap-space-xxs border-b border-surface-container pb-space-xs">
@@ -206,9 +255,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             <div className="grid grid-cols-1 gap-space-md pt-2">
               <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant">
                 Date Display Format
-                <select className="px-space-md py-2.5 rounded-xl bg-surface-container-low text-on-surface focus:outline-none border border-surface-container-high/40">
-                  <option>DD MMM YYYY (e.g. 12 Oct 2026)</option>
-                  <option>YYYY-MM-DD (e.g. 2026-10-12)</option>
+                <select
+                  value={dateFormat}
+                  onChange={(e) => handleDateFormatChange(e.target.value)}
+                  className="px-space-md py-2.5 rounded-xl bg-surface-container-low text-on-surface focus:outline-none border border-surface-container-high/40"
+                >
+                  <option value="DD MMM YYYY">DD MMM YYYY (e.g. 12 Oct 2026)</option>
+                  <option value="YYYY-MM-DD">YYYY-MM-DD (e.g. 2026-10-12)</option>
                 </select>
               </label>
             </div>
@@ -224,10 +277,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             </div>
 
             <p className="font-caption text-caption text-on-surface-variant">
-              Export your local customer, task, and payment records into standard CSV files for offline spreadsheets and auditing.
+              Export your counter banking ledger, customers, tasks, and payment records into standard CSV files for offline auditing.
             </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-space-sm pt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-sm pt-2">
+              <button
+                type="button"
+                onClick={exportBankingCSV}
+                className="flex items-center justify-center gap-2 px-space-md py-2.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-button-utility text-button-utility transition-all border border-surface-container-high/40"
+              >
+                <span className="material-symbols-outlined text-lg text-primary">account_balance</span>
+                <span>Banking Ledger CSV</span>
+              </button>
               <button
                 type="button"
                 onClick={exportCustomersCSV}
@@ -298,8 +359,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               <p>
                 DeskLog stores all data locally in an embedded SQLite database (`desklog.db`). Backups are saved safely in your system AppData directory.
               </p>
-              <div className="flex items-center gap-3 text-xs font-mono text-outline pt-1">
+              <div className="flex items-center gap-2.5 text-xs font-mono text-outline pt-1 flex-wrap">
                 <span>Customers: {customers.length}</span>
+                <span>•</span>
+                <span>Banking: {bankingTransactions.length}</span>
                 <span>•</span>
                 <span>Tasks: {tasks.length}</span>
                 <span>•</span>

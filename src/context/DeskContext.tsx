@@ -40,6 +40,7 @@ export interface DeskContextType {
   deleteCustomer: (id: string) => Promise<void>;
 
   addBankingTransaction: (tx: Omit<BankingTransaction, 'id' | 'is_deleted'>) => Promise<void>;
+  updateBankingTransaction: (id: number, updates: Partial<BankingTransaction>) => Promise<void>;
   deleteBankingTransaction: (id: number) => Promise<void>;
 
   addTask: (taskData: Omit<Task, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;

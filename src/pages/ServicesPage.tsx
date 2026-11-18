@@ -1,11 +1,13 @@
 import React, { useState } from "react";
-import { useTasks } from "../context/DeskContext";
+import { useTasks, useUI } from "../context/DeskContext";
 import { EmptyState } from "../components/EmptyState";
 import { Service } from "../types";
 import { formatRupees, rupeesToPaise, paiseToRupees } from "../utils/currencyUtils";
+import { CLIENT_STANDARD_SERVICES } from "../constants/defaultServices";
 
 export const ServicesPage: React.FC = () => {
   const { services, addService, editService } = useTasks();
+  const { showToast } = useUI();
 
   const [isAdding, setIsAdding] = useState(false);
   const [newServiceName, setNewServiceName] = useState("");
@@ -14,6 +16,32 @@ export const ServicesPage: React.FC = () => {
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [editName, setEditName] = useState("");
   const [editPrice, setEditPrice] = useState("");
+  const [isSeeding, setIsSeeding] = useState(false);
+
+  const handleLoadTemplates = async () => {
+    setIsSeeding(true);
+    let addedCount = 0;
+    try {
+      const existingNames = new Set(services.map(s => s.name.trim().toLowerCase()));
+      for (const tpl of CLIENT_STANDARD_SERVICES) {
+        if (!existingNames.has(tpl.name.trim().toLowerCase())) {
+          await addService({
+            name: tpl.name,
+            default_price: rupeesToPaise(tpl.defaultPriceRupees),
+            is_active: true,
+          });
+          addedCount++;
+        }
+      }
+      if (addedCount > 0) {
+        showToast(`Loaded ${addedCount} standard counter service templates.`, 'success');
+      } else {
+        showToast('All 16 counter service templates are already loaded.', 'info');
+      }
+    } finally {
+      setIsSeeding(false);
+    }
+  };
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,15 +99,28 @@ export const ServicesPage: React.FC = () => {
             Configure shop services and standard default prices.
           </p>
         </div>
-        <button
-          onClick={() => setIsAdding(!isAdding)}
-          className="flex items-center gap-2 px-space-md py-2.5 rounded-full bg-primary text-on-primary font-button-utility font-medium transition-all active:scale-95 shadow-sm"
-        >
-          <span className="material-symbols-outlined text-lg">
-            {isAdding ? "close" : "add"}
-          </span>
-          <span>{isAdding ? "Cancel" : "+ Add New Service"}</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {services.length === 0 && (
+            <button
+              type="button"
+              onClick={handleLoadTemplates}
+              disabled={isSeeding}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface font-button-utility text-xs font-semibold transition-all border border-surface-container-high/40 shadow-xs"
+            >
+              <span className="material-symbols-outlined text-base text-primary">auto_fix_high</span>
+              <span>{isSeeding ? "Loading..." : "+ Load 16 Counter Templates"}</span>
+            </button>
+          )}
+          <button
+            onClick={() => setIsAdding(!isAdding)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-on-primary font-button-utility text-xs font-semibold transition-all active:scale-95 shadow-sm"
+          >
+            <span className="material-symbols-outlined text-base">
+              {isAdding ? "close" : "add"}
+            </span>
+            <span>{isAdding ? "Cancel" : "+ Add New Service"}</span>
+          </button>
+        </div>
       </div>
 
       {isAdding && (

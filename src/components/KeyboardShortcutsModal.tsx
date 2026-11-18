@@ -12,6 +12,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
   if (!isOpen) return null;
 
   const shortcuts = [
+    { key: 'Ctrl + B', macKey: '⌘B', description: 'Quick Banking Transaction (DMT / AePS / UPI)' },
     { key: 'Ctrl + N', macKey: '⌘N', description: 'Create New Task' },
     { key: 'Ctrl + Shift + C', macKey: '⌘⇧C', description: 'Add New Customer' },
     { key: '/', macKey: '/', description: 'Focus Global Search Bar' },

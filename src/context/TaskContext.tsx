@@ -26,6 +26,7 @@ import {
   saveTauriSetting,
   createTauriBackup,
   restoreTauriBackup,
+  isTauriEnv,
 } from '../api/tauri';
 import { createActivityEvent } from '../services/activityService';
 import { isTaskOverdue } from '../services/taskService';
@@ -82,11 +83,50 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
       fetchTauriSettings(),
     ]);
 
-    if (dbTasks) setTasks(dbTasks);
-    if (dbServices) setServices(dbServices);
-    if (dbPayments) setPayments(dbPayments);
-    if (dbActivities) setActivities(dbActivities);
-    if (dbSettings) setSettings(dbSettings);
+    if (dbTasks) {
+      setTasks(dbTasks);
+    } else if (!isTauriEnv()) {
+      try {
+        const cached = localStorage.getItem('desklog_tasks');
+        if (cached) setTasks(JSON.parse(cached));
+      } catch {}
+    }
+
+    if (dbServices) {
+      setServices(dbServices);
+    } else if (!isTauriEnv()) {
+      try {
+        const cached = localStorage.getItem('desklog_services');
+        if (cached) setServices(JSON.parse(cached));
+      } catch {}
+    }
+
+    if (dbPayments) {
+      setPayments(dbPayments);
+    } else if (!isTauriEnv()) {
+      try {
+        const cached = localStorage.getItem('desklog_payments');
+        if (cached) setPayments(JSON.parse(cached));
+      } catch {}
+    }
+
+    if (dbActivities) {
+      setActivities(dbActivities);
+    } else if (!isTauriEnv()) {
+      try {
+        const cached = localStorage.getItem('desklog_activities');
+        if (cached) setActivities(JSON.parse(cached));
+      } catch {}
+    }
+
+    if (dbSettings) {
+      setSettings(dbSettings);
+    } else if (!isTauriEnv()) {
+      try {
+        const cached = localStorage.getItem('desklog_settings');
+        if (cached) setSettings(JSON.parse(cached));
+      } catch {}
+    }
   };
 
   useEffect(() => {
@@ -123,7 +163,15 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     try {
       const saved = await saveTauriService(newService);
-      setServices(prev => [...prev, saved]);
+      setServices(prev => {
+        const next = [...prev, saved];
+        if (!isTauriEnv()) {
+          try {
+            localStorage.setItem('desklog_services', JSON.stringify(next));
+          } catch {}
+        }
+        return next;
+      });
       showToast(`Service "${saved.name}" added.`, 'success');
     } catch (err) {
       console.error('Failed to add service:', err);
@@ -134,7 +182,15 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const editService = async (service: Service) => {
     try {
       await updateTauriService(service);
-      setServices(prev => prev.map(s => (s.id === service.id ? service : s)));
+      setServices(prev => {
+        const next = prev.map(s => (s.id === service.id ? service : s));
+        if (!isTauriEnv()) {
+          try {
+            localStorage.setItem('desklog_services', JSON.stringify(next));
+          } catch {}
+        }
+        return next;
+      });
       showToast(`Service details updated.`, 'success');
     } catch (err) {
       console.error('Failed to update service:', err);
@@ -145,7 +201,15 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteService = async (id: string) => {
     try {
       await deleteTauriService(id);
-      setServices(prev => prev.map(s => (s.id === id ? { ...s, is_active: false } : s)));
+      setServices(prev => {
+        const next = prev.map(s => (s.id === id ? { ...s, is_active: false } : s));
+        if (!isTauriEnv()) {
+          try {
+            localStorage.setItem('desklog_services', JSON.stringify(next));
+          } catch {}
+        }
+        return next;
+      });
       showToast(`Service deactivated.`, 'info');
     } catch (err) {
       console.error('Failed to delete service:', err);
@@ -161,7 +225,15 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     try {
       const saved = await saveTauriPayment(newPayment);
-      setPayments(prev => [...prev, saved]);
+      setPayments(prev => {
+        const next = [...prev, saved];
+        if (!isTauriEnv()) {
+          try {
+            localStorage.setItem('desklog_payments', JSON.stringify(next));
+          } catch {}
+        }
+        return next;
+      });
       showToast(`Payment recorded successfully.`, 'success');
 
       const targetTask = tasks.find(t => t.id === saved.task_id);
@@ -194,7 +266,15 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       const saved = await saveTauriTask(newTask);
-      setTasks(prev => [saved, ...prev]);
+      setTasks(prev => {
+        const next = [saved, ...prev];
+        if (!isTauriEnv()) {
+          try {
+            localStorage.setItem('desklog_tasks', JSON.stringify(next));
+          } catch {}
+        }
+        return next;
+      });
       showToast(`Task "${saved.title}" created.`, 'success');
 
       const cust = customers.find(c => c.id === saved.customer_id);
@@ -234,7 +314,15 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       await updateTauriTask(updatedTask);
-      setTasks(prev => prev.map(t => (t.id === taskId ? updatedTask : t)));
+      setTasks(prev => {
+        const next = prev.map(t => (t.id === taskId ? updatedTask : t));
+        if (!isTauriEnv()) {
+          try {
+            localStorage.setItem('desklog_tasks', JSON.stringify(next));
+          } catch {}
+        }
+        return next;
+      });
       showToast(`Task status updated to ${newStatus}.`, 'info');
 
       const cust = customers.find(c => c.id === target.customer_id);
@@ -271,7 +359,15 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       await updateTauriTask(updatedTask);
-      setTasks(prev => prev.map(t => (t.id === taskId ? updatedTask : t)));
+      setTasks(prev => {
+        const next = prev.map(t => (t.id === taskId ? updatedTask : t));
+        if (!isTauriEnv()) {
+          try {
+            localStorage.setItem('desklog_tasks', JSON.stringify(next));
+          } catch {}
+        }
+        return next;
+      });
       showToast(`Task updated successfully.`, 'success');
 
       const cust = customers.find(c => c.id === target.customer_id);
@@ -295,7 +391,15 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const target = tasks.find(t => t.id === taskId);
     try {
       await deleteTauriTask(taskId);
-      setTasks(prev => prev.filter(t => t.id !== taskId));
+      setTasks(prev => {
+        const next = prev.filter(t => t.id !== taskId);
+        if (!isTauriEnv()) {
+          try {
+            localStorage.setItem('desklog_tasks', JSON.stringify(next));
+          } catch {}
+        }
+        return next;
+      });
       showToast(`Task deleted.`, 'info');
 
       if (target) {
@@ -332,10 +436,18 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (success) {
       setSettings(prev => {
         const exists = prev.find(s => s.key === key);
+        let updated: Setting[];
         if (exists) {
-          return prev.map(s => (s.key === key ? { key, value } : s));
+          updated = prev.map(s => (s.key === key ? { key, value } : s));
+        } else {
+          updated = [...prev, { key, value }];
         }
-        return [...prev, { key, value }];
+        if (!isTauriEnv()) {
+          try {
+            localStorage.setItem('desklog_settings', JSON.stringify(updated));
+          } catch {}
+        }
+        return updated;
       });
       showToast(`Settings updated.`, 'success');
     }

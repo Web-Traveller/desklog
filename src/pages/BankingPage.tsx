@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useBanking, useCustomers, useUI } from '../context/DeskContext';
+import { BankingTransaction } from '../types';
 import { EmptyState } from '../components/EmptyState';
 import { MetricCard } from '../components/MetricCard';
 import { formatDisplayDate } from '../utils/dateUtils';
@@ -11,9 +12,9 @@ import {
 } from '../constants/bankingData';
 
 export const BankingPage: React.FC = () => {
-  const { bankingTransactions, deleteBankingTransaction } = useBanking();
+  const { bankingTransactions, deleteBankingTransaction, updateBankingTransaction } = useBanking();
   const { customers } = useCustomers();
-  const { showConfirm, setIsAddBankingOpen } = useUI();
+  const { showConfirm, setIsAddBankingOpen, showToast } = useUI();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('All');
@@ -21,6 +22,78 @@ export const BankingPage: React.FC = () => {
   const [dateFilter, setDateFilter] = useState('All Time');
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 15;
+  const [showCashCalculator, setShowCashCalculator] = useState(false);
+  const [selectedTxForDetails, setSelectedTxForDetails] = useState<BankingTransaction | null>(null);
+
+  // Cash Denominations (from Balances Dashboard)
+  const [denominations, setDenominations] = useState<Record<number, number>>(() => {
+    try {
+      const saved = localStorage.getItem('desklog_counter_cash_notes');
+      return saved ? JSON.parse(saved) : { 500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0 };
+    } catch {
+      return { 500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0 };
+    }
+  });
+
+  // Top working wallets & BC accounts (from Balances Dashboard)
+  const [walletBalances, setWalletBalances] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem('desklog_portal_balances');
+      return saved ? JSON.parse(saved) : {
+        'SAFEPAY': 0,
+        'PAYBINGO': 0,
+        'Digikhata': 0,
+        'Fino Bank BC': 0,
+        'Baroda Bank BC': 0,
+        'Airtel Bank BC': 0,
+      };
+    } catch {
+      return {
+        'SAFEPAY': 0,
+        'PAYBINGO': 0,
+        'Digikhata': 0,
+        'Fino Bank BC': 0,
+        'Baroda Bank BC': 0,
+        'Airtel Bank BC': 0,
+      };
+    }
+  });
+
+  const totalPhysicalCash = useMemo(() => {
+    return Object.entries(denominations).reduce((sum, [note, count]) => sum + (Number(note) * (count || 0)), 0);
+  }, [denominations]);
+
+  const totalWalletFunds = useMemo(() => {
+    return Object.values(walletBalances).reduce((sum, bal) => sum + (bal || 0), 0);
+  }, [walletBalances]);
+
+  const totalWorkingCapital = totalPhysicalCash + totalWalletFunds;
+
+  const updateDenomination = (note: number, countStr: string) => {
+    const count = parseInt(countStr, 10) || 0;
+    const updated = { ...denominations, [note]: Math.max(0, count) };
+    setDenominations(updated);
+    try {
+      localStorage.setItem('desklog_counter_cash_notes', JSON.stringify(updated));
+    } catch {}
+  };
+
+  const updateWalletBalance = (wallet: string, amountStr: string) => {
+    const amount = parseFloat(amountStr) || 0;
+    const updated = { ...walletBalances, [wallet]: Math.max(0, amount) };
+    setWalletBalances(updated);
+    try {
+      localStorage.setItem('desklog_portal_balances', JSON.stringify(updated));
+    } catch {}
+  };
+
+  const handleClearCash = () => {
+    const cleared = { 500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0 };
+    setDenominations(cleared);
+    try {
+      localStorage.setItem('desklog_counter_cash_notes', JSON.stringify(cleared));
+    } catch {}
+  };
 
   // Customer ID to Customer Map for fast O(1) lookups
   const customerMap = useMemo(() => {
@@ -138,6 +211,31 @@ export const BankingPage: React.FC = () => {
     });
   };
 
+  const handleCopyReceipt = (tx: BankingTransaction) => {
+    const identifier = tx.account_or_aadhaar || tx.transaction_ref_no || '-';
+    const text = `=== DESKLOG TRANSACTION RECEIPT ===
+Date: ${formatDisplayDate(tx.transaction_date)}
+Mode: ${tx.transaction_type}
+Customer: ${getCustomerDisplayName(tx)} ${tx.customer_mobile ? `(${tx.customer_mobile})` : ''}
+Bank / Provider: ${tx.bank_name || '-'}
+Ref / Account: ${identifier}
+Portal: ${tx.company_name || '-'}
+Amount: ${formatRupees(tx.amount)}
+Fee: ${tx.charges ? formatRupees(tx.charges) : '₹0'}
+Status: ${tx.status || 'SUCCESS'}
+${tx.remark ? `Remark: ${tx.remark}\n` : ''}===================================`;
+
+    navigator.clipboard.writeText(text);
+    showToast('Receipt slip copied to clipboard.', 'success');
+  };
+
+  const handleStatusUpdate = async (id: number, newStatus: string) => {
+    await updateBankingTransaction(id, { status: newStatus });
+    if (selectedTxForDetails && selectedTxForDetails.id === id) {
+      setSelectedTxForDetails({ ...selectedTxForDetails, status: newStatus });
+    }
+  };
+
   const getModeBadgeClass = (mode: string) => {
     const cfg = BANKING_MODES[mode as BankingModeId];
     if (cfg?.badgeClass) return cfg.badgeClass;
@@ -158,14 +256,131 @@ export const BankingPage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => setIsAddBankingOpen(true)}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-on-primary hover:bg-primary-container hover:text-on-primary-container transition-all active:scale-95 font-button-utility text-xs font-semibold shadow-sm self-start sm:self-auto"
-        >
-          <span className="material-symbols-outlined text-base">add</span>
-          <span>+ New Transaction</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => setShowCashCalculator(!showCashCalculator)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface font-button-utility text-xs font-semibold transition-all border border-surface-container-high/40 shadow-xs"
+          >
+            <span className="material-symbols-outlined text-base text-primary">point_of_sale</span>
+            <span>{showCashCalculator ? 'Hide Balances & Cash' : 'Counter Cash & Balances'}</span>
+          </button>
+
+          <button
+            onClick={() => setIsAddBankingOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-on-primary hover:bg-primary-container hover:text-on-primary-container transition-all active:scale-95 font-button-utility text-xs font-semibold shadow-sm"
+          >
+            <span className="material-symbols-outlined text-base">add</span>
+            <span>+ New Transaction</span>
+          </button>
+        </div>
       </div>
+
+      {/* Collapsible Counter Cash & Wallet Balances Panel (from Balances Dashboard) */}
+      {showCashCalculator && (
+        <div className="bg-surface-container-lowest rounded-2xl p-4 border border-surface-container/60 shadow-xs flex flex-col gap-4 animate-fadeIn">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-surface-container/40 pb-2.5">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary text-xl">account_balance_wallet</span>
+              <div>
+                <h3 className="font-semibold text-xs text-on-surface">Counter Liquidity & Daily Closing</h3>
+                <p className="text-[11px] text-outline">Reconcile physical cash drawer and monitor prepaid wallet balances</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-start sm:self-auto px-3 py-1 rounded-xl bg-surface-container border border-surface-container-high/40">
+              <span className="text-xs text-outline font-medium">Working Capital:</span>
+              <span className="font-mono font-bold text-xs text-primary">
+                ₹{totalWorkingCapital.toLocaleString('en-IN')}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            {/* Left: Cash Denomination Calculator */}
+            <div className="lg:col-span-7 flex flex-col gap-2.5 p-3 rounded-xl bg-surface-container-low border border-surface-container/50">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-xs text-on-surface flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-sm text-primary">payments</span>
+                  Physical Cash Note Counter
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400">
+                    Drawer: ₹{totalPhysicalCash.toLocaleString('en-IN')}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleClearCash}
+                    className="text-[10px] text-outline hover:text-red-500 font-medium underline"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                {[500, 200, 100, 50, 20, 10].map((note) => {
+                  const count = denominations[note] || 0;
+                  const subtotal = note * count;
+                  return (
+                    <div key={note} className="flex items-center justify-between p-2 rounded-lg bg-surface-container-lowest border border-surface-container/60">
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-surface-container text-on-surface">
+                        ₹{note}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-outline">×</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={count || ''}
+                          placeholder="0"
+                          onChange={(e) => updateDenomination(note, e.target.value)}
+                          className="w-10 px-1 py-0.5 rounded text-center text-xs font-mono font-semibold bg-surface-container text-on-surface border border-surface-container-high/40 focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                        <span className="font-mono text-[10px] font-bold text-outline w-12 text-right">
+                          ={subtotal ? `₹${subtotal}` : '₹0'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Right: Portal & BC Wallet Balances */}
+            <div className="lg:col-span-5 flex flex-col gap-2.5 p-3 rounded-xl bg-surface-container-low border border-surface-container/50">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-xs text-on-surface flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-sm text-primary">account_balance</span>
+                  Prepaid Portals & BC Balances
+                </span>
+                <span className="font-mono font-bold text-xs text-blue-600 dark:text-blue-400">
+                  Total: ₹{totalWalletFunds.toLocaleString('en-IN')}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                {Object.entries(walletBalances).map(([portal, bal]) => (
+                  <div key={portal} className="flex flex-col gap-1 p-2 rounded-lg bg-surface-container-lowest border border-surface-container/60">
+                    <span className="text-[10px] font-semibold text-on-surface-variant truncate">{portal}</span>
+                    <div className="relative">
+                      <span className="absolute left-1.5 top-1 text-[10px] text-outline font-bold">₹</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={bal || ''}
+                        placeholder="0.00"
+                        onChange={(e) => updateWalletBalance(portal, e.target.value)}
+                        className="w-full pl-4 pr-1 py-0.5 rounded text-xs font-mono font-bold bg-surface-container text-on-surface border border-surface-container-high/40 focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Metrics Row - Simple 3-card layout */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -394,14 +609,24 @@ export const BankingPage: React.FC = () => {
 
                       {/* Actions */}
                       <td className="py-3 px-3 whitespace-nowrap text-center">
-                        <button
-                          onClick={() => tx.id && handleDelete(tx.id)}
-                          className="p-1 rounded-lg text-outline hover:text-error hover:bg-error/10 transition-colors opacity-0 group-hover:opacity-100"
-                          title="Delete Record"
-                          type="button"
-                        >
-                          <span className="material-symbols-outlined text-base">delete</span>
-                        </button>
+                        <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => setSelectedTxForDetails(tx)}
+                            className="p-1.5 rounded-lg text-outline hover:text-primary hover:bg-surface-container transition-colors"
+                            title="View Receipt Slip & Details"
+                            type="button"
+                          >
+                            <span className="material-symbols-outlined text-base">receipt_long</span>
+                          </button>
+                          <button
+                            onClick={() => tx.id && handleDelete(tx.id)}
+                            className="p-1.5 rounded-lg text-outline hover:text-error hover:bg-error/10 transition-colors"
+                            title="Delete Record"
+                            type="button"
+                          >
+                            <span className="material-symbols-outlined text-base">delete</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -441,6 +666,123 @@ export const BankingPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Transaction Details & Receipt Slip Modal */}
+      {selectedTxForDetails && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-2xl max-w-md w-full border border-surface-container/60 flex flex-col gap-4">
+            <div className="flex items-center justify-between pb-3 border-b border-surface-container/60">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-xl">receipt_long</span>
+                <div>
+                  <h3 className="font-semibold text-sm text-on-surface">
+                    {selectedTxForDetails.transaction_type} Receipt Slip
+                  </h3>
+                  <span className="text-[11px] text-outline font-mono">
+                    {formatDisplayDate(selectedTxForDetails.transaction_date)}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedTxForDetails(null)}
+                className="text-outline hover:text-on-surface p-1 rounded-full hover:bg-surface-container"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            </div>
+
+            {/* Slip Summary Body */}
+            <div className="p-3.5 rounded-xl bg-surface-container-low border border-surface-container/60 flex flex-col gap-2.5 font-mono text-xs">
+              <div className="flex justify-between items-center pb-2 border-b border-surface-container/40">
+                <span className="text-outline">Customer:</span>
+                <span className="font-bold text-on-surface font-sans">
+                  {getCustomerDisplayName(selectedTxForDetails)}
+                </span>
+              </div>
+              {selectedTxForDetails.customer_mobile && (
+                <div className="flex justify-between items-center">
+                  <span className="text-outline">Mobile:</span>
+                  <span className="text-on-surface">{selectedTxForDetails.customer_mobile}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center">
+                <span className="text-outline">Bank / Provider:</span>
+                <span className="font-semibold text-on-surface">{selectedTxForDetails.bank_name || '-'}</span>
+              </div>
+              {(selectedTxForDetails.account_or_aadhaar || selectedTxForDetails.transaction_ref_no) && (
+                <div className="flex justify-between items-center">
+                  <span className="text-outline">Ref / Account:</span>
+                  <span className="text-on-surface">{selectedTxForDetails.account_or_aadhaar || selectedTxForDetails.transaction_ref_no}</span>
+                </div>
+              )}
+              {selectedTxForDetails.company_name && (
+                <div className="flex justify-between items-center">
+                  <span className="text-outline">Portal:</span>
+                  <span className="text-primary font-bold">{selectedTxForDetails.company_name}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center pt-2 border-t border-surface-container/40">
+                <span className="text-outline font-sans">Amount:</span>
+                <span className="font-bold text-base text-on-surface">{formatRupees(selectedTxForDetails.amount)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-outline font-sans">Fee:</span>
+                <span className="text-on-surface-variant">{selectedTxForDetails.charges ? formatRupees(selectedTxForDetails.charges) : '₹0'}</span>
+              </div>
+              {selectedTxForDetails.remark && (
+                <div className="pt-2 border-t border-surface-container/40 text-[11px] text-outline font-sans">
+                  Note: {selectedTxForDetails.remark}
+                </div>
+              )}
+            </div>
+
+            {/* Quick Status Switcher */}
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-outline font-semibold">Change Status:</span>
+              <div className="flex items-center gap-1 bg-surface-container p-0.5 rounded-lg">
+                {(['SUCCESS', 'IN PROGRESS', 'FAILD'] as const).map((st) => (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => selectedTxForDetails.id && handleStatusUpdate(selectedTxForDetails.id, st)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+                      selectedTxForDetails.status === st
+                        ? st === 'SUCCESS'
+                          ? 'bg-emerald-500 text-white shadow-xs'
+                          : st === 'IN PROGRESS'
+                          ? 'bg-amber-500 text-white shadow-xs'
+                          : 'bg-rose-500 text-white shadow-xs'
+                        : 'text-on-surface-variant hover:text-on-surface'
+                    }`}
+                  >
+                    {st === 'IN PROGRESS' ? 'Pending' : st === 'SUCCESS' ? 'Success' : 'Failed'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer Actions: Copy Slip, Close */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-surface-container/60">
+              <button
+                type="button"
+                onClick={() => handleCopyReceipt(selectedTxForDetails)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold transition"
+              >
+                <span className="material-symbols-outlined text-sm text-primary">content_copy</span>
+                <span>Copy Slip</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedTxForDetails(null)}
+                className="px-5 py-1.5 rounded-full bg-primary hover:bg-primary-container text-on-primary text-xs font-bold transition shadow-xs"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

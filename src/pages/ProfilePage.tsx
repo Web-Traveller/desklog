@@ -32,7 +32,19 @@ export const ProfilePage: React.FC = () => {
   const customer =
     customers.find((c) => c.id === selectedCustomerId) || customers[0];
   const customerTasks = tasks.filter((t) => t.customer_id === customer?.id);
-  const customerBankingTxs = bankingTransactions.filter(tx => tx.customer_id === customer?.id);
+  const customerBankingTxs = bankingTransactions.filter((tx) => {
+    if (!customer) return false;
+    if (tx.customer_id === customer.id) return true;
+    if (customer.mobile && tx.customer_mobile) {
+      const cleanCust = customer.mobile.replace(/[\s-]/g, '');
+      const cleanTx = tx.customer_mobile.replace(/[\s-]/g, '');
+      if (cleanCust && cleanTx && cleanCust === cleanTx) return true;
+    }
+    if (customer.id !== 'cust-general' && tx.customer_name && customer.name) {
+      if (tx.customer_name.trim().toLowerCase() === customer.name.trim().toLowerCase()) return true;
+    }
+    return false;
+  });
 
   const pendingCount = customerTasks.filter(
     (t) => t.status === "PENDING",

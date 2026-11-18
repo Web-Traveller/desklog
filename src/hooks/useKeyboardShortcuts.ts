@@ -5,8 +5,10 @@ export function useKeyboardShortcuts(onToggleHelpModal: () => void) {
   const {
     setIsAddTaskOpen,
     setIsAddCustomerOpen,
+    setIsAddBankingOpen,
     isAddTaskOpen,
     isAddCustomerOpen,
+    isAddBankingOpen,
     performSearch,
     searchQuery,
     setCurrentPage,
@@ -26,6 +28,11 @@ export function useKeyboardShortcuts(onToggleHelpModal: () => void) {
 
       // 1. ESC -> Close modals or clear search
       if (e.key === 'Escape') {
+        if (isAddBankingOpen) {
+          setIsAddBankingOpen(false);
+          e.preventDefault();
+          return;
+        }
         if (isAddTaskOpen) {
           setIsAddTaskOpen(false);
           e.preventDefault();
@@ -54,6 +61,13 @@ export function useKeyboardShortcuts(onToggleHelpModal: () => void) {
       if (isControlOrCmd && !e.shiftKey && (e.key === 'N' || e.key === 'n')) {
         e.preventDefault();
         setIsAddTaskOpen(true);
+        return;
+      }
+
+      // 4. Ctrl/Cmd + B -> Add Banking Transaction
+      if (isControlOrCmd && !e.shiftKey && (e.key === 'B' || e.key === 'b')) {
+        e.preventDefault();
+        setIsAddBankingOpen(true);
         return;
       }
 
@@ -127,9 +141,11 @@ export function useKeyboardShortcuts(onToggleHelpModal: () => void) {
   }, [
     isAddTaskOpen,
     isAddCustomerOpen,
+    isAddBankingOpen,
     searchQuery,
     setIsAddTaskOpen,
     setIsAddCustomerOpen,
+    setIsAddBankingOpen,
     performSearch,
     setCurrentPage,
     onToggleHelpModal,

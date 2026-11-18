@@ -7,6 +7,7 @@ import {
   BANKING_MODE_KEYS,
   getLearnedBanks,
   saveLearnedBank,
+  getLearnedCompanies,
   saveLearnedCompany,
 } from '../constants/bankingData';
 
@@ -19,7 +20,7 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
   isOpen: propIsOpen,
   onClose: propOnClose,
 }) => {
-  const { isAddBankingOpen, setIsAddBankingOpen, addBankingTransaction, showToast } = useDesk();
+  const { isAddBankingOpen, setIsAddBankingOpen, addBankingTransaction, showToast, customers } = useDesk();
   const isOpen = propIsOpen !== undefined ? propIsOpen : isAddBankingOpen;
   const onClose = propOnClose || (() => setIsAddBankingOpen(false));
 
@@ -28,7 +29,7 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
   const modeConfig = BANKING_MODES[activeMode];
 
   // Form fields
-  const [companyName, setCompanyName] = useState<string>('SAFEPAY');
+  const [companyName, setCompanyName] = useState<string>('');
   const [customerName, setCustomerName] = useState<string>('');
   const [customerMobile, setCustomerMobile] = useState<string>('');
   const [accountOrAadhaar, setAccountOrAadhaar] = useState<string>('');
@@ -40,7 +41,28 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [showProviderSuggestions, setShowProviderSuggestions] = useState<boolean>(false);
+  const [showCompanySuggestions, setShowCompanySuggestions] = useState<boolean>(false);
   const providerWrapperRef = useRef<HTMLDivElement>(null);
+  const companyWrapperRef = useRef<HTMLDivElement>(null);
+
+  const handleCustomerNameChange = (val: string) => {
+    setCustomerName(val);
+    const matched = customers.find(c => c.id !== 'cust-general' && c.name.toLowerCase() === val.trim().toLowerCase());
+    if (matched && matched.mobile && !customerMobile) {
+      setCustomerMobile(matched.mobile);
+    }
+  };
+
+  const handleCustomerMobileChange = (val: string) => {
+    setCustomerMobile(val);
+    const clean = val.replace(/[\s-]/g, '');
+    if (clean.length === 10) {
+      const matched = customers.find(c => c.id !== 'cust-general' && c.mobile && c.mobile.replace(/[\s-]/g, '') === clean);
+      if (matched && (!customerName || customerName === 'Walk-in Customer')) {
+        setCustomerName(matched.name);
+      }
+    }
+  };
 
   // Switch mode handler
   const handleSelectMode = (newMode: BankingModeId) => {
@@ -48,13 +70,14 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
     setAccountOrAadhaar('');
     setBankOrProvider('');
     setShowProviderSuggestions(false);
+    setShowCompanySuggestions(false);
   };
 
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
       setActiveMode('DMT');
-      setCompanyName('SAFEPAY');
+      setCompanyName('');
       setCustomerName('');
       setCustomerMobile('');
       setAccountOrAadhaar('');
@@ -64,14 +87,18 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
       setStatus('SUCCESS');
       setRemark('');
       setShowProviderSuggestions(false);
+      setShowCompanySuggestions(false);
     }
   }, [isOpen]);
 
-  // Click outside listener for bank suggestions
+  // Click outside listener for bank & company suggestions
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (providerWrapperRef.current && !providerWrapperRef.current.contains(event.target as Node)) {
         setShowProviderSuggestions(false);
+      }
+      if (companyWrapperRef.current && !companyWrapperRef.current.contains(event.target as Node)) {
+        setShowCompanySuggestions(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -80,14 +107,20 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
 
   if (!isOpen) return null;
 
-  // Providers list
+  // Providers list (All 55 banks available in DMT, AEPS, CREDIT; specific lists for others)
   const availableProviders = modeConfig.defaultProviders.length > 0
     ? modeConfig.defaultProviders
     : getLearnedBanks();
 
   const filteredProviders = bankOrProvider.trim()
     ? availableProviders.filter((p) => p.toLowerCase().includes(bankOrProvider.toLowerCase()))
-    : availableProviders.slice(0, 8);
+    : availableProviders;
+
+  // Companies / Portals list (All 17 portals from operational ledger)
+  const availableCompanies = getLearnedCompanies();
+  const filteredCompanies = companyName.trim()
+    ? availableCompanies.filter((c) => c.toLowerCase().includes(companyName.toLowerCase()))
+    : availableCompanies;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,10 +141,19 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
     const cleanCustMobile = customerMobile.trim() || '';
     const feePaise = charges ? rupeesToPaise(Number(charges)) : 0;
 
+    // Resolve customer profile linkage: link to real profile if customer exists
+    const matchedCustomer = customers.find(c =>
+      c.id !== 'cust-general' && (
+        (cleanCustMobile && c.mobile && c.mobile.replace(/[\s-]/g, '') === cleanCustMobile.replace(/[\s-]/g, '')) ||
+        (cleanCustName && cleanCustName !== 'Walk-in Customer' && c.name.toLowerCase() === cleanCustName.toLowerCase())
+      )
+    );
+    const targetCustomerId = matchedCustomer ? matchedCustomer.id : 'cust-general';
+
     setIsSubmitting(true);
     try {
       await addBankingTransaction({
-        customer_id: 'cust-general',
+        customer_id: targetCustomerId,
         transaction_type: activeMode,
         payment_mode: activeMode === 'AEPS' ? 'AePS' : activeMode === 'UPI' || activeMode === 'UPI CASH' ? 'UPI' : 'Bank Transfer',
         amount: rupeesToPaise(numAmount),
@@ -197,11 +239,17 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
               </label>
               <input
                 type="text"
+                list="customer-name-suggestions"
                 value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
+                onChange={(e) => handleCustomerNameChange(e.target.value)}
                 placeholder="Walk-in Customer (or enter name)"
                 className="w-full px-3 py-2 rounded-xl bg-surface-container-low text-on-surface text-xs border border-surface-container focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
+              <datalist id="customer-name-suggestions">
+                {customers.filter(c => c.id !== 'cust-general').map(c => (
+                  <option key={c.id} value={c.name} />
+                ))}
+              </datalist>
             </div>
 
             {/* Mobile Number */}
@@ -211,12 +259,18 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
               </label>
               <input
                 type="tel"
+                list="customer-phone-suggestions"
                 value={customerMobile}
-                onChange={(e) => setCustomerMobile(e.target.value)}
+                onChange={(e) => handleCustomerMobileChange(e.target.value)}
                 placeholder="10-digit mobile"
                 maxLength={10}
                 className="w-full px-3 py-2 rounded-xl bg-surface-container-low text-on-surface text-xs font-mono border border-surface-container focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
+              <datalist id="customer-phone-suggestions">
+                {customers.filter(c => c.id !== 'cust-general' && c.mobile).map(c => (
+                  <option key={c.id} value={c.mobile} />
+                ))}
+              </datalist>
             </div>
 
             {/* Dynamic Identifier Field (Account / Aadhaar / UPI ID) */}
@@ -241,6 +295,7 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
               </label>
               <input
                 type="text"
+                list="bank-provider-suggestions"
                 value={bankOrProvider}
                 onChange={(e) => {
                   setBankOrProvider(e.target.value);
@@ -250,38 +305,78 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
                 placeholder={modeConfig.providerPlaceholder}
                 className="w-full px-3 py-2 rounded-xl bg-surface-container-low text-on-surface text-xs border border-surface-container focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
+              <datalist id="bank-provider-suggestions">
+                {availableProviders.map((p) => (
+                  <option key={p} value={p} />
+                ))}
+              </datalist>
               {showProviderSuggestions && filteredProviders.length > 0 && (
-                <div className="absolute top-full left-0 w-full mt-1 bg-surface-container-lowest rounded-xl shadow-lg border border-surface-container z-20 max-h-40 overflow-y-auto">
+                <div className="absolute top-full left-0 w-full mt-1 bg-surface-container-lowest rounded-xl shadow-xl border border-surface-container z-30 max-h-56 overflow-y-auto">
+                  <div className="px-3 py-1 bg-surface-container text-[10px] font-semibold text-outline uppercase tracking-wider sticky top-0 border-b border-surface-container/60">
+                    Available Providers ({filteredProviders.length})
+                  </div>
                   {filteredProviders.map((item) => (
                     <button
                       key={item}
                       type="button"
-                      onClick={() => {
+                      onMouseDown={(e) => {
+                        e.preventDefault();
                         setBankOrProvider(item);
                         setShowProviderSuggestions(false);
                       }}
-                      className="w-full text-left px-3 py-1.5 text-xs text-on-surface hover:bg-surface-container border-b border-surface-container/30 last:border-0"
+                      className="w-full text-left px-3 py-2 text-xs text-on-surface hover:bg-surface-container border-b border-surface-container/30 last:border-0 transition-colors flex items-center justify-between"
                     >
-                      <span>{item}</span>
+                      <span className="font-medium">{item}</span>
                     </button>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Portal / Company Input - Normal, Clean Input */}
-            <div className="flex flex-col gap-1 sm:col-span-2">
+            {/* Portal / Company Input - Clean Input with Fast Autocomplete */}
+            <div className="relative flex flex-col gap-1 sm:col-span-2" ref={companyWrapperRef}>
               <label className="text-[11px] font-semibold text-on-surface">
                 Portal / Company <span className="text-red-500 font-bold">*</span>
               </label>
               <input
                 type="text"
+                list="portal-suggestions"
                 value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="e.g. SAFEPAY, PAYBINGO, BOB BC"
+                onChange={(e) => {
+                  setCompanyName(e.target.value);
+                  setShowCompanySuggestions(true);
+                }}
+                onFocus={() => setShowCompanySuggestions(true)}
+                placeholder="Select or type portal (e.g. SAFEPAY, PAYBINGO, BOB BC)"
                 required
                 className="w-full px-3 py-2 rounded-xl bg-surface-container-low text-on-surface text-xs border border-surface-container focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
+              <datalist id="portal-suggestions">
+                {availableCompanies.map((p) => (
+                  <option key={p} value={p} />
+                ))}
+              </datalist>
+              {showCompanySuggestions && filteredCompanies.length > 0 && (
+                <div className="absolute top-full left-0 w-full mt-1 bg-surface-container-lowest rounded-xl shadow-xl border border-surface-container z-30 max-h-52 overflow-y-auto">
+                  <div className="px-3 py-1 bg-surface-container text-[10px] font-semibold text-outline uppercase tracking-wider sticky top-0 border-b border-surface-container/60">
+                    Counter Portals ({filteredCompanies.length})
+                  </div>
+                  {filteredCompanies.map((portal) => (
+                    <button
+                      key={portal}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setCompanyName(portal);
+                        setShowCompanySuggestions(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs text-on-surface hover:bg-surface-container border-b border-surface-container/30 last:border-0 transition-colors flex items-center justify-between"
+                    >
+                      <span className="font-medium">{portal}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

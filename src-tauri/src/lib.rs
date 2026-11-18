@@ -163,6 +163,17 @@ use std::os::windows::process::CommandExt;
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 fn execute_neon_heartbeat(workstation_id: &str, app_version: &str, os_info: &str) -> Result<String, String> {
+    // Check if an external telemetry gateway URL is configured via environment
+    let telemetry_endpoint = match std::env::var("DESKLOG_TELEMETRY_ENDPOINT") {
+        Ok(url) if !url.trim().is_empty() => url,
+        _ => {
+            // Safe local offline telemetry recording (no embedded database credentials)
+            let log_file = std::env::temp_dir().join("desklog_telemetry.log");
+            let _ = std::fs::write(&log_file, format!("Heartbeat recorded locally: ws={}, ver={}, os={}\n", workstation_id, app_version, os_info));
+            return Ok("offline_acknowledged".to_string());
+        }
+    };
+
     use std::io::Write;
     use std::process::{Command, Stdio};
 
@@ -170,8 +181,10 @@ fn execute_neon_heartbeat(workstation_id: &str, app_version: &str, os_info: &str
     let safe_os_info: String = os_info.chars().take(80).collect();
 
     let body = serde_json::json!({
-        "query": "SELECT record_heartbeat($1, $2, $3, $4, $5)",
-        "params": ["desklog", "", safe_ws_id, app_version, safe_os_info]
+        "app": "desklog",
+        "workstation_id": safe_ws_id,
+        "version": app_version,
+        "os_info": safe_os_info
     });
     let body_bytes = serde_json::to_vec(&body).map_err(|e| e.to_string())?;
 
@@ -186,8 +199,7 @@ fn execute_neon_heartbeat(workstation_id: &str, app_version: &str, os_info: &str
             "--connect-timeout", "4",
             "--max-time", "8",
             "-X", "POST",
-            "https://ep-falling-heart-aztfzlgo.c-3.ap-southeast-1.aws.neon.tech/sql",
-            "-H", "Neon-Connection-String: postgresql://neondb_owner:npg_AO7bZ1BzMiyx@ep-falling-heart-aztfzlgo.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require",
+            &telemetry_endpoint,
             "-H", "Content-Type: application/json",
             "--data-binary", "@-"
         ])
@@ -202,17 +214,11 @@ fn execute_neon_heartbeat(workstation_id: &str, app_version: &str, os_info: &str
     }
 
     let output = child.wait_with_output().map_err(|e| format!("Failed to read curl output: {}", e))?;
-
     if !output.status.success() {
         return Err(format!("curl failed with status: {:?}", output.status.code()));
     }
 
     let res = String::from_utf8(output.stdout).map_err(|e| format!("Invalid UTF-8 from curl: {}", e))?;
-    
-    // Write debug log for local verification
-    let log_file = std::env::temp_dir().join("desklog_telemetry.log");
-    let _ = std::fs::write(&log_file, format!("Heartbeat response: {}\n", res));
-
     Ok(res)
 }
 

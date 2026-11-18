@@ -5,8 +5,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { isTauriEnv } from '../api/tauri';
 import { APP_VERSION } from '../constants/version';
 
-const NEON_SQL_ENDPOINT = 'https://ep-falling-heart-aztfzlgo.c-3.ap-southeast-1.aws.neon.tech/sql';
-const NEON_CONNECTION_STRING = 'postgresql://neondb_owner:npg_AO7bZ1BzMiyx@ep-falling-heart-aztfzlgo.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require';
+const NEON_SQL_ENDPOINT = (typeof window !== 'undefined' && (window as any).DESKLOG_TELEMETRY_ENDPOINT) || '';
+const NEON_CONNECTION_STRING = '';
 const APP_ID = 'desklog';
 
 export interface HeartbeatResult {
@@ -154,6 +154,10 @@ export async function sendHeartbeat(): Promise<HeartbeatResult> {
   }
 
   // 2. Fallback: Browser Fetch
+  if (!NEON_SQL_ENDPOINT) {
+    return FALLBACK;
+  }
+
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);

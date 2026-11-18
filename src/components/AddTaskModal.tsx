@@ -141,10 +141,10 @@ export const AddTaskModal: React.FC = () => {
           </div>
 
           <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant">
-            Notes / Remarks
+            Notes / Tracker ID / Document No.
             <input
               className="px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility"
-              placeholder="e.g. Awaiting docs"
+              placeholder="e.g. Tracker ID 265214..., Document / Ack No, or note"
               type="text"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}

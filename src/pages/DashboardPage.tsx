@@ -11,8 +11,11 @@ export const DashboardPage: React.FC = () => {
     tasks,
     customers,
     payments,
+    bankingTransactions,
     setIsAddCustomerOpen,
     setIsAddTaskOpen,
+    setIsAddBankingOpen,
+    setCurrentPage,
     navigateToCustomerProfile,
     customerPage,
     setCustomerPage,
@@ -20,6 +23,22 @@ export const DashboardPage: React.FC = () => {
   } = useDesk();
 
   const metrics = React.useMemo(() => calculateDashboardMetrics(tasks, payments), [tasks, payments]);
+
+  const todayBankingMetrics = React.useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    let volume = 0;
+    let fees = 0;
+    let count = 0;
+    (bankingTransactions || []).forEach(tx => {
+      const txDay = tx.transaction_date ? tx.transaction_date.slice(0, 10) : '';
+      if (txDay === today && !tx.is_deleted) {
+        volume += (tx.amount || 0);
+        fees += (tx.charges || 0);
+        count++;
+      }
+    });
+    return { volume, fees, count };
+  }, [bankingTransactions]);
 
   const pendingTasks = React.useMemo(() => tasks.filter((t) => t.status === "PENDING"), [tasks]);
   const processingTasks = React.useMemo(() => tasks.filter((t) => t.status === "PROCESSING"), [tasks]);
@@ -54,6 +73,15 @@ export const DashboardPage: React.FC = () => {
         </div>
         <div className="flex items-center gap-space-xs">
           <button
+            className="flex items-center gap-1.5 px-space-md py-space-xs rounded-full bg-surface-container hover:bg-surface-container-high transition-all active:scale-95 font-button-utility text-button-utility shadow-xs border border-surface-container-high/60 text-on-surface font-semibold"
+            onClick={() => setIsAddBankingOpen(true)}
+          >
+            <span className="material-symbols-outlined text-base text-primary">
+              account_balance
+            </span>
+            <span>+ New Transaction</span>
+          </button>
+          <button
             className="flex items-center gap-1.5 px-space-md py-space-xs rounded-full bg-primary-container text-on-primary hover:bg-primary transition-all active:scale-95 font-button-utility text-button-utility shadow-sm font-semibold"
             onClick={() => setIsAddTaskOpen(true)}
           >
@@ -70,6 +98,53 @@ export const DashboardPage: React.FC = () => {
               person_add
             </span>
             <span>+ New Customer</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Today's Counter Banking Operations Strip */}
+      <div className="bg-surface-container-lowest rounded-2xl p-4 border border-surface-container/60 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-2xl">account_balance</span>
+          </div>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-xs text-on-surface">Today's Counter Banking</span>
+              <span className="px-2 py-0.5 rounded-full bg-surface-container text-[10px] font-mono font-bold text-primary">
+                {todayBankingMetrics.count} operations
+              </span>
+            </div>
+            <span className="text-[11px] text-on-surface-variant">
+              DMT money transfers, AePS biometric cash, and bill settlements
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 self-end sm:self-center flex-wrap">
+          <div className="flex flex-col text-right">
+            <span className="text-[10px] font-semibold text-outline uppercase tracking-wider">Today's Volume</span>
+            <span className="font-mono font-bold text-sm text-on-surface">
+              ₹{Math.floor(todayBankingMetrics.volume / 100).toLocaleString('en-IN')}
+            </span>
+          </div>
+
+          <div className="h-7 w-[1px] bg-surface-container hidden sm:block" />
+
+          <div className="flex flex-col text-right">
+            <span className="text-[10px] font-semibold text-outline uppercase tracking-wider">Fees Collected</span>
+            <span className="font-mono font-bold text-sm text-emerald-600 dark:text-emerald-400">
+              ₹{Math.floor(todayBankingMetrics.fees / 100).toLocaleString('en-IN')}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setCurrentPage('banking')}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold transition"
+          >
+            <span>Open Ledger</span>
+            <span className="material-symbols-outlined text-sm">arrow_forward</span>
           </button>
         </div>
       </div>

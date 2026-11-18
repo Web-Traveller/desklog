@@ -11,6 +11,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenHelpModal }) => {
     performSearch,
     setIsAddCustomerOpen,
     setIsAddTaskOpen,
+    setIsAddBankingOpen,
   } = useUI();
 
   return (
@@ -81,6 +82,18 @@ export const Header: React.FC<HeaderProps> = ({ onOpenHelpModal }) => {
           )}
 
           {/* Quick Action Buttons */}
+          <button
+            className="flex items-center gap-space-xs px-space-md py-space-xs rounded-full bg-surface-container hover:bg-surface-container-high transition-all active:scale-95 text-on-surface font-button-utility text-button-utility shadow-sm border border-surface-container-high/50"
+            onClick={() => setIsAddBankingOpen(true)}
+            title="New Banking Transaction (Ctrl+B)"
+            type="button"
+          >
+            <span className="material-symbols-outlined text-lg text-primary">
+              account_balance
+            </span>
+            <span>+ Transaction</span>
+          </button>
+
           <button
             className="flex items-center gap-space-xs px-space-md py-space-xs rounded-full bg-surface-container hover:bg-surface-container-high transition-all active:scale-95 text-on-surface font-button-utility text-button-utility shadow-sm border border-surface-container-high/50"
             onClick={() => setIsAddCustomerOpen(true)}

@@ -6,6 +6,7 @@ import {
   saveTauriCustomer,
   updateTauriCustomer,
   deleteTauriCustomer,
+  isTauriEnv,
 } from '../api/tauri';
 import { createActivityEvent } from '../services/activityService';
 import { saveTauriActivity } from '../api/tauri';
@@ -31,7 +32,29 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const reloadCustomers = async () => {
     const dbCustomers = await fetchTauriCustomers();
-    if (dbCustomers) setCustomers(dbCustomers);
+    if (dbCustomers) {
+      setCustomers(dbCustomers);
+    } else if (!isTauriEnv()) {
+      try {
+        const cached = localStorage.getItem('desklog_customers');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            if (!parsed.some((c: Customer) => c.id === GENERAL_CUSTOMER.id)) {
+              setCustomers([GENERAL_CUSTOMER, ...parsed]);
+            } else {
+              setCustomers(parsed);
+            }
+          } else {
+            setCustomers([GENERAL_CUSTOMER]);
+          }
+        } else {
+          setCustomers([GENERAL_CUSTOMER]);
+        }
+      } catch {
+        setCustomers([GENERAL_CUSTOMER]);
+      }
+    }
   };
 
   useEffect(() => {
@@ -70,7 +93,15 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     try {
       const saved = await saveTauriCustomer(newCustomer);
-      setCustomers(prev => [...prev, saved]);
+      setCustomers(prev => {
+        const next = [...prev, saved];
+        if (!isTauriEnv()) {
+          try {
+            localStorage.setItem('desklog_customers', JSON.stringify(next));
+          } catch {}
+        }
+        return next;
+      });
       showToast(`Customer "${saved.name}" added successfully.`, 'success');
 
       const act = createActivityEvent({
@@ -105,9 +136,15 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     try {
       await updateTauriCustomer(id, name, mobile, note, aadhaar_number);
-      setCustomers(prev =>
-        prev.map(c => (c.id === id ? { ...c, ...customerData, updated_at: new Date().toISOString() } : c))
-      );
+      setCustomers(prev => {
+        const next = prev.map(c => (c.id === id ? { ...c, ...customerData, updated_at: new Date().toISOString() } : c));
+        if (!isTauriEnv()) {
+          try {
+            localStorage.setItem('desklog_customers', JSON.stringify(next));
+          } catch {}
+        }
+        return next;
+      });
       showToast(`Customer profile updated.`, 'success');
 
       const act = createActivityEvent({
@@ -135,7 +172,15 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const target = customers.find(c => c.id === id);
     try {
       await deleteTauriCustomer(id);
-      setCustomers(prev => prev.filter(c => c.id !== id));
+      setCustomers(prev => {
+        const next = prev.filter(c => c.id !== id);
+        if (!isTauriEnv()) {
+          try {
+            localStorage.setItem('desklog_customers', JSON.stringify(next));
+          } catch {}
+        }
+        return next;
+      });
       if (selectedCustomerId === id) {
         setSelectedCustomerId('cust-general');
       }
