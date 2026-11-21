@@ -6,7 +6,7 @@
  * remembered in localStorage for future 1-keystroke suggestions.
  */
 
-export type BankingModeId = 'DMT' | 'AEPS' | 'UPI' | 'UPI CASH' | 'BILL' | 'CREDIT' | 'CSC';
+export type BankingModeId = 'DMT' | 'AEPS' | 'UPI' | 'UPI CASH' | 'BILL' | 'CREDIT' | 'CSC' | 'NEPAL' | 'SIM';
 
 export interface BankingModeConfig {
   id: BankingModeId;
@@ -167,9 +167,77 @@ export const BANKING_MODES: Record<BankingModeId, BankingModeConfig> = {
     suggestedPortals: ['CSC', 'UCL CSC', 'NSDL'],
     remarkPlaceholder: 'e.g. Application tracking ID or token note',
   },
+  NEPAL: {
+    id: 'NEPAL',
+    label: 'NEPAL',
+    shortDesc: 'Nepal Remittance Transfer',
+    icon: 'travel_explore',
+    badgeClass: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20',
+    idFieldLabel: 'Receiver Citizenship / Account No.',
+    idFieldPlaceholder: 'Enter receiver citizenship no or Nepal bank account',
+    idFieldHelper: 'Citizenship or bank account of recipient in Nepal',
+    idFieldType: 'text',
+    providerLabel: 'Partner Bank / Rail in Nepal',
+    providerPlaceholder: 'e.g. Prabhu Bank, Global IME, Kumari Bank',
+    providerHelper: 'Destination bank or remittance agent in Nepal',
+    defaultProviders: [
+      'Prabhu Bank',
+      'Global IME Bank',
+      'Nepal Investment Mega Bank',
+      'Everest Bank',
+      'Nabil Bank',
+      'Himalayan Bank',
+    ],
+    suggestedPortals: ['Prabhu Money Transfer', 'SAFEPAY', 'A2Zsuvidhaa'],
+    remarkPlaceholder: 'e.g. Prabhu MT Pin or receiver district',
+  },
+  SIM: {
+    id: 'SIM',
+    label: 'SIM',
+    shortDesc: 'SIM Card & Mobile Recharges',
+    icon: 'sim_card',
+    badgeClass: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20',
+    idFieldLabel: 'SIM / Mobile Number',
+    idFieldPlaceholder: 'Enter 10-digit SIM mobile number',
+    idFieldHelper: 'Mobile number activated or recharged',
+    idFieldType: 'text',
+    providerLabel: 'Telecom Operator',
+    providerPlaceholder: 'Select operator (e.g. Airtel, Jio, VI)',
+    providerHelper: 'Mobile network operator',
+    defaultProviders: ['VODAPHONE', 'AIRTEL', 'JIO', 'BSNL'],
+    suggestedPortals: ['VODAPHONE', 'Airtel Bank BC', 'MobiKwik', 'PAYTM B'],
+    remarkPlaceholder: 'e.g. Plan code or FRC activation note',
+  },
 };
 
-export const BANKING_MODE_KEYS: BankingModeId[] = ['DMT', 'AEPS', 'UPI', 'UPI CASH', 'BILL', 'CREDIT', 'CSC'];
+export const BANKING_MODE_KEYS: BankingModeId[] = ['DMT', 'AEPS', 'UPI', 'UPI CASH', 'BILL', 'CREDIT', 'CSC', 'NEPAL', 'SIM'];
+
+/**
+ * Client Data Book Work Types for Citizen & Documentation Tasks (Work Manager)
+ */
+export const CLIENT_WORK_TYPES = [
+  'Domicile Income Certificate',
+  'Income Certificate',
+  'Domicile Urgent',
+  'PAN CARD',
+  'NEW PAN',
+  'CORRECTION PAN',
+  'PAN FIND AND PAN CARD',
+  'Fino Bank KYC',
+  'PF KYC',
+  'Food Linces',
+  'ITR',
+  'MOB UPDATE',
+  'LITE BILL',
+  'CARD PAYMENT',
+  'DISH TV',
+  'IRCTC TATKAL',
+  'IRCTC NORMAL',
+  'Police Verification',
+  'Aadhar Card Update',
+  'E-Shram Labour Card',
+  'Ayushman Bharat Card',
+];
 
 export const TOP_INDIAN_BANKS = [
   'State Bank of India',

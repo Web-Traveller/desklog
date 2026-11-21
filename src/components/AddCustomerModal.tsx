@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useDesk } from "../context/DeskContext";
 import { findCustomersByMobile } from "../services/customerService";
+import { validateMobileNumber, validateAadhaarNumber } from "../utils/validationUtils";
 
 export const AddCustomerModal: React.FC = () => {
   const {
@@ -10,12 +11,15 @@ export const AddCustomerModal: React.FC = () => {
     customers,
     navigateToCustomerProfile,
     setIsAddTaskOpen,
+    showToast,
   } = useDesk();
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [aadhaar, setAadhaar] = useState("");
   const [notes, setNotes] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isAddCustomerOpen) return null;
 
@@ -29,21 +33,56 @@ export const AddCustomerModal: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !phone.trim()) return;
+    if (isSubmitting) return;
 
-    await addCustomer({
-      name: name.trim(),
-      mobile: phone.trim(),
-      is_verified: true,
-      note: notes.trim(),
-      aadhaar_number: aadhaar.trim(),
-    });
+    const errors: Record<string, string> = {};
+    if (!name.trim()) {
+      errors.name = "Customer name is required.";
+    }
 
-    setName("");
-    setPhone("");
-    setAadhaar("");
-    setNotes("");
-    setIsAddCustomerOpen(false);
+    // Mobile number validation
+    const phoneValidation = validateMobileNumber(phone);
+    if (!phoneValidation.valid) {
+      errors.phone = phoneValidation.error!;
+    }
+
+    // Aadhaar validation (if provided)
+    if (aadhaar.trim()) {
+      const aadhaarValidation = validateAadhaarNumber(aadhaar);
+      if (!aadhaarValidation.valid) {
+        errors.aadhaar = aadhaarValidation.error!;
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      const firstError = Object.values(errors)[0];
+      showToast(firstError, "warning");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await addCustomer({
+        name: name.trim(),
+        mobile: phone.trim(),
+        is_verified: true,
+        note: notes.trim(),
+        aadhaar_number: aadhaar.trim(),
+      });
+
+      setName("");
+      setPhone("");
+      setAadhaar("");
+      setNotes("");
+      setFieldErrors({});
+      setIsAddCustomerOpen(false);
+    } catch (err) {
+      console.error("Failed to add customer:", err);
+      showToast("Failed to create customer profile. Please try again.", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSelectExisting = (id: string) => {
@@ -52,6 +91,7 @@ export const AddCustomerModal: React.FC = () => {
     setPhone("");
     setAadhaar("");
     setNotes("");
+    setFieldErrors({});
     navigateToCustomerProfile(id);
     setIsAddTaskOpen(true);
   };
@@ -122,35 +162,92 @@ export const AddCustomerModal: React.FC = () => {
             Full Name *
             <input
               required
-              className="px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility"
+              className={`px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 font-button-utility text-button-utility border ${
+                fieldErrors.name
+                  ? 'border-red-500 ring-1 ring-red-500/20'
+                  : 'border-transparent focus:ring-primary/20'
+              }`}
               placeholder="e.g. Ramesh V. Sharma"
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (fieldErrors.name) {
+                  setFieldErrors(prev => {
+                    const copy = { ...prev };
+                    delete copy.name;
+                    return copy;
+                  });
+                }
+              }}
             />
+            {fieldErrors.name && (
+              <p className="text-[11px] text-red-500 font-medium flex items-center gap-1 mt-0.5">
+                <span className="material-symbols-outlined text-xs">error</span>
+                {fieldErrors.name}
+              </p>
+            )}
           </label>
 
           <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant">
             Mobile Number *
             <input
               required
-              className="px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility font-mono"
+              className={`px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 font-button-utility text-button-utility font-mono border ${
+                fieldErrors.phone
+                  ? 'border-red-500 ring-1 ring-red-500/20'
+                  : 'border-transparent focus:ring-primary/20'
+              }`}
               placeholder="e.g. 9820012345"
               type="text"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => {
+                setPhone(e.target.value);
+                if (fieldErrors.phone) {
+                  setFieldErrors(prev => {
+                    const copy = { ...prev };
+                    delete copy.phone;
+                    return copy;
+                  });
+                }
+              }}
             />
+            {fieldErrors.phone && (
+              <p className="text-[11px] text-red-500 font-medium flex items-center gap-1 mt-0.5">
+                <span className="material-symbols-outlined text-xs">error</span>
+                {fieldErrors.phone}
+              </p>
+            )}
           </label>
 
           <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant">
             Aadhaar Number
             <input
-              className="px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-button-utility text-button-utility font-mono"
+              className={`px-space-md py-2.5 rounded-xl bg-surface-container text-on-surface focus:outline-none focus:ring-2 font-button-utility text-button-utility font-mono border ${
+                fieldErrors.aadhaar
+                  ? 'border-red-500 ring-1 ring-red-500/20'
+                  : 'border-transparent focus:ring-primary/20'
+              }`}
               placeholder="e.g. 1234 5678 9012"
               type="text"
               value={aadhaar}
-              onChange={(e) => setAadhaar(e.target.value)}
+              onChange={(e) => {
+                setAadhaar(e.target.value);
+                if (fieldErrors.aadhaar) {
+                  setFieldErrors(prev => {
+                    const copy = { ...prev };
+                    delete copy.aadhaar;
+                    return copy;
+                  });
+                }
+              }}
             />
+            {fieldErrors.aadhaar && (
+              <p className="text-[11px] text-red-500 font-medium flex items-center gap-1 mt-0.5">
+                <span className="material-symbols-outlined text-xs">error</span>
+                {fieldErrors.aadhaar}
+              </p>
+            )}
           </label>
 
           <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant">
@@ -168,15 +265,17 @@ export const AddCustomerModal: React.FC = () => {
             <button
               className="px-space-md py-2 rounded-full text-on-surface-variant hover:bg-surface-container font-button-utility text-button-utility"
               onClick={() => setIsAddCustomerOpen(false)}
+              disabled={isSubmitting}
               type="button"
             >
               Cancel
             </button>
             <button
-              className="px-space-md py-2 rounded-full bg-primary-container hover:bg-primary transition-all active:scale-95 text-on-primary font-button-utility text-button-utility font-medium shadow-sm"
+              className="px-space-md py-2 rounded-full bg-primary-container hover:bg-primary transition-all active:scale-95 text-on-primary font-button-utility text-button-utility font-medium shadow-sm disabled:opacity-50"
               type="submit"
+              disabled={isSubmitting}
             >
-              Create New Person
+              {isSubmitting ? "Creating..." : "Create New Person"}
             </button>
           </div>
         </form>

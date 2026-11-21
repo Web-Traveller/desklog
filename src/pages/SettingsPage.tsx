@@ -8,9 +8,7 @@ interface SettingsPageProps {
   onOpenHelpModal?: () => void;
 }
 
-export const SettingsPage: React.FC<SettingsPageProps> = ({
-  onOpenHelpModal,
-}) => {
+export const SettingsPage: React.FC<SettingsPageProps> = () => {
   const {
     customers,
     tasks,
@@ -150,11 +148,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     const headers = [
       "ID",
       "Title",
+      "Work Type",
+      "Tracker ID",
+      "Document Number",
       "Customer ID",
       "Customer Name",
+      "Customer Mobile",
       "Service ID",
       "Status",
-      "Billing Amount (Paise)",
+      "Billing Amount (₹)",
       "Target Date",
       "Scheduled Date",
       "Notes",
@@ -165,11 +167,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       return [
         cleanCSVCell(t.id),
         cleanCSVCell(t.title),
+        cleanCSVCell(t.work_type || ""),
+        cleanCSVCell(t.tracker_id || ""),
+        cleanCSVCell(t.document_number || ""),
         cleanCSVCell(t.customer_id),
         cleanCSVCell(cust?.name || ""),
+        cleanCSVCell(cust?.mobile || ""),
         cleanCSVCell(t.service_id || ""),
         cleanCSVCell(t.status),
-        cleanCSVCell(t.billing_amount || 0),
+        cleanCSVCell(t.billing_amount !== undefined ? Math.floor(t.billing_amount / 100) : 0),
         cleanCSVCell(t.target_date || ""),
         cleanCSVCell(t.scheduled_date || ""),
         cleanCSVCell(t.notes || ""),
@@ -181,17 +187,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   };
 
   const exportPaymentsCSV = () => {
-    const headers = ["ID", "Task ID", "Task Title", "Customer Name", "Amount (Paise)", "Created At"];
+    const headers = ["ID", "Task ID", "Task Title", "Customer Name", "Customer Mobile", "Amount (₹)", "Created At"];
     const rows = payments.map((p) => {
       const task = tasks.find((t) => t.id === p.task_id);
       const cust = task ? customers.find((c) => c.id === task.customer_id) : null;
       return [
-        `"${p.id}"`,
-        `"${p.task_id}"`,
-        `"${(task?.title || "").replace(/"/g, '""')}"`,
-        `"${(cust?.name || "").replace(/"/g, '""')}"`,
-        `"${p.amount}"`,
-        `"${p.created_at}"`,
+        cleanCSVCell(p.id),
+        cleanCSVCell(p.task_id),
+        cleanCSVCell(task?.title || ""),
+        cleanCSVCell(cust?.name || ""),
+        cleanCSVCell(cust?.mobile || ""),
+        cleanCSVCell(Math.floor((p.amount || 0) / 100)),
+        cleanCSVCell(p.created_at),
       ];
     });
     const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
@@ -210,6 +217,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       "Portal / Company",
       "Amount (₹)",
       "Customer Fee (₹)",
+      "Company Cost (₹)",
+      "Refund (₹)",
+      "Commission (₹)",
       "Status",
       "Remark",
     ];
@@ -224,6 +234,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
       cleanCSVCell(tx.company_name || ""),
       cleanCSVCell(Math.floor((tx.amount || 0) / 100)),
       cleanCSVCell(Math.floor((tx.charges || 0) / 100)),
+      cleanCSVCell(Math.floor((tx.company_charge || 0) / 100)),
+      cleanCSVCell(Math.floor((tx.refund || 0) / 100)),
+      cleanCSVCell(Math.floor((tx.commission || Math.max(0, (tx.charges || 0) - (tx.company_charge || 0))) / 100)),
       cleanCSVCell(tx.status || "SUCCESS"),
       cleanCSVCell(tx.remark || ""),
     ]);
@@ -313,33 +326,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 <span className="material-symbols-outlined text-lg text-primary">payments</span>
                 <span>Payments CSV</span>
               </button>
-            </div>
-          </div>
-
-          {/* Keyboard Shortcuts Section */}
-          <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-xs border border-surface-container/60 flex flex-col gap-space-md">
-            <div className="flex items-center gap-space-xs border-b border-surface-container/40 pb-space-xs">
-              <span className="material-symbols-outlined text-primary text-xl">keyboard</span>
-              <h2 className="font-tagline text-tagline text-on-surface font-semibold">
-                Keyboard Hotkeys
-              </h2>
-            </div>
-
-            <p className="font-caption text-caption text-on-surface-variant">
-              Accelerate daily desk operations using global keyboard shortcuts for creating tasks, adding customers, searching, and quick navigation.
-            </p>
-
-            <div className="flex flex-wrap items-center gap-space-sm pt-space-xs">
-              {onOpenHelpModal && (
-                <button
-                  className="w-full flex justify-center items-center gap-2 px-space-md py-2 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface font-button-utility text-button-utility font-medium transition-all active:scale-95 shadow-xs"
-                  onClick={onOpenHelpModal}
-                  type="button"
-                >
-                  <span className="material-symbols-outlined text-lg text-primary">keyboard_command_key</span>
-                  <span>View All Keyboard Shortcuts (?)</span>
-                </button>
-              )}
             </div>
           </div>
         </div>

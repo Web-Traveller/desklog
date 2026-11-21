@@ -22,6 +22,8 @@ import {
   deleteTauriService,
   fetchTauriPayments,
   saveTauriPayment,
+  updateTauriPayment,
+  deleteTauriPayment,
   fetchTauriSettings,
   saveTauriSetting,
   createTauriBackup,
@@ -46,8 +48,10 @@ interface TaskContextType {
   editService: (service: Service) => Promise<void>;
   deleteService: (id: string) => Promise<void>;
   addPayment: (payment: Omit<Payment, 'id' | 'created_at'>) => Promise<void>;
+  editPayment: (id: string, updates: Partial<Payment>) => Promise<void>;
+  deletePayment: (id: string) => Promise<void>;
 
-  addTask: (taskData: Omit<Task, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
+  addTask: (taskData: Omit<Task, 'id' | 'created_at' | 'updated_at'>, initialPaidAmount?: number) => Promise<Task | null>;
   updateTaskStatus: (taskId: string, newStatus: TaskStatus, cancellationReason?: string) => Promise<void>;
   updateTask: (taskId: string, taskData: Partial<Task>) => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
@@ -255,7 +259,83 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const addTask = async (taskData: Omit<Task, 'id' | 'created_at' | 'updated_at'>) => {
+  const editPayment = async (id: string, updates: Partial<Payment>) => {
+    const target = payments.find(p => p.id === id);
+    if (!target) return;
+    const updatedPayment: Payment = {
+      ...target,
+      ...updates,
+      id,
+    };
+    try {
+      await updateTauriPayment(updatedPayment);
+      setPayments(prev => {
+        const next = prev.map(p => (p.id === id ? updatedPayment : p));
+        if (!isTauriEnv()) {
+          try {
+            localStorage.setItem('desklog_payments', JSON.stringify(next));
+          } catch {}
+        }
+        return next;
+      });
+      showToast(`Payment updated successfully.`, 'success');
+
+      const targetTask = tasks.find(t => t.id === updatedPayment.task_id);
+      const targetCustomer = targetTask ? customers.find(c => c.id === targetTask.customer_id) : undefined;
+      const act = createActivityEvent({
+        type: 'payment_updated',
+        title: `Payment adjusted: ${formatRupees(updatedPayment.amount)}`,
+        description: `Payment details updated for task ${targetTask?.title || 'Desk Work'}.`,
+        taskId: updatedPayment.task_id,
+        customerId: targetCustomer?.id,
+        customerName: targetCustomer?.name,
+        customerPhone: targetCustomer?.mobile,
+      });
+      await saveTauriActivity(act);
+    } catch (err) {
+      console.error('Failed to update payment:', err);
+      showToast(`Failed to update payment: ${err instanceof Error ? err.message : String(err)}`, 'error');
+    }
+  };
+
+  const deletePayment = async (id: string) => {
+    const target = payments.find(p => p.id === id);
+    if (!target) return;
+    try {
+      await deleteTauriPayment(id);
+      setPayments(prev => {
+        const next = prev.filter(p => p.id !== id);
+        if (!isTauriEnv()) {
+          try {
+            localStorage.setItem('desklog_payments', JSON.stringify(next));
+          } catch {}
+        }
+        return next;
+      });
+      showToast(`Payment removed.`, 'info');
+
+      const targetTask = tasks.find(t => t.id === target.task_id);
+      const targetCustomer = targetTask ? customers.find(c => c.id === targetTask.customer_id) : undefined;
+      const act = createActivityEvent({
+        type: 'payment_deleted',
+        title: `Payment voided: ${formatRupees(target.amount)}`,
+        description: `Payment removed from task ${targetTask?.title || 'Desk Work'}.`,
+        taskId: target.task_id,
+        customerId: targetCustomer?.id,
+        customerName: targetCustomer?.name,
+        customerPhone: targetCustomer?.mobile,
+      });
+      await saveTauriActivity(act);
+    } catch (err) {
+      console.error('Failed to delete payment:', err);
+      showToast(`Failed to delete payment: ${err instanceof Error ? err.message : String(err)}`, 'error');
+    }
+  };
+
+  const addTask = async (
+    taskData: Omit<Task, 'id' | 'created_at' | 'updated_at'>,
+    initialPaidAmount?: number
+  ): Promise<Task | null> => {
     const now = new Date().toISOString();
     const newTask: Task = {
       ...taskData,
@@ -275,6 +355,23 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         return next;
       });
+
+      // If initial payment was made upfront, record it automatically
+      if (initialPaidAmount && initialPaidAmount > 0) {
+        const initialPayment: Payment = {
+          id: `pay-${Date.now()}`,
+          task_id: saved.id,
+          amount: initialPaidAmount,
+          created_at: now,
+        };
+        try {
+          const savedPay = await saveTauriPayment(initialPayment);
+          setPayments(prev => [savedPay, ...prev]);
+        } catch (payErr) {
+          console.warn('Failed to save initial payment for task:', payErr);
+        }
+      }
+
       showToast(`Task "${saved.title}" created.`, 'success');
 
       const cust = customers.find(c => c.id === saved.customer_id);
@@ -288,10 +385,12 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         customerPhone: cust?.mobile,
       });
       await saveTauriActivity(act);
+      return saved;
     } catch (err) {
       console.error('Failed to add task:', err);
       Sentry.captureException(err, { tags: { action: 'add_task' }, extra: { taskTitle: newTask.title, customerId: newTask.customer_id } });
       showToast(`Failed to create task: ${err instanceof Error ? err.message : String(err)}`, 'error');
+      return null;
     }
   };
 
@@ -400,6 +499,15 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         return next;
       });
+      setPayments(prev => {
+        const next = prev.filter(p => p.task_id !== taskId);
+        if (!isTauriEnv()) {
+          try {
+            localStorage.setItem('desklog_payments', JSON.stringify(next));
+          } catch {}
+        }
+        return next;
+      });
       showToast(`Task deleted.`, 'info');
 
       if (target) {
@@ -493,6 +601,8 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
         editService,
         deleteService,
         addPayment,
+        editPayment,
+        deletePayment,
         addTask,
         updateTaskStatus,
         updateTask,
@@ -510,7 +620,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
-export const useTasks = () => {
+export const useTasks = (): TaskContextType => {
   const context = useContext(TaskContext);
   if (!context) {
     console.warn('useTasks called outside TaskProvider');
@@ -524,7 +634,9 @@ export const useTasks = () => {
       editService: async () => {},
       deleteService: async () => {},
       addPayment: async () => {},
-      addTask: async () => {},
+      editPayment: async () => {},
+      deletePayment: async () => {},
+      addTask: async () => null,
       updateTaskStatus: async () => {},
       updateTask: async () => {},
       deleteTask: async () => {},

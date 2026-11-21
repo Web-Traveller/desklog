@@ -5,7 +5,7 @@ interface HeaderProps {
   onOpenHelpModal?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenHelpModal }) => {
+export const Header: React.FC<HeaderProps> = () => {
   const {
     searchQuery,
     performSearch,
@@ -66,26 +66,11 @@ export const Header: React.FC<HeaderProps> = ({ onOpenHelpModal }) => {
 
         {/* Top Header Controls */}
         <div className="flex items-center gap-space-sm min-w-max">
-          {/* Keyboard Shortcuts Trigger Button */}
-          {onOpenHelpModal && (
-            <button
-              className="hidden md:flex items-center gap-1 px-space-xs py-1 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface-variant font-fine-print text-fine-print transition-all border border-surface-container-high/50"
-              onClick={onOpenHelpModal}
-              title="Keyboard Shortcuts (?)"
-              type="button"
-            >
-              <span className="material-symbols-outlined text-sm text-primary">
-                keyboard
-              </span>
-              <span>Hotkeys</span>
-            </button>
-          )}
-
           {/* Quick Action Buttons */}
           <button
             className="flex items-center gap-space-xs px-space-md py-space-xs rounded-full bg-surface-container hover:bg-surface-container-high transition-all active:scale-95 text-on-surface font-button-utility text-button-utility shadow-sm border border-surface-container-high/50"
             onClick={() => setIsAddBankingOpen(true)}
-            title="New Banking Transaction (Ctrl+B)"
+            title="New Banking Transaction"
             type="button"
           >
             <span className="material-symbols-outlined text-lg text-primary">
@@ -97,7 +82,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenHelpModal }) => {
           <button
             className="flex items-center gap-space-xs px-space-md py-space-xs rounded-full bg-surface-container hover:bg-surface-container-high transition-all active:scale-95 text-on-surface font-button-utility text-button-utility shadow-sm border border-surface-container-high/50"
             onClick={() => setIsAddCustomerOpen(true)}
-            title="Add New Customer (Ctrl+Shift+C)"
+            title="Add New Customer"
             type="button"
           >
             <span className="material-symbols-outlined text-lg text-primary">
@@ -109,7 +94,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenHelpModal }) => {
           <button
             className="flex items-center gap-space-xs px-space-md py-space-xs rounded-full bg-primary-container hover:bg-primary transition-all active:scale-95 text-on-primary font-button-utility text-button-utility shadow-[0_2px_8px_rgba(0,102,204,0.3)] font-medium"
             onClick={() => setIsAddTaskOpen(true)}
-            title="Create New Task (Ctrl+N)"
+            title="Create New Task"
             type="button"
           >
             <span className="material-symbols-outlined text-lg">add_task</span>

@@ -95,6 +95,16 @@ fn add_payment(payment: Payment, state: State<'_, AppState>) -> Result<Payment, 
 }
 
 #[tauri::command]
+fn edit_payment(payment: Payment, state: State<'_, AppState>) -> Result<(), String> {
+    state.get_db().update_payment(&payment).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_payment(id: String, state: State<'_, AppState>) -> Result<(), String> {
+    state.get_db().delete_payment(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn get_activities(state: State<'_, AppState>) -> Result<Vec<ActivityEvent>, String> {
     state.get_db().fetch_activities().map_err(|e| e.to_string())
 }
@@ -138,6 +148,11 @@ fn get_banking_transactions_for_customer(customer_id: String, state: State<'_, A
 #[tauri::command]
 fn add_banking_transaction(tx: BankingTransaction, state: State<'_, AppState>) -> Result<BankingTransaction, String> {
     state.get_db().insert_banking_transaction(&tx).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn edit_banking_transaction(tx: BankingTransaction, state: State<'_, AppState>) -> Result<BankingTransaction, String> {
+    state.get_db().update_banking_transaction(&tx).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -256,6 +271,13 @@ fn send_heartbeat_native(workstation_id: String, app_version: String, os_info: S
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -299,6 +321,8 @@ pub fn run() {
             delete_service,
             get_payments,
             add_payment,
+            edit_payment,
+            delete_payment,
             get_activities,
             add_activity,
             get_settings,
@@ -308,6 +332,7 @@ pub fn run() {
             get_banking_transactions,
             get_banking_transactions_for_customer,
             add_banking_transaction,
+            edit_banking_transaction,
             delete_banking_transaction,
             send_desktop_notification,
             get_workstation_id,

@@ -196,7 +196,7 @@ export const ProfilePage: React.FC = () => {
                 <span className="material-symbols-outlined text-base text-outline">
                   calendar_month
                 </span>
-                <span>Enrolled: {customer.created_at}</span>
+                <span>Enrolled: {formatDisplayDate(customer.created_at)}</span>
               </div>
               {customer.aadhaar_number && (
                 <>

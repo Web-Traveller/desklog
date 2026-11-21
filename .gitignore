@@ -20,6 +20,8 @@ desklog_data
 *.key.pub
 src-tauri/*.key
 src-tauri/*.key.pub
+*.exe
+*.msi
 
 # Editor directories and files
 .vscode/*

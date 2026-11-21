@@ -19,6 +19,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
   const taskPayments = payments.filter(p => p.task_id === task.id);
   const totalPaid = taskPayments.reduce((acc, curr) => acc + curr.amount, 0);
+  const billingPaise = task.billing_amount || 0;
+  const pendingDuePaise = Math.max(0, billingPaise - totalPaid);
+  const isFullyPaid = billingPaise > 0 && totalPaid >= billingPaise;
+  const hasPendingDue = pendingDuePaise > 0;
 
   const activeHighlight = isHighlighted || highlightedTaskId === task.id;
 
@@ -80,6 +84,26 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           <span className="font-mono text-xs flex-shrink-0">{(customers.find(c => c.id === task.customer_id)?.mobile || "")}</span>
         </div>
 
+        {(task.work_type || task.tracker_id || task.document_number) && (
+          <div className="flex flex-wrap items-center gap-1 text-[11px] font-mono">
+            {task.work_type && (
+              <span className="px-1.5 py-0.2 rounded font-sans text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
+                {task.work_type}
+              </span>
+            )}
+            {task.tracker_id && (
+              <span className="bg-surface-container px-1 py-0.2 rounded border border-surface-container-high/50 text-outline" title="Tracker ID">
+                Trk: <strong className="text-on-surface font-mono">{task.tracker_id}</strong>
+              </span>
+            )}
+            {task.document_number && (
+              <span className="bg-surface-container px-1 py-0.2 rounded border border-surface-container-high/50 text-outline" title="Document Number">
+                Doc: <strong className="text-on-surface font-mono">{task.document_number}</strong>
+              </span>
+            )}
+          </div>
+        )}
+
         {task.scheduled_date && (
           <div className="text-xs text-primary font-medium flex items-center gap-1">
             <span className="material-symbols-outlined text-[14px]">alarm</span>
@@ -87,9 +111,23 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           </div>
         )}
         {task.billing_amount !== undefined && (
-          <div className="text-xs text-on-surface-variant flex items-center gap-1 font-mono">
-            <span className="material-symbols-outlined text-[14px]">payments</span>
-            {formatRupees(task.billing_amount)} ({totalPaid >= task.billing_amount ? "PAID" : totalPaid > 0 ? "PARTIAL" : "UNPAID"}{totalPaid > 0 ? ` - Paid ${formatRupees(totalPaid)}` : ''})
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-mono pt-0.5">
+            <span className="text-on-surface font-semibold" title="Total Service Billing">
+              Total: <strong>{formatRupees(billingPaise)}</strong>
+            </span>
+            <span className="text-outline/40">|</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-medium" title="Paid Advance / Amount Received">
+              Paid: {formatRupees(totalPaid)}
+            </span>
+            {hasPendingDue ? (
+              <span className="px-1.5 py-0.2 rounded font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30" title="Pending Balance (Udhari)">
+                Due: {formatRupees(pendingDuePaise)}
+              </span>
+            ) : isFullyPaid ? (
+              <span className="px-1.5 py-0.2 rounded font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                Paid ✓
+              </span>
+            ) : null}
           </div>
         )}
 
@@ -197,6 +235,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             <span className="font-fine-print text-fine-print text-on-surface-variant">
               ({(customers.find(c => c.id === task.customer_id)?.name || "")})
             </span>
+            {task.work_type && (
+              <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-fine-print text-fine-print font-medium">
+                {task.work_type}
+              </span>
+            )}
             {activeHighlight && (
               <span className="px-2 py-0.5 rounded-full bg-primary text-on-primary font-fine-print text-fine-print font-bold animate-pulse">
                 Target Task
@@ -231,12 +274,40 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 </span>
               </>
             )}
+            {task.tracker_id && (
+              <>
+                <span className="text-surface-dim">•</span>
+                <span className="flex items-center gap-1 font-mono text-outline">
+                  <span className="material-symbols-outlined text-xs">tag</span>
+                  Tracker: <strong className="text-on-surface font-medium">{task.tracker_id}</strong>
+                </span>
+              </>
+            )}
+            {task.document_number && (
+              <>
+                <span className="text-surface-dim">•</span>
+                <span className="flex items-center gap-1 font-mono text-outline">
+                  <span className="material-symbols-outlined text-xs">description</span>
+                  Doc #: <strong className="text-on-surface font-medium">{task.document_number}</strong>
+                </span>
+              </>
+            )}
             {task.billing_amount !== undefined && (
               <>
                 <span className="text-surface-dim">•</span>
-                <span className="flex items-center gap-1 font-mono">
-                  <span className="material-symbols-outlined text-xs">payments</span>
-                  {formatRupees(task.billing_amount)} ({totalPaid >= task.billing_amount ? "PAID" : totalPaid > 0 ? "PARTIAL" : "UNPAID"}{totalPaid > 0 ? ` - Paid ${formatRupees(totalPaid)}` : ''})
+                <span className="flex items-center gap-1.5 font-mono text-[11px]">
+                  <span className="text-on-surface font-semibold" title="Total Billing">Total: {formatRupees(billingPaise)}</span>
+                  <span className="text-outline/40">|</span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-medium" title="Paid Advance">Paid: {formatRupees(totalPaid)}</span>
+                  {hasPendingDue ? (
+                    <span className="px-2 py-0.5 rounded-full font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30" title="Pending Balance (Udhari)">
+                      Due: {formatRupees(pendingDuePaise)}
+                    </span>
+                  ) : isFullyPaid ? (
+                    <span className="px-2 py-0.5 rounded-full font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                      Paid ✓
+                    </span>
+                  ) : null}
                 </span>
               </>
             )}

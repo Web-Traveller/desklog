@@ -274,7 +274,7 @@ export const CalendarPage: React.FC = () => {
             >
               <CustomerSearchPicker
                 customers={customers}
-                label="Customer Name / Walk-in"
+                label="Customer Name"
                 selectedCustomerId={quickCustId}
                 onSelectCustomer={(c) => setQuickCustId(c.id)}
               />

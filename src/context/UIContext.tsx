@@ -19,6 +19,8 @@ interface UIContextType {
   previousPage: ActivePage;
   highlightedTaskId: string | null;
   setHighlightedTaskId: (id: string | null) => void;
+  highlightedBankingTxId: number | null;
+  setHighlightedBankingTxId: (id: number | null) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   taskDateFilter: string;
@@ -47,6 +49,7 @@ interface UIContextType {
   showConfirm: (options: ConfirmOptions) => void;
   navigateToCustomerProfile: (customerId: string, setSelectedCustomerId: (id: string) => void) => void;
   navigateToCustomerTaskProfile: (customerId: string, taskId: string, setSelectedCustomerId: (id: string) => void) => void;
+  navigateToBankingTx: (txId: number) => void;
   performSearch: (query: string) => void;
 }
 
@@ -56,6 +59,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [currentPage, setCurrentPageInternal] = useState<ActivePage>('dashboard');
   const [previousPage, setPreviousPage] = useState<ActivePage>('dashboard');
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
+  const [highlightedBankingTxId, setHighlightedBankingTxId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [taskDateFilter, setTaskDateFilter] = useState('Last 7 days');
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string>(getFormattedToday());
@@ -121,6 +125,11 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     setCurrentPage('profile');
   };
 
+  const navigateToBankingTx = (txId: number) => {
+    setHighlightedBankingTxId(txId);
+    setCurrentPage('banking');
+  };
+
   const performSearch = (query: string) => {
     setSearchQuery(query);
     if (currentPage !== 'search') {
@@ -136,6 +145,8 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         previousPage,
         highlightedTaskId,
         setHighlightedTaskId,
+        highlightedBankingTxId,
+        setHighlightedBankingTxId,
         searchQuery,
         setSearchQuery,
         taskDateFilter,
@@ -161,6 +172,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         showConfirm,
         navigateToCustomerProfile,
         navigateToCustomerTaskProfile,
+        navigateToBankingTx,
         performSearch,
       }}
     >
@@ -193,6 +205,8 @@ export const useUI = () => {
       previousPage: 'dashboard' as ActivePage,
       highlightedTaskId: null,
       setHighlightedTaskId: () => {},
+      highlightedBankingTxId: null,
+      setHighlightedBankingTxId: () => {},
       searchQuery: '',
       setSearchQuery: () => {},
       taskDateFilter: 'Last 7 days',
@@ -218,6 +232,7 @@ export const useUI = () => {
       showConfirm: () => {},
       navigateToCustomerProfile: () => {},
       navigateToCustomerTaskProfile: () => {},
+      navigateToBankingTx: () => {},
       performSearch: () => {},
     };
   }

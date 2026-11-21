@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useDesk } from '../context/DeskContext';
 import { rupeesToPaise } from '../utils/currencyUtils';
+import {
+  validateMobileNumber,
+  validateTransactionAmountRupees,
+  validateCompanyChargeAgainstFee,
+} from '../utils/validationUtils';
 import {
   BankingModeId,
   BANKING_MODES,
@@ -29,6 +35,7 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
   const modeConfig = BANKING_MODES[activeMode];
 
   // Form fields
+  const [transactionDate, setTransactionDate] = useState<string>('');
   const [companyName, setCompanyName] = useState<string>('');
   const [customerName, setCustomerName] = useState<string>('');
   const [customerMobile, setCustomerMobile] = useState<string>('');
@@ -36,8 +43,12 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
   const [bankOrProvider, setBankOrProvider] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
   const [charges, setCharges] = useState<string>('');
+  const [companyCharge, setCompanyCharge] = useState<string>('');
+  const [refund, setRefund] = useState<string>('');
+  const [commission, setCommission] = useState<string>('');
   const [status, setStatus] = useState<string>('SUCCESS');
   const [remark, setRemark] = useState<string>('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [showProviderSuggestions, setShowProviderSuggestions] = useState<boolean>(false);
@@ -55,11 +66,34 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
 
   const handleCustomerMobileChange = (val: string) => {
     setCustomerMobile(val);
+    if (fieldErrors.customerMobile) {
+      setFieldErrors(prev => {
+        const copy = { ...prev };
+        delete copy.customerMobile;
+        return copy;
+      });
+    }
     const clean = val.replace(/[\s-]/g, '');
     if (clean.length === 10) {
       const matched = customers.find(c => c.id !== 'cust-general' && c.mobile && c.mobile.replace(/[\s-]/g, '') === clean);
-      if (matched && (!customerName || customerName === 'Walk-in Customer')) {
+      if (matched && (!customerName || customerName === 'Walk-in Customer' || customerName === 'Customer')) {
         setCustomerName(matched.name);
+      }
+    }
+  };
+
+  const handleAccountOrAadhaarChange = (val: string) => {
+    setAccountOrAadhaar(val);
+    const clean = val.replace(/[\s-]/g, '');
+    if (clean.length === 12) {
+      const matched = customers.find(c => c.id !== 'cust-general' && c.aadhaar_number && c.aadhaar_number.replace(/[\s-]/g, '') === clean);
+      if (matched) {
+        if (!customerName || customerName === 'Walk-in Customer' || customerName === 'Customer') {
+          setCustomerName(matched.name);
+        }
+        if (!customerMobile && matched.mobile) {
+          setCustomerMobile(matched.mobile);
+        }
       }
     }
   };
@@ -71,12 +105,44 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
     setBankOrProvider('');
     setShowProviderSuggestions(false);
     setShowCompanySuggestions(false);
+    setFieldErrors({});
+  };
+
+  const handleChargesChange = (val: string) => {
+    setCharges(val);
+    const c = parseFloat(val) || 0;
+    const comp = parseFloat(companyCharge) || 0;
+    setCommission(String(Math.max(0, c - comp)));
+    if (fieldErrors.companyCharge) {
+      setFieldErrors(prev => {
+        const copy = { ...prev };
+        delete copy.companyCharge;
+        return copy;
+      });
+    }
+  };
+
+  const handleCompanyChargeChange = (val: string) => {
+    setCompanyCharge(val);
+    const c = parseFloat(charges) || 0;
+    const comp = parseFloat(val) || 0;
+    setCommission(String(Math.max(0, c - comp)));
+    if (fieldErrors.companyCharge) {
+      setFieldErrors(prev => {
+        const copy = { ...prev };
+        delete copy.companyCharge;
+        return copy;
+      });
+    }
   };
 
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
       setActiveMode('DMT');
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      setTransactionDate(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`);
       setCompanyName('');
       setCustomerName('');
       setCustomerMobile('');
@@ -84,10 +150,14 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
       setBankOrProvider('');
       setAmount('');
       setCharges('');
+      setCompanyCharge('');
+      setRefund('');
+      setCommission('');
       setStatus('SUCCESS');
       setRemark('');
       setShowProviderSuggestions(false);
       setShowCompanySuggestions(false);
+      setFieldErrors({});
     }
   }, [isOpen]);
 
@@ -124,11 +194,35 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // --- Enterprise Input Validation ---
+    const errors: Record<string, string> = {};
+
     const numAmount = Number(amount);
-    if (!amount || isNaN(numAmount) || !isFinite(numAmount) || numAmount <= 0) {
-      showToast('Please enter a valid amount.', 'warning');
+    const amountValidation = validateTransactionAmountRupees(numAmount);
+    if (!amountValidation.valid) {
+      errors.amount = amountValidation.error!;
+    }
+
+    const mobileValidation = validateMobileNumber(customerMobile);
+    if (!mobileValidation.valid) {
+      errors.customerMobile = mobileValidation.error!;
+    }
+
+    const numCharges = parseFloat(charges) || 0;
+    const numCompanyCharge = parseFloat(companyCharge) || 0;
+    const companyChargeValidation = validateCompanyChargeAgainstFee(numCharges, numCompanyCharge);
+    if (!companyChargeValidation.valid) {
+      errors.companyCharge = companyChargeValidation.error!;
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      const firstError = Object.values(errors)[0];
+      showToast(firstError, 'warning');
       return;
     }
+    // --- End Validation ---
 
     if (bankOrProvider.trim() && modeConfig.defaultProviders.length === 0) {
       saveLearnedBank(bankOrProvider.trim());
@@ -137,18 +231,25 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
       saveLearnedCompany(companyName.trim());
     }
 
-    const cleanCustName = customerName.trim() || 'Walk-in Customer';
-    const cleanCustMobile = customerMobile.trim() || '';
-    const feePaise = charges ? rupeesToPaise(Number(charges)) : 0;
+    const cleanAcct = accountOrAadhaar.trim().replace(/[\s-]/g, '');
+    const cleanCustMobile = customerMobile.trim();
+    const rawCustName = customerName.trim();
+    const feePaise = charges ? rupeesToPaise(numCharges) : 0;
+    const compChargePaise = companyCharge ? rupeesToPaise(numCompanyCharge) : 0;
+    const refundPaise = refund ? rupeesToPaise(Number(refund)) : 0;
+    const commPaise = commission ? rupeesToPaise(Number(commission)) : Math.max(0, feePaise - compChargePaise);
 
-    // Resolve customer profile linkage: link to real profile if customer exists
+    // Resolve customer profile linkage: link to real profile if customer exists by mobile, Aadhaar, or name
     const matchedCustomer = customers.find(c =>
       c.id !== 'cust-general' && (
         (cleanCustMobile && c.mobile && c.mobile.replace(/[\s-]/g, '') === cleanCustMobile.replace(/[\s-]/g, '')) ||
-        (cleanCustName && cleanCustName !== 'Walk-in Customer' && c.name.toLowerCase() === cleanCustName.toLowerCase())
+        (cleanAcct && c.aadhaar_number && c.aadhaar_number.replace(/[\s-]/g, '') === cleanAcct) ||
+        (rawCustName && rawCustName !== 'Walk-in Customer' && c.name.toLowerCase() === rawCustName.toLowerCase())
       )
     );
     const targetCustomerId = matchedCustomer ? matchedCustomer.id : 'cust-general';
+    const cleanCustName = rawCustName || matchedCustomer?.name || 'Customer';
+    const resolvedMobile = cleanCustMobile || matchedCustomer?.mobile || '';
 
     setIsSubmitting(true);
     try {
@@ -158,14 +259,16 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
         payment_mode: activeMode === 'AEPS' ? 'AePS' : activeMode === 'UPI' || activeMode === 'UPI CASH' ? 'UPI' : 'Bank Transfer',
         amount: rupeesToPaise(numAmount),
         transaction_ref_no: accountOrAadhaar.trim() || remark.trim() || '',
-        transaction_date: new Date().toISOString(),
+        transaction_date: transactionDate ? new Date(transactionDate).toISOString() : new Date().toISOString(),
         company_name: companyName.trim(),
         customer_name: cleanCustName,
-        customer_mobile: cleanCustMobile,
+        customer_mobile: resolvedMobile,
         account_or_aadhaar: accountOrAadhaar.trim(),
         bank_name: bankOrProvider.trim(),
         charges: feePaise,
-        commission: feePaise, // Default commission to fee
+        company_charge: compChargePaise,
+        refund: refundPaise,
+        commission: commPaise,
         status: status,
         remark: remark.trim(),
       });
@@ -180,7 +283,7 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-scrim/40 backdrop-blur-xs animate-fadeIn overflow-y-auto">
       <div className="bg-surface-container-lowest w-full max-w-lg rounded-2xl shadow-xl border border-surface-container/70 p-4 sm:p-5 flex flex-col gap-3.5 my-6 animate-scaleUp">
         
@@ -229,6 +332,46 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           
+          {/* Date & Mode Header Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-semibold text-outline">
+                Date & Time
+              </label>
+              <input
+                type="datetime-local"
+                value={transactionDate}
+                onChange={(e) => setTransactionDate(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-xl bg-surface-container text-on-surface text-xs border border-surface-container focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-semibold text-outline">
+                Status
+              </label>
+              <div className="flex items-center gap-1 bg-surface-container-low p-1 rounded-xl border border-surface-container/60 h-[34px]">
+                {(['SUCCESS', 'IN PROGRESS', 'FAILD'] as const).map((st) => (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => setStatus(st)}
+                    className={`flex-1 py-1 rounded-lg text-[10px] font-bold transition text-center ${
+                      status === st
+                        ? st === 'SUCCESS'
+                          ? 'bg-emerald-500 text-white shadow-xs'
+                          : st === 'IN PROGRESS'
+                          ? 'bg-amber-500 text-white shadow-xs'
+                          : 'bg-rose-500 text-white shadow-xs'
+                        : 'text-on-surface-variant hover:text-on-surface'
+                    }`}
+                  >
+                    {st === 'IN PROGRESS' ? 'Pending' : st === 'SUCCESS' ? 'Success' : 'Failed'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
           {/* Main 2-Column Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             
@@ -242,7 +385,7 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
                 list="customer-name-suggestions"
                 value={customerName}
                 onChange={(e) => handleCustomerNameChange(e.target.value)}
-                placeholder="Walk-in Customer (or enter name)"
+                placeholder="Customer Name"
                 className="w-full px-3 py-2 rounded-xl bg-surface-container-low text-on-surface text-xs border border-surface-container focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
               <datalist id="customer-name-suggestions">
@@ -264,8 +407,18 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
                 onChange={(e) => handleCustomerMobileChange(e.target.value)}
                 placeholder="10-digit mobile"
                 maxLength={10}
-                className="w-full px-3 py-2 rounded-xl bg-surface-container-low text-on-surface text-xs font-mono border border-surface-container focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className={`w-full px-3 py-2 rounded-xl bg-surface-container-low text-on-surface text-xs font-mono border focus:outline-none focus:ring-2 ${
+                  fieldErrors.customerMobile
+                    ? 'border-red-500 ring-1 ring-red-500/20'
+                    : 'border-surface-container focus:ring-primary/20'
+                }`}
               />
+              {fieldErrors.customerMobile && (
+                <p className="text-[10px] text-red-500 font-medium flex items-center gap-1 mt-0.5">
+                  <span className="material-symbols-outlined text-[12px]">error</span>
+                  {fieldErrors.customerMobile}
+                </p>
+              )}
               <datalist id="customer-phone-suggestions">
                 {customers.filter(c => c.id !== 'cust-general' && c.mobile).map(c => (
                   <option key={c.id} value={c.mobile} />
@@ -281,7 +434,7 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
               <input
                 type={modeConfig.idFieldType || 'text'}
                 value={accountOrAadhaar}
-                onChange={(e) => setAccountOrAadhaar(e.target.value)}
+                onChange={(e) => handleAccountOrAadhaarChange(e.target.value)}
                 placeholder={modeConfig.idFieldPlaceholder}
                 required
                 className="w-full px-3 py-2 rounded-xl bg-surface-container-low text-on-surface text-xs font-mono border border-surface-container focus:outline-none focus:ring-2 focus:ring-primary/20"
@@ -380,7 +533,7 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
             </div>
           </div>
 
-          {/* Clean Financials Block: Only Amount & Customer Fee */}
+          {/* Financials Block: Amount, Fee, Company Cost, Refund, Commission */}
           <div className="p-3 bg-surface-container-low rounded-xl border border-surface-container/60 flex flex-col gap-2">
             {/* Quick AEPS Amount Chips */}
             {activeMode === 'AEPS' && (
@@ -392,10 +545,12 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
                     type="button"
                     onClick={() => {
                       setAmount(String(val));
-                      if (val <= 1000) setCharges('10');
-                      else if (val <= 2000) setCharges('20');
-                      else if (val <= 3000) setCharges('30');
-                      else setCharges('50');
+                      let fee = 50;
+                      if (val <= 1000) fee = 10;
+                      else if (val <= 2000) fee = 20;
+                      else if (val <= 3000) fee = 30;
+                      setCharges(String(fee));
+                      setCommission(String(fee));
                     }}
                     className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-surface-container hover:bg-primary hover:text-on-primary transition text-on-surface"
                   >
@@ -405,77 +560,128 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3 items-end">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end">
               {/* Amount */}
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-bold text-on-surface">
-                  Amount (₹) <span className="text-red-500 font-bold">*</span>
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[10px] font-bold text-on-surface">
+                  Amount (₹) *
                 </label>
                 <div className="relative">
-                  <span className="absolute left-2.5 top-2 text-outline font-bold text-xs">₹</span>
+                  <span className="absolute left-2 top-1.5 text-outline text-[11px]">₹</span>
                   <input
                     type="number"
                     step="any"
                     value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
+                    onChange={(e) => {
+                      setAmount(e.target.value);
+                      if (fieldErrors.amount) {
+                        setFieldErrors(prev => {
+                          const copy = { ...prev };
+                          delete copy.amount;
+                          return copy;
+                        });
+                      }
+                    }}
                     placeholder="0.00"
                     required
-                    className="w-full pl-6 pr-2 py-1.5 rounded-xl bg-surface-container-lowest text-on-surface font-mono font-bold text-sm border border-surface-container focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    className={`w-full pl-5 pr-1 py-1 rounded-lg bg-surface-container-lowest text-on-surface font-mono font-bold text-xs border focus:outline-none focus:ring-2 ${
+                      fieldErrors.amount
+                        ? 'border-red-500 ring-1 ring-red-500/20'
+                        : 'border-surface-container focus:ring-primary/20'
+                    }`}
                   />
                 </div>
+                {fieldErrors.amount && (
+                  <p className="text-[10px] text-red-500 font-medium flex items-center gap-0.5 mt-0.5">
+                    <span className="material-symbols-outlined text-[11px]">error</span>
+                    {fieldErrors.amount}
+                  </p>
+                )}
               </div>
 
               {/* Customer Fee */}
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-semibold text-on-surface">
-                  Customer Fee (₹)
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[10px] font-semibold text-outline">
+                  Customer Fee
                 </label>
                 <input
                   type="number"
                   step="any"
                   value={charges}
-                  onChange={(e) => setCharges(e.target.value)}
+                  onChange={(e) => handleChargesChange(e.target.value)}
                   placeholder="0.00"
-                  className="w-full px-2.5 py-1.5 rounded-xl bg-surface-container-lowest text-on-surface font-mono text-xs border border-surface-container focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  className="w-full px-2 py-1 rounded-lg bg-surface-container-lowest text-on-surface font-mono text-xs border border-surface-container focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+
+              {/* Company Charge */}
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[10px] font-semibold text-outline" title="Portal fee / deduction">
+                  Company Cost
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={companyCharge}
+                  onChange={(e) => handleCompanyChargeChange(e.target.value)}
+                  placeholder="0.00"
+                  className={`w-full px-2 py-1 rounded-lg bg-surface-container-lowest text-on-surface font-mono text-xs border focus:outline-none focus:ring-2 ${
+                    fieldErrors.companyCharge
+                      ? 'border-red-500 ring-1 ring-red-500/20'
+                      : 'border-surface-container focus:ring-primary/20'
+                  }`}
+                />
+                {fieldErrors.companyCharge && (
+                  <p className="text-[10px] text-red-500 font-medium flex items-center gap-0.5 mt-0.5">
+                    <span className="material-symbols-outlined text-[11px]">error</span>
+                    {fieldErrors.companyCharge}
+                  </p>
+                )}
+              </div>
+
+              {/* Refund */}
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                  Refund
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={refund}
+                  onChange={(e) => setRefund(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full px-2 py-1 rounded-lg bg-surface-container-lowest text-amber-600 dark:text-amber-400 font-mono text-xs border border-surface-container focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+
+              {/* Commission */}
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 font-bold">
+                  Commission
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={commission}
+                  onChange={(e) => setCommission(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono font-bold text-xs border border-emerald-500/30 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                 />
               </div>
             </div>
           </div>
 
-          {/* Status & Remarks Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
-            {/* Status Pills */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-outline font-semibold">Status:</span>
-              <div className="flex items-center gap-1 bg-surface-container-low p-0.5 rounded-lg border border-surface-container/60">
-                {(['SUCCESS', 'IN PROGRESS', 'FAILD'] as const).map((st) => (
-                  <button
-                    key={st}
-                    type="button"
-                    onClick={() => setStatus(st)}
-                    className={`px-2.5 py-0.5 rounded text-[10px] font-bold transition ${
-                      status === st
-                        ? st === 'SUCCESS'
-                          ? 'bg-emerald-500 text-white shadow-xs'
-                          : st === 'IN PROGRESS'
-                          ? 'bg-amber-500 text-white shadow-xs'
-                          : 'bg-rose-500 text-white shadow-xs'
-                        : 'text-on-surface-variant hover:text-on-surface'
-                    }`}
-                  >
-                    {st === 'IN PROGRESS' ? 'Pending' : st === 'SUCCESS' ? 'Success' : 'Failed'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Remark */}
+          {/* Remark Input */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[11px] font-semibold text-outline">
+              Remark / Reference
+            </label>
             <input
               type="text"
               value={remark}
               onChange={(e) => setRemark(e.target.value)}
               placeholder="Remark / Reference note (optional)"
-              className="w-full px-3 py-1.5 rounded-xl bg-surface-container-low text-on-surface text-xs border border-surface-container focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="w-full px-3 py-1.5 rounded-xl bg-surface-container text-on-surface text-xs border border-surface-container focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
 
@@ -509,6 +715,7 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

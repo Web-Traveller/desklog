@@ -2,9 +2,11 @@ import React, { useState } from "react";
 import { useDesk } from "../context/DeskContext";
 import { TaskCard } from "../components/TaskCard";
 import { EmptyState } from "../components/EmptyState";
+import { MetricCard } from "../components/MetricCard";
 import { TaskStatus } from "../types";
 import { isTaskOverdue } from "../services/taskService";
 import { calculatePaymentStatus } from "../services/paymentService";
+import { formatRupees } from "../utils/currencyUtils";
 
 export const TasksPage: React.FC = () => {
   const {
@@ -24,13 +26,43 @@ export const TasksPage: React.FC = () => {
   >("ALL");
   const [serviceFilter, setServiceFilter] = useState<string>("ALL");
   const [overdueOnly, setOverdueOnly] = useState<boolean>(false);
+  const [udhariOnly, setUdhariOnly] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
+
+  const financialSummary = React.useMemo(() => {
+    let billed = 0;
+    let paid = 0;
+    let udhariTasks = 0;
+
+    tasks.forEach((t) => {
+      const b = t.billing_amount || 0;
+      billed += b;
+      const taskPaid = payments
+        .filter((p) => p.task_id === t.id)
+        .reduce((sum, p) => sum + p.amount, 0);
+      paid += taskPaid;
+      if (b - taskPaid > 0) {
+        udhariTasks++;
+      }
+    });
+
+    const pending = Math.max(0, billed - paid);
+    return { billed, paid, pending, udhariTasks };
+  }, [tasks, payments]);
 
   const filteredTasks = React.useMemo(() => {
     return tasks.filter((t) => {
       // Status filter
       if (statusFilter !== "ALL" && t.status !== statusFilter) {
         return false;
+      }
+
+      // Udhari (Pending Balance) filter
+      if (udhariOnly) {
+        const taskPayments = payments.filter((p) => p.task_id === t.id);
+        const taskPaid = taskPayments.reduce((acc, curr) => acc + curr.amount, 0);
+        const due = (t.billing_amount || 0) - taskPaid;
+        if (due <= 0) return false;
       }
 
       // Payment status filter
@@ -50,20 +82,35 @@ export const TasksPage: React.FC = () => {
         return false;
       }
 
-      // Search query
+      // Search query - universal search across task, customer, aadhaar, mobile, tracker ID, document number
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();
         const cust = customers.find((c) => c.id === t.customer_id);
         const titleMatch = t.title.toLowerCase().includes(q);
         const custNameMatch = (cust?.name || "").toLowerCase().includes(q);
         const custMobileMatch = (cust?.mobile || "").includes(q);
+        const custAadhaarMatch = (cust?.aadhaar_number || "").includes(q);
+        const trackerMatch = (t.tracker_id || "").toLowerCase().includes(q);
+        const docMatch = (t.document_number || "").toLowerCase().includes(q);
+        const workTypeMatch = (t.work_type || "").toLowerCase().includes(q);
         const noteMatch = (t.notes || "").toLowerCase().includes(q);
-        return titleMatch || custNameMatch || custMobileMatch || noteMatch;
+        const amountMatch = t.billing_amount !== undefined && t.billing_amount.toString().includes(q);
+        return (
+          titleMatch ||
+          custNameMatch ||
+          custMobileMatch ||
+          custAadhaarMatch ||
+          trackerMatch ||
+          docMatch ||
+          workTypeMatch ||
+          noteMatch ||
+          amountMatch
+        );
       }
 
       return true;
     });
-  }, [tasks, statusFilter, paymentFilter, payments, serviceFilter, overdueOnly, searchTerm, customers]);
+  }, [tasks, statusFilter, paymentFilter, payments, serviceFilter, overdueOnly, udhariOnly, searchTerm, customers]);
 
   const startIndex = taskPage * ITEMS_PER_PAGE;
   const paginatedTasks = React.useMemo(() => {
@@ -95,6 +142,31 @@ export const TasksPage: React.FC = () => {
             <span>+ Create New Task</span>
           </button>
         </div>
+      </div>
+
+      {/* Financial Overview - Billed, Paid, Pending (Udhari) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-space-md">
+        <MetricCard
+          title="Total Work Billed"
+          value={formatRupees(financialSummary.billed)}
+          icon="receipt_long"
+          iconColorClass="text-primary"
+          subtitle={`Across all ${tasks.length} recorded orders`}
+        />
+        <MetricCard
+          title="Collected Revenue (Paid)"
+          value={formatRupees(financialSummary.paid)}
+          icon="check_circle"
+          iconColorClass="text-emerald-500"
+          subtitle="Realized cash & digital receipts"
+        />
+        <MetricCard
+          title="Pending Due (Udhari)"
+          value={formatRupees(financialSummary.pending)}
+          icon="pending_actions"
+          iconColorClass={financialSummary.pending > 0 ? "text-amber-500" : "text-emerald-500"}
+          subtitle={`${financialSummary.udhariTasks} orders with unpaid balance`}
+        />
       </div>
 
       {/* Primary Status Filter Pills */}
@@ -143,13 +215,13 @@ export const TasksPage: React.FC = () => {
 
       {/* Secondary Filter & Search Toolbar */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-space-md items-center bg-surface-container-lowest p-space-md rounded-2xl border border-surface-container/60 shadow-xs">
-        <div className="md:col-span-5 relative flex items-center">
+        <div className="md:col-span-4 relative flex items-center">
           <span className="material-symbols-outlined absolute left-space-sm text-outline pointer-events-none text-xl">
             search
           </span>
           <input
             className="w-full pl-10 pr-space-md py-2.5 rounded-full bg-surface-container-low text-on-surface placeholder:text-outline font-button-utility text-button-utility transition-all focus:outline-none focus:ring-2 focus:ring-primary/20 border border-surface-container-high/40"
-            placeholder="Search task title, customer, mobile..."
+            placeholder="Search task, customer, mobile, Aadhaar, tracker ID, doc #..."
             type="text"
             value={searchTerm}
             onChange={(e) => {
@@ -193,8 +265,26 @@ export const TasksPage: React.FC = () => {
           </select>
         </div>
 
-        <div className="md:col-span-2 flex items-center justify-end">
-          <label className="flex items-center gap-2 cursor-pointer font-fine-print text-fine-print text-on-surface font-semibold select-none">
+        <div className="md:col-span-3 flex items-center justify-end gap-space-sm">
+          <button
+            type="button"
+            onClick={() => {
+              setUdhariOnly(!udhariOnly);
+              setTaskPage(0);
+            }}
+            className={`px-3 py-2 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+              udhariOnly
+                ? "bg-amber-600 text-white shadow-xs ring-2 ring-amber-400/40"
+                : "bg-surface-container hover:bg-surface-container-high text-on-surface-variant border border-surface-container-high/60"
+            }`}
+            title="Filter tasks that still have an unpaid balance (Udhari)"
+          >
+            <span className="material-symbols-outlined text-sm">
+              account_balance_wallet
+            </span>
+            <span>Udhari ({financialSummary.udhariTasks})</span>
+          </button>
+          <label className="flex items-center gap-1.5 cursor-pointer font-fine-print text-fine-print text-on-surface font-semibold select-none">
             <input
               type="checkbox"
               checked={overdueOnly}
@@ -204,7 +294,7 @@ export const TasksPage: React.FC = () => {
               }}
               className="w-4 h-4 rounded text-error border-surface-container-high focus:ring-error"
             />
-            <span className="text-error">Overdue Only</span>
+            <span className="text-error">Overdue</span>
           </label>
         </div>
       </div>

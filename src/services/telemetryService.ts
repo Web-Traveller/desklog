@@ -123,6 +123,10 @@ export async function sendHeartbeat(): Promise<HeartbeatResult> {
         osInfo: osInfo,
       });
 
+      if (!rawJson || rawJson === 'offline_acknowledged') {
+        return FALLBACK;
+      }
+
       const data = JSON.parse(rawJson);
       console.log('[TELEMETRY] Native response:', data);
 

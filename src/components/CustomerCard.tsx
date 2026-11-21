@@ -22,17 +22,22 @@ export const CustomerCard: React.FC<CustomerCardProps> = ({
   const { navigateToCustomerProfile, confirmDeleteCustomer } = useDesk();
 
   const renderHighlightedName = (name: string, query?: string) => {
-    if (!query) return name;
-    const parts = name.split(new RegExp(`(${query})`, 'gi'));
-    return parts.map((part, i) =>
-      part.toLowerCase() === query.toLowerCase() ? (
-        <mark key={i} className="bg-primary-fixed text-on-primary-fixed px-1 rounded">
-          {part}
-        </mark>
-      ) : (
-        part
-      )
-    );
+    if (!query || !query.trim()) return name;
+    try {
+      const escapedQuery = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const parts = name.split(new RegExp(`(${escapedQuery})`, 'gi'));
+      return parts.map((part, i) =>
+        part.toLowerCase() === query.trim().toLowerCase() ? (
+          <mark key={i} className="bg-primary-fixed text-on-primary-fixed px-1 rounded">
+            {part}
+          </mark>
+        ) : (
+          part
+        )
+      );
+    } catch {
+      return name;
+    }
   };
 
   const handleDeleteCustomer = (e: React.MouseEvent) => {

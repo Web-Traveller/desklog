@@ -49,6 +49,12 @@ pub struct Task {
     pub created_at: String,
     pub updated_at: String,
     pub completed_at: Option<String>,
+    #[serde(default)]
+    pub tracker_id: Option<String>,
+    #[serde(default)]
+    pub document_number: Option<String>,
+    #[serde(default)]
+    pub work_type: Option<String>,
 }
 
 #[allow(non_snake_case)]
@@ -109,6 +115,10 @@ pub struct BankingTransaction {
     pub status: Option<String>,
     #[serde(default)]
     pub remark: Option<String>,
+    #[serde(default)]
+    pub company_charge: Option<i64>,
+    #[serde(default)]
+    pub refund: Option<i64>,
 }
 
 pub struct Database {
@@ -134,10 +144,13 @@ impl Database {
         let db_path = app_dir.join("desklog.db");
         let conn = Connection::open(&db_path).map_err(|e| format!("Failed to open database: {}", e))?;
         
+        // Immediately configure SQLite busy timeout before any statement
+        conn.busy_timeout(std::time::Duration::from_secs(10))
+            .map_err(|e| format!("Failed to set busy timeout: {}", e))?;
+
         // Enable SQLite WAL (Write-Ahead Logging) mode and performance pragmas
         conn.execute_batch(
             "PRAGMA journal_mode = WAL;
-             PRAGMA busy_timeout = 5000;
              PRAGMA synchronous = NORMAL;
              PRAGMA foreign_keys = ON;"
         ).map_err(|e| format!("Failed to set database PRAGMAs: {}", e))?;
@@ -365,6 +378,50 @@ impl Database {
             tx.commit()?;
         }
 
+        // Migration v5: Tracker ID, Document Number, Work Type for tasks & Company Charge, Refund for banking
+        let current_version: i32 = conn.query_row("PRAGMA user_version;", [], |row| row.get(0))?;
+        if current_version < 5 {
+            let tx = conn.transaction()?;
+            
+            // 1. Columns for banking_transactions
+            let mut existing_tx_cols = Vec::new();
+            if let Ok(mut stmt) = tx.prepare("PRAGMA table_info(banking_transactions);") {
+                if let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(1)) {
+                    existing_tx_cols = rows.flatten().collect();
+                }
+            }
+            if !existing_tx_cols.contains(&"company_charge".to_string()) {
+                tx.execute_batch("ALTER TABLE banking_transactions ADD COLUMN company_charge INTEGER DEFAULT 0;")?;
+            }
+            if !existing_tx_cols.contains(&"refund".to_string()) {
+                tx.execute_batch("ALTER TABLE banking_transactions ADD COLUMN refund INTEGER DEFAULT 0;")?;
+            }
+
+            // 2. Columns for tasks
+            let mut existing_task_cols = Vec::new();
+            if let Ok(mut stmt) = tx.prepare("PRAGMA table_info(tasks);") {
+                if let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(1)) {
+                    existing_task_cols = rows.flatten().collect();
+                }
+            }
+            if !existing_task_cols.contains(&"tracker_id".to_string()) {
+                tx.execute_batch("ALTER TABLE tasks ADD COLUMN tracker_id TEXT;")?;
+            }
+            if !existing_task_cols.contains(&"document_number".to_string()) {
+                tx.execute_batch("ALTER TABLE tasks ADD COLUMN document_number TEXT;")?;
+            }
+            if !existing_task_cols.contains(&"work_type".to_string()) {
+                tx.execute_batch("ALTER TABLE tasks ADD COLUMN work_type TEXT;")?;
+            }
+
+            tx.execute_batch(
+                "CREATE INDEX IF NOT EXISTS idx_tasks_tracker_id ON tasks(tracker_id);
+                 CREATE INDEX IF NOT EXISTS idx_tasks_document_number ON tasks(document_number);
+                 PRAGMA user_version = 5;"
+            )?;
+            tx.commit()?;
+        }
+
         self.ensure_general_customer(&conn)?;
         Ok(())
     }
@@ -481,7 +538,7 @@ impl Database {
 
     pub fn fetch_tasks(&self) -> Result<Vec<Task>> {
         let conn = self.get_conn();
-        let mut stmt = conn.prepare_cached("SELECT id, customer_id, service_id, title, status, scheduled_date, scheduled_time, target_date, notes, billing_amount, cancellation_reason, created_at, updated_at, completed_at FROM tasks ORDER BY rowid DESC;")?;
+        let mut stmt = conn.prepare_cached("SELECT id, customer_id, service_id, title, status, scheduled_date, scheduled_time, target_date, notes, billing_amount, cancellation_reason, created_at, updated_at, completed_at, tracker_id, document_number, work_type FROM tasks ORDER BY rowid DESC;")?;
         let task_iter = stmt.query_map([], |row| {
             Ok(Task {
                 id: row.get(0)?,
@@ -498,6 +555,9 @@ impl Database {
                 created_at: row.get(11)?,
                 updated_at: row.get(12)?,
                 completed_at: row.get(13)?,
+                tracker_id: row.get(14).unwrap_or(None),
+                document_number: row.get(15).unwrap_or(None),
+                work_type: row.get(16).unwrap_or(None),
             })
         })?;
         let mut tasks = Vec::new();
@@ -509,7 +569,7 @@ impl Database {
 
     pub fn fetch_task_by_id(&self, id: &str) -> Result<Option<Task>> {
         let conn = self.get_conn();
-        let mut stmt = conn.prepare_cached("SELECT id, customer_id, service_id, title, status, scheduled_date, scheduled_time, target_date, notes, billing_amount, cancellation_reason, created_at, updated_at, completed_at FROM tasks WHERE id = ?1;")?;
+        let mut stmt = conn.prepare_cached("SELECT id, customer_id, service_id, title, status, scheduled_date, scheduled_time, target_date, notes, billing_amount, cancellation_reason, created_at, updated_at, completed_at, tracker_id, document_number, work_type FROM tasks WHERE id = ?1;")?;
         let mut task_iter = stmt.query_map(params![id], |row| {
             Ok(Task {
                 id: row.get(0)?,
@@ -526,6 +586,9 @@ impl Database {
                 created_at: row.get(11)?,
                 updated_at: row.get(12)?,
                 completed_at: row.get(13)?,
+                tracker_id: row.get(14).unwrap_or(None),
+                document_number: row.get(15).unwrap_or(None),
+                work_type: row.get(16).unwrap_or(None),
             })
         })?;
         if let Some(result) = task_iter.next() {
@@ -538,8 +601,8 @@ impl Database {
     pub fn insert_task(&self, task: &Task) -> Result<()> {
         let conn = self.get_conn();
         conn.execute(
-            "INSERT INTO tasks (id, customer_id, service_id, title, status, scheduled_date, scheduled_time, target_date, notes, billing_amount, cancellation_reason, created_at, updated_at, completed_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+            "INSERT INTO tasks (id, customer_id, service_id, title, status, scheduled_date, scheduled_time, target_date, notes, billing_amount, cancellation_reason, created_at, updated_at, completed_at, tracker_id, document_number, work_type)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
              ON CONFLICT(id) DO UPDATE SET
                title = excluded.title,
                status = excluded.status,
@@ -551,7 +614,10 @@ impl Database {
                billing_amount = excluded.billing_amount,
                cancellation_reason = excluded.cancellation_reason,
                updated_at = excluded.updated_at,
-               completed_at = excluded.completed_at;",
+               completed_at = excluded.completed_at,
+               tracker_id = excluded.tracker_id,
+               document_number = excluded.document_number,
+               work_type = excluded.work_type;",
             params![
                 task.id,
                 task.customer_id,
@@ -566,7 +632,10 @@ impl Database {
                 task.cancellation_reason,
                 task.created_at,
                 task.updated_at,
-                task.completed_at
+                task.completed_at,
+                task.tracker_id,
+                task.document_number,
+                task.work_type
             ],
         )?;
         Ok(())
@@ -576,7 +645,7 @@ impl Database {
         let conn = self.get_conn();
         let updated_at = chrono::Local::now().to_rfc3339();
         conn.execute(
-            "UPDATE tasks SET service_id = ?1, title = ?2, status = ?3, scheduled_date = ?4, scheduled_time = ?5, target_date = ?6, notes = ?7, billing_amount = ?8, cancellation_reason = ?9, updated_at = ?10, completed_at = ?11 WHERE id = ?12;",
+            "UPDATE tasks SET service_id = ?1, title = ?2, status = ?3, scheduled_date = ?4, scheduled_time = ?5, target_date = ?6, notes = ?7, billing_amount = ?8, cancellation_reason = ?9, updated_at = ?10, completed_at = ?11, tracker_id = ?12, document_number = ?13, work_type = ?14 WHERE id = ?15;",
             params![
                 task.service_id,
                 task.title,
@@ -589,6 +658,9 @@ impl Database {
                 task.cancellation_reason,
                 updated_at,
                 task.completed_at,
+                task.tracker_id,
+                task.document_number,
+                task.work_type,
                 task.id
             ],
         )?;
@@ -673,6 +745,21 @@ impl Database {
         Ok(())
     }
 
+    pub fn update_payment(&self, payment: &Payment) -> Result<()> {
+        let conn = self.get_conn();
+        conn.execute(
+            "UPDATE payments SET task_id = ?1, amount = ?2, created_at = ?3 WHERE id = ?4;",
+            params![payment.task_id, payment.amount, payment.created_at, payment.id],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_payment(&self, id: &str) -> Result<()> {
+        let conn = self.get_conn();
+        conn.execute("DELETE FROM payments WHERE id = ?1;", params![id])?;
+        Ok(())
+    }
+
     pub fn fetch_activities(&self) -> Result<Vec<ActivityEvent>> {
         let conn = self.get_conn();
         let mut stmt = conn.prepare_cached("SELECT id, activity_type, title, description, task_id, customer_id, created_at FROM activities ORDER BY rowid DESC;")?;
@@ -733,7 +820,8 @@ impl Database {
         let conn = self.get_conn();
         let mut stmt = conn.prepare_cached(
             "SELECT id, customer_id, transaction_type, payment_mode, amount, transaction_ref_no, metadata, transaction_date, is_deleted,
-                    company_name, customer_name, customer_mobile, account_or_aadhaar, bank_name, charges, commission, status, remark
+                    company_name, customer_name, customer_mobile, account_or_aadhaar, bank_name, charges, commission, status, remark,
+                    company_charge, refund
              FROM banking_transactions WHERE is_deleted = 0 ORDER BY transaction_date DESC;"
         )?;
         let iter = stmt.query_map([], |row| {
@@ -763,6 +851,8 @@ impl Database {
                 commission: row.get(15)?,
                 status: row.get(16)?,
                 remark: row.get(17)?,
+                company_charge: row.get(18).unwrap_or(Some(0)),
+                refund: row.get(19).unwrap_or(Some(0)),
             })
         })?;
         let mut txs = Vec::new();
@@ -776,7 +866,8 @@ impl Database {
         let conn = self.get_conn();
         let mut stmt = conn.prepare_cached(
             "SELECT id, customer_id, transaction_type, payment_mode, amount, transaction_ref_no, metadata, transaction_date, is_deleted,
-                    company_name, customer_name, customer_mobile, account_or_aadhaar, bank_name, charges, commission, status, remark
+                    company_name, customer_name, customer_mobile, account_or_aadhaar, bank_name, charges, commission, status, remark,
+                    company_charge, refund
              FROM banking_transactions WHERE customer_id = ?1 AND is_deleted = 0 ORDER BY transaction_date DESC;"
         )?;
         let iter = stmt.query_map(params![customer_id], |row| {
@@ -806,6 +897,8 @@ impl Database {
                 commission: row.get(15)?,
                 status: row.get(16)?,
                 remark: row.get(17)?,
+                company_charge: row.get(18).unwrap_or(Some(0)),
+                refund: row.get(19).unwrap_or(Some(0)),
             })
         })?;
         let mut txs = Vec::new();
@@ -837,9 +930,10 @@ impl Database {
         conn.execute(
             "INSERT INTO banking_transactions (
                 customer_id, transaction_type, payment_mode, amount, transaction_ref_no, metadata, transaction_date, is_deleted,
-                company_name, customer_name, customer_mobile, account_or_aadhaar, bank_name, charges, commission, status, remark
+                company_name, customer_name, customer_mobile, account_or_aadhaar, bank_name, charges, commission, status, remark,
+                company_charge, refund
              )
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16);",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18);",
             params![
                 cust_id,
                 tx.transaction_type,
@@ -856,7 +950,9 @@ impl Database {
                 tx.charges.unwrap_or(0),
                 tx.commission.unwrap_or(0),
                 status,
-                tx.remark
+                tx.remark,
+                tx.company_charge.unwrap_or(0),
+                tx.refund.unwrap_or(0)
             ],
         )?;
         let id = conn.last_insert_rowid();
@@ -867,6 +963,69 @@ impl Database {
         inserted.status = Some(status);
         inserted.is_deleted = false;
         Ok(inserted)
+    }
+
+    pub fn update_banking_transaction(&self, tx: &BankingTransaction) -> Result<BankingTransaction> {
+        let id = tx.id.ok_or_else(|| {
+            rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_MISUSE),
+                Some("Transaction ID is required to update".to_string()),
+            )
+        })?;
+        let cust_id = if tx.customer_id.trim().is_empty() {
+            "cust-general".to_string()
+        } else {
+            tx.customer_id.trim().to_string()
+        };
+        let conn = self.get_conn();
+        let status = tx.status.clone().unwrap_or_else(|| "SUCCESS".to_string());
+        conn.execute(
+            "UPDATE banking_transactions SET
+                transaction_type = ?1,
+                payment_mode = ?2,
+                amount = ?3,
+                transaction_ref_no = ?4,
+                metadata = ?5,
+                transaction_date = ?6,
+                company_name = ?7,
+                customer_name = ?8,
+                customer_mobile = ?9,
+                account_or_aadhaar = ?10,
+                bank_name = ?11,
+                charges = ?12,
+                commission = ?13,
+                status = ?14,
+                remark = ?15,
+                company_charge = ?16,
+                refund = ?17,
+                customer_id = ?18
+             WHERE id = ?19;",
+            params![
+                tx.transaction_type,
+                tx.payment_mode,
+                tx.amount,
+                tx.transaction_ref_no,
+                tx.metadata,
+                tx.transaction_date,
+                tx.company_name,
+                tx.customer_name,
+                tx.customer_mobile,
+                tx.account_or_aadhaar,
+                tx.bank_name,
+                tx.charges.unwrap_or(0),
+                tx.commission.unwrap_or(0),
+                status,
+                tx.remark,
+                tx.company_charge.unwrap_or(0),
+                tx.refund.unwrap_or(0),
+                cust_id,
+                id
+            ],
+        )?;
+        let mut updated = tx.clone();
+        updated.customer_id = cust_id;
+        updated.status = Some(status);
+        Ok(updated)
     }
 
     pub fn delete_banking_transaction(&self, id: i64) -> Result<()> {
@@ -930,23 +1089,3 @@ impl Database {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn verify_migration_v3_on_live_db() {
-        let path = "C:\\Users\\Ajinkya\\AppData\\Roaming\\com.desklog.manager\\desklog.db";
-        let db_path = PathBuf::from(path);
-        let app_dir = db_path.parent().unwrap().to_path_buf();
-        if let Ok(db) = Database::new(app_dir) {
-            let conn = db.get_conn();
-            let version: i32 = conn.query_row("PRAGMA user_version;", [], |row| row.get(0)).unwrap();
-            assert!(version >= 3);
-            let mut stmt = conn.prepare("PRAGMA table_info(customers);").unwrap();
-            let cols: Vec<String> = stmt.query_map([], |row| row.get::<_, String>(1)).unwrap().flatten().collect();
-            assert!(cols.contains(&"aadhaar_number".to_string()));
-            println!("Migration v3 verified successfully! Version is {}", version);
-        }
-    }
-}

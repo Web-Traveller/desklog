@@ -15,6 +15,8 @@ export interface DeskContextType {
   setSelectedCustomerId: (id: string | null) => void;
   highlightedTaskId: string | null;
   setHighlightedTaskId: (id: string | null) => void;
+  highlightedBankingTxId: number | null;
+  setHighlightedBankingTxId: (id: number | null) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   taskDateFilter: string;
@@ -34,6 +36,8 @@ export interface DeskContextType {
   editService: (service: Service) => Promise<void>;
   deleteService: (id: string) => Promise<void>;
   addPayment: (payment: Omit<Payment, 'id' | 'created_at'>) => Promise<void>;
+  editPayment: (id: string, updates: Partial<Payment>) => Promise<void>;
+  deletePayment: (id: string) => Promise<void>;
 
   addCustomer: (customerData: Omit<Customer, 'id' | 'created_at' | 'updated_at'>) => Promise<Customer>;
   editCustomer: (id: string, customerData: Partial<Customer>) => Promise<void>;
@@ -43,7 +47,7 @@ export interface DeskContextType {
   updateBankingTransaction: (id: number, updates: Partial<BankingTransaction>) => Promise<void>;
   deleteBankingTransaction: (id: number) => Promise<void>;
 
-  addTask: (taskData: Omit<Task, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
+  addTask: (taskData: Omit<Task, 'id' | 'created_at' | 'updated_at'>, initialPaidAmount?: number) => Promise<Task | null>;
   updateTaskStatus: (taskId: string, newStatus: TaskStatus, cancellationReason?: string) => Promise<void>;
   updateTask: (taskId: string, taskData: Partial<Task>) => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
@@ -72,6 +76,7 @@ export interface DeskContextType {
 
   navigateToCustomerProfile: (customerId: string) => void;
   navigateToCustomerTaskProfile: (customerId: string, taskId: string) => void;
+  navigateToBankingTx: (txId: number) => void;
   performSearch: (query: string) => void;
 
   taskPage: number;

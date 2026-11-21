@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useDesk } from '../context/DeskContext';
 import { MetricCard } from '../components/MetricCard';
 import { EmptyState } from '../components/EmptyState';
+import { EditPaymentModal } from '../components/EditPaymentModal';
+import { Payment, Task, Customer } from '../types';
 import { formatDisplayDate } from '../utils/dateUtils';
 import { formatRupees } from '../utils/currencyUtils';
 
@@ -9,6 +11,7 @@ export const PaymentsPage: React.FC = () => {
   const { tasks, payments, customers, navigateToCustomerTaskProfile } = useDesk();
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(0);
+  const [editingPayment, setEditingPayment] = useState<{ pay: Payment; task?: Task; customer?: Customer } | null>(null);
   const PAGE_SIZE = 15;
 
   // Memoized Computations
@@ -44,14 +47,19 @@ export const PaymentsPage: React.FC = () => {
         const customer = customers.find((c) => c.id === task?.customer_id);
         return { pay, task, customer };
       })
-      .filter(({ task, customer }) => {
-        if (!searchTerm) return true;
-        const q = searchTerm.toLowerCase();
-        return (
-          task?.title.toLowerCase().includes(q) ||
-          customer?.name.toLowerCase().includes(q) ||
-          customer?.mobile?.includes(q)
-        );
+      .filter(({ pay, task, customer }) => {
+        if (!searchTerm.trim()) return true;
+        const q = searchTerm.toLowerCase().trim();
+        const cleanQ = searchTerm.replace(/[\s-]/g, '').toLowerCase();
+        const titleMatch = task?.title.toLowerCase().includes(q) || false;
+        const nameMatch = customer?.name.toLowerCase().includes(q) || false;
+        const mobileMatch = customer?.mobile ? customer.mobile.replace(/[\s-]/g, '').includes(cleanQ) : false;
+        const aadhaarMatch = customer?.aadhaar_number ? customer.aadhaar_number.replace(/[\s-]/g, '').includes(cleanQ) : false;
+        const trackerMatch = task?.tracker_id ? task.tracker_id.toLowerCase().includes(q) : false;
+        const docMatch = task?.document_number ? task.document_number.toLowerCase().includes(q) : false;
+        const amtStr = String(Math.floor((pay.amount || 0) / 100));
+        const amountMatch = amtStr.includes(cleanQ);
+        return titleMatch || nameMatch || mobileMatch || aadhaarMatch || trackerMatch || docMatch || amountMatch;
       })
       .sort((a, b) => new Date(b.pay.created_at).getTime() - new Date(a.pay.created_at).getTime());
   }, [payments, tasks, customers, searchTerm]);
@@ -185,14 +193,26 @@ export const PaymentsPage: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-space-md py-space-sm text-center">
-                      <button
-                        className="px-3 py-1.5 rounded-full text-outline hover:text-primary hover:bg-primary-container transition-colors font-button-utility text-button-utility"
-                        onClick={() => {
-                          if (task && customer) navigateToCustomerTaskProfile(customer.id, task.id);
-                        }}
-                      >
-                        View Task
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          className="px-2.5 py-1 rounded-full text-xs font-semibold text-outline hover:text-primary hover:bg-surface-container transition-colors flex items-center gap-1"
+                          onClick={() => setEditingPayment({ pay, task, customer })}
+                          title="Edit Payment"
+                        >
+                          <span className="material-symbols-outlined text-sm">edit</span>
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="px-2.5 py-1 rounded-full text-xs font-semibold text-outline hover:text-primary hover:bg-primary-container transition-colors"
+                          onClick={() => {
+                            if (task && customer) navigateToCustomerTaskProfile(customer.id, task.id);
+                          }}
+                        >
+                          View Task
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -229,6 +249,15 @@ export const PaymentsPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Edit Payment Modal */}
+      <EditPaymentModal
+        isOpen={!!editingPayment}
+        payment={editingPayment?.pay || null}
+        task={editingPayment?.task}
+        customer={editingPayment?.customer}
+        onClose={() => setEditingPayment(null)}
+      />
     </div>
   );
 };

@@ -1,8 +1,10 @@
-import React, { useState, useMemo } from 'react';
-import { useBanking, useCustomers, useUI } from '../context/DeskContext';
+import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { useBanking, useCustomers, useUI, useTasks } from '../context/DeskContext';
 import { BankingTransaction } from '../types';
 import { EmptyState } from '../components/EmptyState';
 import { MetricCard } from '../components/MetricCard';
+import { EditBankingTransactionModal } from '../components/EditBankingTransactionModal';
 import { formatDisplayDate } from '../utils/dateUtils';
 import { formatRupees } from '../utils/currencyUtils';
 import {
@@ -14,7 +16,8 @@ import {
 export const BankingPage: React.FC = () => {
   const { bankingTransactions, deleteBankingTransaction, updateBankingTransaction } = useBanking();
   const { customers } = useCustomers();
-  const { showConfirm, setIsAddBankingOpen, showToast } = useUI();
+  const { showConfirm, setIsAddBankingOpen, showToast, highlightedBankingTxId, setHighlightedBankingTxId } = useUI();
+  const { saveAppSetting, getSettingValue } = useTasks();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('All');
@@ -24,6 +27,7 @@ export const BankingPage: React.FC = () => {
   const PAGE_SIZE = 15;
   const [showCashCalculator, setShowCashCalculator] = useState(false);
   const [selectedTxForDetails, setSelectedTxForDetails] = useState<BankingTransaction | null>(null);
+  const [editingTx, setEditingTx] = useState<BankingTransaction | null>(null);
 
   // Cash Denominations (from Balances Dashboard)
   const [denominations, setDenominations] = useState<Record<number, number>>(() => {
@@ -59,6 +63,22 @@ export const BankingPage: React.FC = () => {
     }
   });
 
+  // Sync balances and notes with SQLite settings on mount
+  useEffect(() => {
+    const dbCash = getSettingValue('desklog_counter_cash_notes');
+    if (dbCash) {
+      try {
+        setDenominations(JSON.parse(dbCash));
+      } catch {}
+    }
+    const dbWallets = getSettingValue('desklog_portal_balances');
+    if (dbWallets) {
+      try {
+        setWalletBalances(JSON.parse(dbWallets));
+      } catch {}
+    }
+  }, [getSettingValue]);
+
   const totalPhysicalCash = useMemo(() => {
     return Object.entries(denominations).reduce((sum, [note, count]) => sum + (Number(note) * (count || 0)), 0);
   }, [denominations]);
@@ -73,26 +93,32 @@ export const BankingPage: React.FC = () => {
     const count = parseInt(countStr, 10) || 0;
     const updated = { ...denominations, [note]: Math.max(0, count) };
     setDenominations(updated);
+    const serialized = JSON.stringify(updated);
     try {
-      localStorage.setItem('desklog_counter_cash_notes', JSON.stringify(updated));
+      localStorage.setItem('desklog_counter_cash_notes', serialized);
     } catch {}
+    saveAppSetting('desklog_counter_cash_notes', serialized).catch(() => {});
   };
 
   const updateWalletBalance = (wallet: string, amountStr: string) => {
     const amount = parseFloat(amountStr) || 0;
     const updated = { ...walletBalances, [wallet]: Math.max(0, amount) };
     setWalletBalances(updated);
+    const serialized = JSON.stringify(updated);
     try {
-      localStorage.setItem('desklog_portal_balances', JSON.stringify(updated));
+      localStorage.setItem('desklog_portal_balances', serialized);
     } catch {}
+    saveAppSetting('desklog_portal_balances', serialized).catch(() => {});
   };
 
   const handleClearCash = () => {
     const cleared = { 500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0 };
     setDenominations(cleared);
+    const serialized = JSON.stringify(cleared);
     try {
-      localStorage.setItem('desklog_counter_cash_notes', JSON.stringify(cleared));
+      localStorage.setItem('desklog_counter_cash_notes', serialized);
     } catch {}
+    saveAppSetting('desklog_counter_cash_notes', serialized).catch(() => {});
   };
 
   // Customer ID to Customer Map for fast O(1) lookups
@@ -113,11 +139,22 @@ export const BankingPage: React.FC = () => {
     return counts;
   }, [bankingTransactions]);
 
-  const getCustomerDisplayName = (tx: any) => {
-    if (tx.customer_name && tx.customer_name.trim()) {
+  const getCustomerDisplayName = (tx: BankingTransaction): string => {
+    if (tx.customer_name && tx.customer_name.trim() && tx.customer_name.trim() !== 'Walk-in Customer') {
       return tx.customer_name.trim();
     }
-    return customerMap.get(tx.customer_id) || 'Walk-in Customer';
+    const fromId = customerMap.get(tx.customer_id);
+    if (fromId && fromId.trim() && fromId !== 'General / Walk-in Client' && fromId !== 'Walk-in Customer') {
+      return fromId.trim();
+    }
+    const cleanMobile = tx.customer_mobile?.replace(/[\s-]/g, '');
+    const cleanAcct = tx.account_or_aadhaar?.replace(/[\s-]/g, '');
+    const matched = customers.find((c) =>
+      (cleanMobile && c.mobile && c.mobile.replace(/[\s-]/g, '') === cleanMobile) ||
+      (cleanAcct && c.aadhaar_number && c.aadhaar_number.replace(/[\s-]/g, '') === cleanAcct)
+    );
+    if (matched?.name) return matched.name;
+    return 'Customer';
   };
 
   // Filtered transactions
@@ -151,44 +188,88 @@ export const BankingPage: React.FC = () => {
         }
       }
 
-      // Search Query
+      // Universal Deep Search Query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const custName = (tx.customer_name || customerMap.get(tx.customer_id) || '').toLowerCase();
-        const mobile = (tx.customer_mobile || '').toLowerCase();
+        const cleanQ = searchQuery.replace(/[\s-]/g, '').toLowerCase();
+        const custName = getCustomerDisplayName(tx).toLowerCase();
+        const mobile = (tx.customer_mobile || '').replace(/[\s-]/g, '').toLowerCase();
         const portal = (tx.company_name || '').toLowerCase();
         const bank = (tx.bank_name || '').toLowerCase();
-        const acct = (tx.account_or_aadhaar || tx.transaction_ref_no || '').toLowerCase();
+        const acct = (tx.account_or_aadhaar || tx.transaction_ref_no || '').replace(/[\s-]/g, '').toLowerCase();
         const remark = (tx.remark || '').toLowerCase();
+        const mode = (tx.transaction_type || '').toLowerCase();
+        const status = (tx.status || '').toLowerCase();
+        const amtStr = String(Math.floor((tx.amount || 0) / 100));
+        const feeStr = String(Math.floor((tx.charges || 0) / 100));
+        const commStr = String(Math.floor((tx.commission || 0) / 100));
+        const refStr = String(Math.floor((tx.refund || 0) / 100));
+
+        // Also check if any customer matching query is linked by mobile or Aadhaar
+        const matchedCust = customers.find((c) =>
+          (mobile && c.mobile && c.mobile.replace(/[\s-]/g, '') === mobile) ||
+          (acct && c.aadhaar_number && c.aadhaar_number.replace(/[\s-]/g, '') === acct) ||
+          (c.id === tx.customer_id && c.id !== 'cust-general')
+        );
+        const custAadhaar = matchedCust?.aadhaar_number ? matchedCust.aadhaar_number.replace(/[\s-]/g, '').toLowerCase() : '';
+        const matchedCustName = matchedCust?.name ? matchedCust.name.toLowerCase() : '';
 
         return (
           custName.includes(q) ||
-          mobile.includes(q) ||
+          matchedCustName.includes(q) ||
+          mobile.includes(cleanQ) ||
           portal.includes(q) ||
           bank.includes(q) ||
-          acct.includes(q) ||
-          remark.includes(q)
+          acct.includes(cleanQ) ||
+          custAadhaar.includes(cleanQ) ||
+          remark.includes(q) ||
+          mode.includes(q) ||
+          status.includes(q) ||
+          amtStr.includes(cleanQ) ||
+          feeStr.includes(cleanQ) ||
+          commStr.includes(cleanQ) ||
+          refStr.includes(cleanQ)
         );
       }
 
       return true;
     });
-  }, [bankingTransactions, filterType, statusFilter, dateFilter, searchQuery, customerMap]);
+  }, [bankingTransactions, filterType, statusFilter, dateFilter, searchQuery, customerMap, customers]);
 
-  // Aggregate Metrics - KISS (Only 3 essential numbers)
-  const { totalVolume, totalTransactions, totalCharges } = useMemo(() => {
+  // Comprehensive Metrics: Volume, Transactions, Fees, Commission, Refunds, Inflow/Outflow
+  const { totalVolume, totalTransactions, totalCommission, totalRefunds, sentOutflow, receivedInflow, successCount } = useMemo(() => {
     let vol = 0;
     let chg = 0;
+    let comm = 0;
+    let ref = 0;
+    let sent = 0;
+    let received = 0;
+    let succ = 0;
 
     filteredTransactions.forEach((tx) => {
       vol += tx.amount || 0;
       chg += tx.charges || 0;
+      comm += tx.commission || 0;
+      ref += tx.refund || 0;
+      if (tx.status === 'SUCCESS' || !tx.status) {
+        succ++;
+        if (tx.transaction_type === 'AEPS') {
+          received += tx.amount || 0;
+        } else {
+          sent += tx.amount || 0;
+        }
+      }
     });
 
     return {
       totalVolume: vol,
       totalTransactions: filteredTransactions.length,
       totalCharges: chg,
+      totalCommission: comm,
+      totalRefunds: ref,
+      sentOutflow: sent,
+      receivedInflow: received,
+      successCount: succ,
     };
   }, [filteredTransactions]);
 
@@ -198,6 +279,39 @@ export const BankingPage: React.FC = () => {
     safePage * PAGE_SIZE,
     (safePage + 1) * PAGE_SIZE
   );
+
+  // Auto-scroll and highlight transaction navigated from Universal Search
+  useEffect(() => {
+    if (!highlightedBankingTxId) return;
+
+    // Reset filters so the targeted transaction is visible in ledger
+    setFilterType('All');
+    setStatusFilter('All');
+    setDateFilter('All Time');
+    setSearchQuery('');
+
+    const index = (bankingTransactions || []).findIndex((t) => t.id === highlightedBankingTxId);
+    if (index !== -1) {
+      const targetPage = Math.floor(index / PAGE_SIZE);
+      setPage(targetPage);
+
+      const scrollTimer = setTimeout(() => {
+        const el = document.getElementById(`banking-tx-${highlightedBankingTxId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 150);
+
+      const clearTimer = setTimeout(() => {
+        setHighlightedBankingTxId(null);
+      }, 4500);
+
+      return () => {
+        clearTimeout(scrollTimer);
+        clearTimeout(clearTimer);
+      };
+    }
+  }, [highlightedBankingTxId, bankingTransactions, PAGE_SIZE, setHighlightedBankingTxId]);
 
   const handleDelete = (id: number) => {
     showConfirm({
@@ -382,26 +496,81 @@ ${tx.remark ? `Remark: ${tx.remark}\n` : ''}===================================`
         </div>
       )}
 
-      {/* Metrics Row - Simple 3-card layout */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {/* Minimal Date Scope Selector & Quick Summary */}
+      <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-surface-container-lowest border border-surface-container/60 shadow-xs">
+        <div className="flex items-center gap-1.5">
+          <span className="material-symbols-outlined text-sm text-primary">calendar_today</span>
+          <span className="text-xs font-semibold text-on-surface">Records:</span>
+          <div className="flex items-center gap-1">
+            {(['Today', 'This Week', 'This Month', 'All Time'] as const).map((df) => (
+              <button
+                key={df}
+                type="button"
+                onClick={() => { setDateFilter(df); setPage(0); }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  dateFilter === df
+                    ? 'bg-primary text-on-primary font-bold shadow-xs'
+                    : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+                }`}
+              >
+                {df}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 text-xs text-on-surface-variant font-medium">
+          <span>Total Records: <strong className="font-mono text-on-surface">{totalTransactions}</strong></span>
+          <span>•</span>
+          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+            {successCount} Success
+          </span>
+          {totalTransactions - successCount > 0 && (
+            <>
+              <span>•</span>
+              <span className="text-rose-500 font-semibold">
+                {totalTransactions - successCount} Other
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Minimal Summary Metrics - 5 Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <MetricCard
           icon="account_balance"
-          title="Total Volume"
+          title="Turnover Volume"
           value={formatRupees(totalVolume)}
-          subtitle="Processed volume"
+          subtitle={`${successCount} successful operations`}
         />
         <MetricCard
-          icon="receipt_long"
-          title="Total Transactions"
-          value={totalTransactions}
-          subtitle="Counter operations"
+          icon="arrow_upward"
+          iconColorClass="text-blue-500"
+          title="Sent Outflow"
+          value={formatRupees(sentOutflow)}
+          subtitle="DMT & bill payments"
         />
         <MetricCard
-          icon="payments"
-          iconColorClass="text-secondary"
-          title="Customer Fees"
-          value={formatRupees(totalCharges)}
-          subtitle="Total fees collected"
+          icon="arrow_downward"
+          iconColorClass="text-emerald-500"
+          title="Received Inflow"
+          value={formatRupees(receivedInflow)}
+          subtitle="AePS & cash withdrawals"
+        />
+        <MetricCard
+          icon="trending_up"
+          iconColorClass="text-emerald-500"
+          title="Net Commission"
+          value={formatRupees(totalCommission)}
+          subtitle="Your counter earnings"
+        />
+        <MetricCard
+          icon="replay"
+          iconColorClass="text-amber-500"
+          title="Refunds"
+          value={formatRupees(totalRefunds)}
+          subtitle="Customer reversals"
         />
       </div>
 
@@ -502,21 +671,23 @@ ${tx.remark ? `Remark: ${tx.remark}\n` : ''}===================================`
           <table className="w-full text-left border-collapse text-xs">
             <thead className="bg-surface-container-low/70 border-b border-surface-container/60">
               <tr>
-                <th className="py-3 px-4 font-semibold text-outline whitespace-nowrap">Date</th>
-                <th className="py-3 px-3 font-semibold text-outline whitespace-nowrap">Mode</th>
-                <th className="py-3 px-4 font-semibold text-outline">Customer & Ref</th>
-                <th className="py-3 px-4 font-semibold text-outline">Service & Portal</th>
-                <th className="py-3 px-4 font-semibold text-outline text-right">Amount</th>
-                <th className="py-3 px-4 font-semibold text-outline text-right">Fee (₹)</th>
-                <th className="py-3 px-3 font-semibold text-outline text-center">Status</th>
-                <th className="py-3 px-3 font-semibold text-outline text-center w-12"></th>
+                <th className="py-3 px-3 font-semibold text-outline whitespace-nowrap">Date</th>
+                <th className="py-3 px-2 font-semibold text-outline whitespace-nowrap">Mode</th>
+                <th className="py-3 px-3 font-semibold text-outline">Customer & Ref</th>
+                <th className="py-3 px-3 font-semibold text-outline">Service & Portal</th>
+                <th className="py-3 px-3 font-semibold text-outline text-right">Amount</th>
+                <th className="py-3 px-3 font-semibold text-outline text-right">Fee (₹)</th>
+                <th className="py-3 px-3 font-semibold text-outline text-right text-amber-600 dark:text-amber-400">Refund</th>
+                <th className="py-3 px-3 font-semibold text-outline text-right text-emerald-600 dark:text-emerald-400">Commission</th>
+                <th className="py-3 px-2 font-semibold text-outline text-center">Status</th>
+                <th className="py-3 px-2 font-semibold text-outline text-center w-24">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-container/40">
               {filteredTransactions.length === 0 ? (
                 <EmptyState
                   isTableRow
-                  colSpan={8}
+                  colSpan={10}
                   icon="account_balance_wallet"
                   title="No banking records found"
                   description={
@@ -533,11 +704,17 @@ ${tx.remark ? `Remark: ${tx.remark}\n` : ''}===================================`
                   const isSuccess = txStatus === 'SUCCESS';
                   const isFailed = txStatus === 'FAILD';
                   const identifier = tx.account_or_aadhaar || tx.transaction_ref_no || '';
+                  const isHighlighted = highlightedBankingTxId === tx.id;
 
                   return (
                     <tr
                       key={tx.id}
-                      className="hover:bg-surface-container-lowest/90 transition-colors group"
+                      id={`banking-tx-${tx.id}`}
+                      className={`transition-all duration-500 group ${
+                        isHighlighted
+                          ? 'bg-primary/20 ring-2 ring-primary ring-inset font-semibold shadow-md animate-pulse'
+                          : 'hover:bg-surface-container-lowest/90'
+                      }`}
                     >
                       {/* Date */}
                       <td className="py-3 px-4 whitespace-nowrap text-on-surface-variant font-medium">
@@ -578,17 +755,27 @@ ${tx.remark ? `Remark: ${tx.remark}\n` : ''}===================================`
                       </td>
 
                       {/* Amount */}
-                      <td className="py-3 px-4 text-right font-bold text-on-surface font-mono text-sm whitespace-nowrap">
+                      <td className="py-3 px-3 text-right font-bold text-on-surface font-mono text-xs whitespace-nowrap">
                         {formatRupees(tx.amount)}
                       </td>
 
-                      {/* Customer Fee Only */}
-                      <td className="py-3 px-4 text-right font-mono text-on-surface-variant font-medium whitespace-nowrap">
+                      {/* Customer Fee */}
+                      <td className="py-3 px-3 text-right font-mono text-on-surface-variant font-medium whitespace-nowrap">
                         {tx.charges && tx.charges > 0 ? formatRupees(tx.charges) : '₹0'}
                       </td>
 
+                      {/* Refund */}
+                      <td className="py-3 px-3 text-right font-mono text-amber-600 dark:text-amber-400 font-medium whitespace-nowrap">
+                        {tx.refund && tx.refund > 0 ? formatRupees(tx.refund) : '-'}
+                      </td>
+
+                      {/* Commission */}
+                      <td className="py-3 px-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                        {tx.commission && tx.commission > 0 ? formatRupees(tx.commission) : '₹0'}
+                      </td>
+
                       {/* Status */}
-                      <td className="py-3 px-3 whitespace-nowrap text-center">
+                      <td className="py-3 px-2 whitespace-nowrap text-center">
                         <span
                           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                             isSuccess
@@ -608,7 +795,7 @@ ${tx.remark ? `Remark: ${tx.remark}\n` : ''}===================================`
                       </td>
 
                       {/* Actions */}
-                      <td className="py-3 px-3 whitespace-nowrap text-center">
+                      <td className="py-3 px-2 whitespace-nowrap text-center">
                         <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => setSelectedTxForDetails(tx)}
@@ -617,6 +804,14 @@ ${tx.remark ? `Remark: ${tx.remark}\n` : ''}===================================`
                             type="button"
                           >
                             <span className="material-symbols-outlined text-base">receipt_long</span>
+                          </button>
+                          <button
+                            onClick={() => setEditingTx(tx)}
+                            className="p-1.5 rounded-lg text-outline hover:text-primary hover:bg-surface-container transition-colors"
+                            title="Edit Transaction"
+                            type="button"
+                          >
+                            <span className="material-symbols-outlined text-base">edit</span>
                           </button>
                           <button
                             onClick={() => tx.id && handleDelete(tx.id)}
@@ -668,7 +863,7 @@ ${tx.remark ? `Remark: ${tx.remark}\n` : ''}===================================`
       </div>
 
       {/* Transaction Details & Receipt Slip Modal */}
-      {selectedTxForDetails && (
+      {selectedTxForDetails && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 backdrop-blur-sm p-4 animate-fadeIn">
           <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-2xl max-w-md w-full border border-surface-container/60 flex flex-col gap-4">
             <div className="flex items-center justify-between pb-3 border-b border-surface-container/60">
@@ -727,9 +922,27 @@ ${tx.remark ? `Remark: ${tx.remark}\n` : ''}===================================`
                 <span className="font-bold text-base text-on-surface">{formatRupees(selectedTxForDetails.amount)}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-outline font-sans">Fee:</span>
+                <span className="text-outline font-sans">Customer Fee:</span>
                 <span className="text-on-surface-variant">{selectedTxForDetails.charges ? formatRupees(selectedTxForDetails.charges) : '₹0'}</span>
               </div>
+              {selectedTxForDetails.company_charge !== undefined && selectedTxForDetails.company_charge > 0 && (
+                <div className="flex justify-between items-center">
+                  <span className="text-outline font-sans">Company Cost:</span>
+                  <span className="text-on-surface-variant font-medium">{formatRupees(selectedTxForDetails.company_charge)}</span>
+                </div>
+              )}
+              {selectedTxForDetails.refund !== undefined && selectedTxForDetails.refund > 0 && (
+                <div className="flex justify-between items-center text-amber-600 dark:text-amber-400">
+                  <span className="font-sans font-bold">Refund:</span>
+                  <span className="font-bold">{formatRupees(selectedTxForDetails.refund)}</span>
+                </div>
+              )}
+              {selectedTxForDetails.commission !== undefined && selectedTxForDetails.commission > 0 && (
+                <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-400">
+                  <span className="font-sans font-bold">Net Commission:</span>
+                  <span className="font-bold text-sm">{formatRupees(selectedTxForDetails.commission)}</span>
+                </div>
+              )}
               {selectedTxForDetails.remark && (
                 <div className="pt-2 border-t border-surface-container/40 text-[11px] text-outline font-sans">
                   Note: {selectedTxForDetails.remark}
@@ -762,27 +975,50 @@ ${tx.remark ? `Remark: ${tx.remark}\n` : ''}===================================`
               </div>
             </div>
 
-            {/* Footer Actions: Copy Slip, Close */}
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-surface-container/60">
+            {/* Footer Actions: Copy Slip, Edit, Close */}
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-surface-container/60">
               <button
                 type="button"
-                onClick={() => handleCopyReceipt(selectedTxForDetails)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold transition"
+                onClick={() => {
+                  const txToEdit = selectedTxForDetails;
+                  setSelectedTxForDetails(null);
+                  setEditingTx(txToEdit);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container hover:bg-surface-container-high text-primary text-xs font-semibold transition"
               >
-                <span className="material-symbols-outlined text-sm text-primary">content_copy</span>
-                <span>Copy Slip</span>
+                <span className="material-symbols-outlined text-sm">edit</span>
+                <span>Edit Record</span>
               </button>
-              <button
-                type="button"
-                onClick={() => setSelectedTxForDetails(null)}
-                className="px-5 py-1.5 rounded-full bg-primary hover:bg-primary-container text-on-primary text-xs font-bold transition shadow-xs"
-              >
-                Done
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleCopyReceipt(selectedTxForDetails)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold transition"
+                >
+                  <span className="material-symbols-outlined text-sm text-primary">content_copy</span>
+                  <span>Copy Slip</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTxForDetails(null)}
+                  className="px-5 py-1.5 rounded-full bg-primary hover:bg-primary-container text-on-primary text-xs font-bold transition shadow-xs"
+                >
+                  Done
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
+
+      {/* Edit Banking Transaction Modal */}
+      <EditBankingTransactionModal
+        isOpen={!!editingTx}
+        transaction={editingTx}
+        onClose={() => setEditingTx(null)}
+      />
     </div>
   );
 };

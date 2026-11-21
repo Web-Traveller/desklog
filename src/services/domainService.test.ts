@@ -100,9 +100,20 @@ describe('Phase 18: Core Domain Business Rules', () => {
       ...partialPayments,
       { id: 'pay-2', task_id: task.id, amount: 30000, created_at: '2026-09-29 12:00:00' },
     ];
-    expect(calculatePaidTotal(fullPayments)).toBe(50000);
-    expect(calculateDueAmount(task.billing_amount, fullPayments)).toBe(0);
-    expect(calculatePaymentStatus(task.billing_amount, fullPayments)).toBe('PAID');
+    // 4. Payment Adjustment (Phase 1 Edit Payment): Changing pay-1 from 20000 to 10000 paise
+    const adjustedPayments: Payment[] = [
+      { ...partialPayments[0], amount: 10000 },
+      fullPayments[1],
+    ];
+    expect(calculatePaidTotal(adjustedPayments)).toBe(40000);
+    expect(calculateDueAmount(task.billing_amount, adjustedPayments)).toBe(10000);
+    expect(calculatePaymentStatus(task.billing_amount, adjustedPayments)).toBe('PARTIALLY_PAID');
+
+    // 5. Payment Deletion (Phase 1 Void Payment): Deleting pay-2 leaves only pay-1 (10000 paise)
+    const afterDeletePayments: Payment[] = [adjustedPayments[0]];
+    expect(calculatePaidTotal(afterDeletePayments)).toBe(10000);
+    expect(calculateDueAmount(task.billing_amount, afterDeletePayments)).toBe(40000);
+    expect(calculatePaymentStatus(task.billing_amount, afterDeletePayments)).toBe('PARTIALLY_PAID');
   });
 
   test('Overdue System: Past target completion date triggers overdue flag without mutating status', () => {

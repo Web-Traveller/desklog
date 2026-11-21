@@ -13,7 +13,7 @@ export const CustomerSearchPicker: React.FC<CustomerSearchPickerProps> = ({
   customers,
   selectedCustomerId,
   onSelectCustomer,
-  label = 'Select Customer / Walk-in',
+  label = 'Customer Name',
   placeholder = 'Type customer name or mobile number...',
 }) => {
   const [isOpen, setIsOpen] = useState(false);

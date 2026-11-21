@@ -119,6 +119,18 @@ export async function saveTauriPayment(payment: Payment): Promise<Payment> {
   return res || payment;
 }
 
+export async function updateTauriPayment(payment: Payment): Promise<boolean> {
+  if (!isTauriEnv()) return true;
+  await invoke('edit_payment', { payment });
+  return true;
+}
+
+export async function deleteTauriPayment(id: string): Promise<boolean> {
+  if (!isTauriEnv()) return true;
+  await invoke('delete_payment', { id });
+  return true;
+}
+
 // --- ACTIVITIES ---
 interface RawActivityEvent {
   id: string;
@@ -245,6 +257,17 @@ export async function saveTauriBankingTransaction(tx: BankingTransaction): Promi
   if (!isTauriEnv()) return tx;
   const res = await invoke<BankingTransaction>('add_banking_transaction', { tx });
   return res || tx;
+}
+
+export async function updateTauriBankingTransaction(tx: BankingTransaction): Promise<BankingTransaction | null> {
+  if (!isTauriEnv()) return tx;
+  try {
+    const res = await invoke<BankingTransaction>('edit_banking_transaction', { tx });
+    return res || tx;
+  } catch (err) {
+    console.warn('Failed to update banking transaction:', err);
+    return null;
+  }
 }
 
 export async function deleteTauriBankingTransaction(id: number): Promise<boolean> {

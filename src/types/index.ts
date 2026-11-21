@@ -41,6 +41,9 @@ export interface Task {
   created_at: string;
   updated_at: string;
   completed_at?: string;
+  tracker_id?: string;
+  document_number?: string;
+  work_type?: string;
 }
 
 export interface Payment {
@@ -54,15 +57,21 @@ export interface Payment {
 export type ActivityEventType =
   | 'customer_created'
   | 'customer_updated'
+  | 'customer_deleted'
   | 'task_created'
   | 'task_edited'
   | 'task_scheduled'
   | 'task_rescheduled'
   | 'status_changed'
   | 'payment_added'
+  | 'payment_updated'
+  | 'payment_deleted'
   | 'task_ready'
   | 'task_delivered'
-  | 'task_cancelled';
+  | 'task_cancelled'
+  | 'banking_transaction_added'
+  | 'banking_transaction_updated'
+  | 'banking_transaction_deleted';
 
 export interface ActivityEvent {
   id: string;
@@ -168,7 +177,15 @@ export interface BankingTransaction {
   /** Stored in integer paise, 1 INR = 100 Paise */
   charges?: number;
   /** Stored in integer paise, 1 INR = 100 Paise */
+  company_charge?: number;
+  /** Stored in integer paise, 1 INR = 100 Paise */
+  refund?: number;
+  /** Stored in integer paise, 1 INR = 100 Paise */
   commission?: number;
+  /** Transaction processing status.
+   * Note: 'FAILD' is intentional — matches raw client data export from Excel ledger.
+   * Display layer maps this to 'Failed' for the UI.
+   */
   status?: 'SUCCESS' | 'FAILD' | 'IN PROGRESS' | string;
   remark?: string;
 }

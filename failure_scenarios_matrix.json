@@ -1,0 +1,992 @@
+[
+  {
+    "id": 1,
+    "category": "Customer Profile & Identification",
+    "issue": "9-digit mobile number entered by mistake",
+    "priority": "High",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Customer profile cannot receive SMS/WhatsApp updates; searches fail; profile save blocked without inline field error indicator.",
+    "possible_solution": "Real-time inline validation checking length === 10 with instant red border and helper text 'Must be 10 digits'."
+  },
+  {
+    "id": 2,
+    "category": "Customer Profile & Identification",
+    "issue": "11-digit mobile number entered with leading zero (e.g. 09820012345)",
+    "priority": "Medium",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Validation blocks submission if strictly checking 10 digits; customer frustrated.",
+    "possible_solution": "Auto-sanitize leading '0' on blur/change: val.startsWith('0') ? val.slice(1) : val."
+  },
+  {
+    "id": 3,
+    "category": "Customer Profile & Identification",
+    "issue": "Country code prefix (+91 or 91) pasted from WhatsApp/contacts",
+    "priority": "Medium",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "String length becomes 12-13 chars; regex rejects valid number.",
+    "possible_solution": "Input normalizer that strips '+91', spaces, and dashes before regex validation."
+  },
+  {
+    "id": 4,
+    "category": "Customer Profile & Identification",
+    "issue": "Shared mobile number between family members (father, son, wife)",
+    "priority": "High",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Multiple distinct citizen documents mistakenly linked to the same entity or search ambiguity.",
+    "possible_solution": "Banner warning 'Shared mobile detected with X profiles', allowing selection of existing person or explicit creation of new independent person."
+  },
+  {
+    "id": 5,
+    "category": "Customer Profile & Identification",
+    "issue": "Aadhaar number entered with 11 digits (missing 1 digit)",
+    "priority": "High",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Invalid biometric key stored; AePS or DBT government portal lookup fails.",
+    "possible_solution": "Aadhaar field formatter with 4-4-4 auto-spacing (XXXX XXXX XXXX) and 12-digit length check."
+  },
+  {
+    "id": 6,
+    "category": "Customer Profile & Identification",
+    "issue": "Aadhaar entered with hyphens/spaces (1234-5678-9012)",
+    "priority": "High",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Database query for '123456789012' returns zero results.",
+    "possible_solution": "Strip all whitespace and non-digit characters in sanitization layer before database write and search indexing."
+  },
+  {
+    "id": 7,
+    "category": "Customer Profile & Identification",
+    "issue": "Customer name left blank during quick counter rush",
+    "priority": "Medium",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Form cannot submit or creates anonymous corrupt records.",
+    "possible_solution": "Auto-populate default fallback to 'Walk-in Client' or 'Counter Customer' if name is left blank."
+  },
+  {
+    "id": 8,
+    "category": "Customer Profile & Identification",
+    "issue": "Special characters or quotes in customer name (e.g. Ramesh 'Bhai' Patil)",
+    "priority": "Medium",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "SQL query syntax error or CSV export column shifting/injection.",
+    "possible_solution": "Sanitize quotes and escape CSV formulas using cleanCSVCell utility."
+  },
+  {
+    "id": 9,
+    "category": "Customer Profile & Identification",
+    "issue": "Deleting customer profile that has open active tasks or unpaid balance",
+    "priority": "Critical",
+    "client_feedback_linked": "paid, pending, total amount",
+    "impact": "Cascade deletion deletes active tasks and pending udhari records permanently.",
+    "possible_solution": "Enforce soft-delete (is_active = false) and block deletion if customer has tasks with pending status or unpaid dues."
+  },
+  {
+    "id": 10,
+    "category": "Customer Profile & Identification",
+    "issue": "Customer name entered in irregular casing (ALL CAPS or all lowercase)",
+    "priority": "Low",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Unprofessional receipts and slips printed for government submissions.",
+    "possible_solution": "Auto-title-case customer names on input blur."
+  },
+  {
+    "id": 11,
+    "category": "Customer Profile & Identification",
+    "issue": "Letter typed in mobile number by mistake (e.g. 98200O1234, letter O instead of 0)",
+    "priority": "High",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Invalid phone stored; SMS API delivery failure.",
+    "possible_solution": "Set input type='tel' with inputMode='numeric' and block non-digit keystrokes via onKeyDown."
+  },
+  {
+    "id": 12,
+    "category": "Customer Profile & Identification",
+    "issue": "Marathi / Hindi Unicode text in notes without proper encoding",
+    "priority": "Medium",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Corrupted characters (mojibake / question marks) when exporting to Excel CSV.",
+    "possible_solution": "Prepend UTF-8 Byte Order Mark ('\\uFEFF') to all exported CSV strings."
+  },
+  {
+    "id": 13,
+    "category": "Customer Profile & Identification",
+    "issue": "Customer inactivated while owing udhari / pending amount",
+    "priority": "High",
+    "client_feedback_linked": "paid, pending, total amount",
+    "impact": "Outstanding dues hidden from standard view; shopkeeper forgets to collect balance.",
+    "possible_solution": "Show unpaid balance warning dialog before deactivating profile; include inactive debtors in Dues report."
+  },
+  {
+    "id": 14,
+    "category": "Customer Profile & Identification",
+    "issue": "Accidentally deleting default general walk-in profile ('cust-general')",
+    "priority": "Critical",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "All walk-in transactions and quick desk services fail foreign key constraint.",
+    "possible_solution": "Hardcode immunity for 'cust-general' in UI and backend trigger."
+  },
+  {
+    "id": 15,
+    "category": "Customer Profile & Identification",
+    "issue": "Customer mobile updated without syncing linked past transaction mobile numbers",
+    "priority": "Medium",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Searching new mobile misses past historical transactions.",
+    "possible_solution": "Universal search searches by customer ID relation or optionally prompts 'Update past transactions with new mobile?'."
+  },
+  {
+    "id": 16,
+    "category": "Tasks & Work Manager",
+    "issue": "Typo in Tracker ID / Government Application Ack Number",
+    "priority": "High",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Searching portal status fails; client thinks application was never submitted.",
+    "possible_solution": "Add format validation and quick clipboard paste button with character count indicator."
+  },
+  {
+    "id": 17,
+    "category": "Tasks & Work Manager",
+    "issue": "Document number swapped with Tracker ID",
+    "priority": "Medium",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Disorganized records; receipts display application number as certificate number.",
+    "possible_solution": "Clear field placeholders and tooltips explaining Tracker ID (Ack) vs Document Number (Final Certificate)."
+  },
+  {
+    "id": 18,
+    "category": "Tasks & Work Manager",
+    "issue": "Target completion date set to past date accidentally",
+    "priority": "Medium",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Task immediately shows up in Overdue alerts and triggers desktop notifications.",
+    "possible_solution": "Warn user if target date is before today before saving."
+  },
+  {
+    "id": 19,
+    "category": "Tasks & Work Manager",
+    "issue": "Billing amount entered as negative or zero for billable service",
+    "priority": "Critical",
+    "client_feedback_linked": "paid, pending, total amount",
+    "impact": "Revenue and total billing calculations distorted; marks task as paid.",
+    "possible_solution": "Enforce billing_amount > 0 for active tasks unless marked as explicitly complimentary."
+  },
+  {
+    "id": 20,
+    "category": "Tasks & Work Manager",
+    "issue": "Decimal paise precision drift in billing amount (e.g. ₹150.75)",
+    "priority": "Medium",
+    "client_feedback_linked": "paid, pending, total amount",
+    "impact": "Floating point inaccuracies in ledger sums.",
+    "possible_solution": "Strict integer paise storage (Math.round(amount * 100)) with 2-decimal display format."
+  },
+  {
+    "id": 21,
+    "category": "Tasks & Work Manager",
+    "issue": "Advance payment entered greater than total billing amount",
+    "priority": "High",
+    "client_feedback_linked": "paid, pending, total amount",
+    "impact": "Pending due calculates as negative balance (negative udhari).",
+    "possible_solution": "Validate that paid <= billing amount, or clearly label excess as 'Advance Customer Deposit'."
+  },
+  {
+    "id": 22,
+    "category": "Tasks & Work Manager",
+    "issue": "Task marked 'DELIVERED' while pending payment is still unpaid",
+    "priority": "High",
+    "client_feedback_linked": "paid, pending, total amount",
+    "impact": "Customer takes document home without paying; shop loses money.",
+    "possible_solution": "Show confirmation modal: 'Pending due ₹X remaining. Mark as Delivered with Udhari or Record Payment first?'."
+  },
+  {
+    "id": 23,
+    "category": "Tasks & Work Manager",
+    "issue": "Task marked 'CANCELLED' without recording cancellation reason",
+    "priority": "Medium",
+    "client_feedback_linked": "paid, pending, total amount",
+    "impact": "Audit trail dispute between customer and shop on why application failed.",
+    "possible_solution": "Make cancellation reason prompt mandatory when status transitions to 'CANCELLED'."
+  },
+  {
+    "id": 24,
+    "category": "Tasks & Work Manager",
+    "issue": "Task deleted while partial payments were already logged",
+    "priority": "Critical",
+    "client_feedback_linked": "Edit option for the payment records, and othre things",
+    "impact": "Orphan payments left in database or revenue records mismatched against tasks.",
+    "possible_solution": "Warn user of existing payments; allow transferring payment to customer wallet or refunding before task deletion."
+  },
+  {
+    "id": 25,
+    "category": "Tasks & Work Manager",
+    "issue": "Double click on 'Create Task' creates two identical tasks in SQLite",
+    "priority": "High",
+    "client_feedback_linked": "paid, pending, total amount",
+    "impact": "Duplicate workload cards and duplicated billing due.",
+    "possible_solution": "Disable submit button immediately upon click with isSubmitting state guard."
+  },
+  {
+    "id": 26,
+    "category": "Tasks & Work Manager",
+    "issue": "Work Type typed freely with typos (e.g. 'Domasile' instead of 'Domicile')",
+    "priority": "Medium",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Work manager analytics cannot group tasks by category.",
+    "possible_solution": "Datalist autocomplete with learned fuzzy matching from CLIENT_WORK_TYPES."
+  },
+  {
+    "id": 27,
+    "category": "Tasks & Work Manager",
+    "issue": "Task scheduled without delivery time",
+    "priority": "Low",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Calendar view groups all tasks at midnight (00:00).",
+    "possible_solution": "Default delivery time to standard shop closing time (e.g. 18:00) if left empty."
+  },
+  {
+    "id": 28,
+    "category": "Tasks & Work Manager",
+    "issue": "Client upgrades service mid-way (Normal PAN to Tatkal PAN)",
+    "priority": "Medium",
+    "client_feedback_linked": "paid, pending, total amount",
+    "impact": "Billing amount changes; existing advance payment must be preserved and due recalculated.",
+    "possible_solution": "Allow editing billing amount in EditTaskModal with dynamic recalculated pending due."
+  },
+  {
+    "id": 29,
+    "category": "Tasks & Work Manager",
+    "issue": "Concurrent edit of task notes by two operators",
+    "priority": "Medium",
+    "client_feedback_linked": "Edit option for the payment records, and othre things",
+    "impact": "Last write wins, overwriting critical tracking notes.",
+    "possible_solution": "Append-only timestamped notes or optimistic locking on task updated_at."
+  },
+  {
+    "id": 30,
+    "category": "Tasks & Work Manager",
+    "issue": "Task logged under wrong customer profile",
+    "priority": "High",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Customer profile contains wrong document history and wrong udhari.",
+    "possible_solution": "Allow re-assigning customer profile in EditTaskModal."
+  },
+  {
+    "id": 31,
+    "category": "Tasks & Work Manager",
+    "issue": "Task billing amount left blank",
+    "priority": "High",
+    "client_feedback_linked": "paid, pending, total amount",
+    "impact": "Task marked as paid immediately; shop loses track of unbilled service fees.",
+    "possible_solution": "Prompt: 'No billing amount entered. Is this a free consultation service?'."
+  },
+  {
+    "id": 32,
+    "category": "Tasks & Work Manager",
+    "issue": "Accidental drag-and-drop of Kanban card to wrong status column on touch screen",
+    "priority": "Medium",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Task marked 'Delivered' or 'Cancelled' accidentally.",
+    "possible_solution": "Add quick 'Undo' toast popup when status changes via drag."
+  },
+  {
+    "id": 33,
+    "category": "Tasks & Work Manager",
+    "issue": "Excessively long title or remarks entered overflowing UI",
+    "priority": "Low",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Kanban cards expand vertically and distort board grid.",
+    "possible_solution": "Apply line-clamp-2 on task card titles and max-length constraints."
+  },
+  {
+    "id": 34,
+    "category": "Tasks & Work Manager",
+    "issue": "Default service price altered in Settings, affecting past task records",
+    "priority": "Critical",
+    "client_feedback_linked": "paid, pending, total amount",
+    "impact": "Past completed revenue figures change unpredictably.",
+    "possible_solution": "Tasks copy price at creation time; service price changes only affect future tasks."
+  },
+  {
+    "id": 35,
+    "category": "Tasks & Work Manager",
+    "issue": "Task marked Delivered without entering final issued certificate document number",
+    "priority": "High",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "When customer needs duplicate printout later, shop cannot retrieve document.",
+    "possible_solution": "Highlight Document Number input when transitioning to Ready or Delivered."
+  },
+  {
+    "id": 36,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Customer Aadhaar entered into Bank Account Number field in DMT mode",
+    "priority": "High",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Money transfer record logged with wrong identifier; reconciliation against portal fails.",
+    "possible_solution": "Detect 12-digit format and prompt: 'This looks like an Aadhaar number. Did you mean AePS mode?'."
+  },
+  {
+    "id": 37,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Bank account number entered with spaces or hyphens",
+    "priority": "Medium",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Exact match search by account number fails.",
+    "possible_solution": "Auto-strip spaces from account number on paste and input."
+  },
+  {
+    "id": 38,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Customer fee (charges) left as zero for money transfer",
+    "priority": "High",
+    "client_feedback_linked": "refund and commission fields",
+    "impact": "Commission calculation shows ₹0 or negative; shop profit understated.",
+    "possible_solution": "Auto-suggest standard fee based on amount tiers (e.g. 1% or ₹10 per ₹1,000)."
+  },
+  {
+    "id": 39,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Company cost (portal fee) entered higher than customer fee",
+    "priority": "Critical",
+    "client_feedback_linked": "refund and commission fields",
+    "impact": "Negative commission; shop loses money on transaction.",
+    "possible_solution": "Validate company_charge <= charges with explicit warning before submission."
+  },
+  {
+    "id": 40,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Refund amount entered on a successful transaction",
+    "priority": "High",
+    "client_feedback_linked": "refund and commission fields",
+    "impact": "Distorts net commission and reduces drawer balance erroneously.",
+    "possible_solution": "Only enable Refund field when status is 'FAILD' or 'REFUNDED'."
+  },
+  {
+    "id": 41,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Typo in IMPS/UTR reference number",
+    "priority": "High",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Customer claims money not received; shopkeeper cannot locate bank reference.",
+    "possible_solution": "Verify UTR format (typically 12 digits for UPI/IMPS) with format validation helper."
+  },
+  {
+    "id": 42,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Selecting wrong portal/company (e.g. logged as SAFEPAY when done via PAYBINGO)",
+    "priority": "High",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Portal wallet reconciliation does not match actual balance in Safepay/Paybingo.",
+    "possible_solution": "Display recently used portals with quick 1-click selection chips."
+  },
+  {
+    "id": 43,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Wrong destination bank selected from suggestions",
+    "priority": "Medium",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Receipt displays wrong bank; recipient bank dispute.",
+    "possible_solution": "Searchable autocomplete dropdown with bank logo / initials and full name."
+  },
+  {
+    "id": 44,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Transaction marked 'SUCCESS' when bank portal was 'Pending / Timeout'",
+    "priority": "High",
+    "client_feedback_linked": "refund and commission fields",
+    "impact": "Premature profit recognition; if transaction fails at bank, customer demands refund.",
+    "possible_solution": "Set default status to 'IN PROGRESS' if reference number is missing or portal is pending."
+  },
+  {
+    "id": 45,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Failed transfer refunded to customer from cash drawer without updating DeskLog",
+    "priority": "Critical",
+    "client_feedback_linked": "refund and commission fields",
+    "impact": "Cash drawer has a shortage equal to refund amount at evening closing.",
+    "possible_solution": "Add 1-click 'Process Refund' action on failed banking transactions that logs drawer outflow."
+  },
+  {
+    "id": 46,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "AePS withdrawal debited from customer but cash handover interrupted",
+    "priority": "Critical",
+    "client_feedback_linked": "refund and commission fields",
+    "impact": "Severe legal and customer conflict; shop accused of theft.",
+    "possible_solution": "Audit logging with exact seconds timestamp and receipt generation for handover confirmation."
+  },
+  {
+    "id": 47,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Single transaction amount entered with extra zeros (e.g. ₹10,00,000 instead of ₹10,000)",
+    "priority": "Critical",
+    "client_feedback_linked": "paid, pending, total amount",
+    "impact": "Daily turnover and volume metrics instantly distorted by 100x.",
+    "possible_solution": "Hard upper limit ceiling of ₹10,00,000 per transaction and confirmation prompt for amounts > ₹1,00,000."
+  },
+  {
+    "id": 48,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Nepal remittance logged without receiver citizenship or PIN",
+    "priority": "High",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "RBI Indo-Nepal Remittance regulatory violation; recipient in Nepal cannot claim cash.",
+    "possible_solution": "Enforce receiver citizenship or bank account required in NEPAL mode."
+  },
+  {
+    "id": 49,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Mobile recharge operator selected incorrectly",
+    "priority": "Low",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Commission variance between operators.",
+    "possible_solution": "Detect operator based on mobile prefix where possible."
+  },
+  {
+    "id": 50,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Electricity bill payment consumer number missing subdivision code",
+    "priority": "Medium",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Bill payment cannot be verified on Mahavitaran/MSEDC portal.",
+    "possible_solution": "Provide subdivision helper notes for major boards like MSEDC and Torrent."
+  },
+  {
+    "id": 51,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Credit card bill payment card last 4 digits mistyped",
+    "priority": "High",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Payment posted to wrong card account; customer incurs bank penalties.",
+    "possible_solution": "Display card issuer + last 4 digits confirmation check."
+  },
+  {
+    "id": 52,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Transaction date selected in the future",
+    "priority": "Medium",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Transaction does not appear in today's daily counter ledger.",
+    "possible_solution": "Default to current local date/time and disallow future dates."
+  },
+  {
+    "id": 53,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Editing banking transaction after end of day without audit trace",
+    "priority": "High",
+    "client_feedback_linked": "Edit option for the payment records, and othre things",
+    "impact": "Historical profit and cash balance altered invisibly.",
+    "possible_solution": "Log 'banking_transaction_updated' in activity audit events."
+  },
+  {
+    "id": 54,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Deleting banking transaction instead of marking 'FAILD'",
+    "priority": "Critical",
+    "client_feedback_linked": "refund and commission fields",
+    "impact": "Financial ledger record vanishes; impossible to reconcile bank statement.",
+    "possible_solution": "Soft-delete only with mandatory audit event logging."
+  },
+  {
+    "id": 55,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Customer scans shop QR for cash handover, but online payment reverses",
+    "priority": "Critical",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Shopkeeper hands out cash, customer online transfer fails later.",
+    "possible_solution": "Track UPI Cash as 'Pending UTR Verification' until bank SMS confirmation."
+  },
+  {
+    "id": 56,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Consolidating 5 separate transfers into one bulk entry",
+    "priority": "High",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Individual customer tracking and receipt generation impossible.",
+    "possible_solution": "Streamline fast 10-second entry flow so individual entries take minimal time."
+  },
+  {
+    "id": 57,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Copying receipt slip copies wrong/stale clipboard data",
+    "priority": "High",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Old customer's receipt sent to new customer via WhatsApp, exposing private data.",
+    "possible_solution": "Explicit toast confirmation displaying customer name of copied receipt."
+  },
+  {
+    "id": 58,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Fee counted in net commission even when status is 'FAILD'",
+    "priority": "Critical",
+    "client_feedback_linked": "refund and commission fields",
+    "impact": "Profit metrics overstated by unearned fees.",
+    "possible_solution": "Exclude transactions where status === 'FAILD' from commission sums."
+  },
+  {
+    "id": 59,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Counter cash drawer balance calculates as negative",
+    "priority": "High",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Shopkeeper did not enter opening cash float, rendering cash counter meaningless.",
+    "possible_solution": "Add 'Opening Float' entry at start of business day."
+  },
+  {
+    "id": 60,
+    "category": "Banking, DMT, AePS & Remittance",
+    "issue": "Prepaid BC wallet balance goes negative",
+    "priority": "Medium",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Unrecorded wallet top-ups distort remaining portal balance.",
+    "possible_solution": "Provide simple '+ Add Wallet Top-Up' quick action in Balances Dashboard."
+  },
+  {
+    "id": 61,
+    "category": "Cash Drawer & Denominations",
+    "issue": "Entering negative note count in cash drawer",
+    "priority": "Medium",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Subtracts physical cash from total drawer calculation.",
+    "possible_solution": "Clamp note count to Math.max(0, count)."
+  },
+  {
+    "id": 62,
+    "category": "Cash Drawer & Denominations",
+    "issue": "Entering decimal note count (e.g. 2.5 notes)",
+    "priority": "Low",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Fractional notes do not exist physically; causes strange totals.",
+    "possible_solution": "Parse counts with parseInt(val, 10)."
+  },
+  {
+    "id": 63,
+    "category": "Cash Drawer & Denominations",
+    "issue": "Clearing browser cache wipes counter cash note counts",
+    "priority": "High",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Cash drawer tally lost on browser reset.",
+    "possible_solution": "Persist denominations to SQLite settings table (completed)."
+  },
+  {
+    "id": 64,
+    "category": "Cash Drawer & Denominations",
+    "issue": "Owner adds personal cash to drawer without logging in DeskLog",
+    "priority": "Medium",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Physical drawer has surplus cash compared to system tally.",
+    "possible_solution": "Provide 'Cash In / Cash Out' drawer adjustments ledger."
+  },
+  {
+    "id": 65,
+    "category": "Cash Drawer & Denominations",
+    "issue": "Cash drawer shortage at end of day closing",
+    "priority": "High",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Tally discrepancy unaccounted for.",
+    "possible_solution": "Show variance amount: 'Physical Cash vs Expected System Balance: Difference ₹X'."
+  },
+  {
+    "id": 66,
+    "category": "Cash Drawer & Denominations",
+    "issue": "Shop bank to portal wallet top-up omitted from records",
+    "priority": "High",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Portal wallet shows zero balance while portal has funds.",
+    "possible_solution": "Quick sync action for portal balances."
+  },
+  {
+    "id": 67,
+    "category": "Cash Drawer & Denominations",
+    "issue": "Cash calculator shows outdated ₹2000 notes",
+    "priority": "Low",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Cluttered UI with obsolete currency note.",
+    "possible_solution": "Active notes restricted to 500, 200, 100, 50, 20, 10."
+  },
+  {
+    "id": 68,
+    "category": "Cash Drawer & Denominations",
+    "issue": "Accidentally clicking 'Clear' on cash counter",
+    "priority": "Medium",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "All entered note counts reset immediately.",
+    "possible_solution": "Require confirmation prompt or provide 5-second undo button."
+  },
+  {
+    "id": 69,
+    "category": "Cash Drawer & Denominations",
+    "issue": "Slow responsiveness on older dual-core kiosk PCs",
+    "priority": "Medium",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Keystroke lag when counting money.",
+    "possible_solution": "Debounce persistence writes and optimize memoized subtotal calculations."
+  },
+  {
+    "id": 70,
+    "category": "Cash Drawer & Denominations",
+    "issue": "Drawer counted while a high-value AePS transaction is in progress",
+    "priority": "Medium",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Drawer cash matches momentarily, then shows discrepancy once transaction is saved.",
+    "possible_solution": "Show indicator: '1 transaction currently in progress'."
+  },
+  {
+    "id": 71,
+    "category": "Payments, Udhari & Collections",
+    "issue": "Payment recorded against wrong task for same customer",
+    "priority": "Critical",
+    "client_feedback_linked": "Edit option for the payment records, and othre things",
+    "impact": "Task A shows unpaid due while Task B is overpaid; customer confused.",
+    "possible_solution": "Create EditPaymentModal allowing re-allocation of payment to correct task."
+  },
+  {
+    "id": 72,
+    "category": "Payments, Udhari & Collections",
+    "issue": "Typo in payment amount (e.g. entered ₹5000 instead of ₹500)",
+    "priority": "Critical",
+    "client_feedback_linked": "Edit option for the payment records, and othre things",
+    "impact": "Grossly inflates revenue; clears udhari falsely.",
+    "possible_solution": "Add Edit Payment action in PaymentsPage table to modify amount or delete erroneous entry."
+  },
+  {
+    "id": 73,
+    "category": "Payments, Udhari & Collections",
+    "issue": "Customer paid via UPI QR, but logged as Cash",
+    "priority": "High",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Cash drawer has deficit; bank has surplus.",
+    "possible_solution": "Support payment_mode property on Payment entity (Cash vs Online/UPI)."
+  },
+  {
+    "id": 74,
+    "category": "Payments, Udhari & Collections",
+    "issue": "Accidentally deleting payment record with no way to restore",
+    "priority": "High",
+    "client_feedback_linked": "Edit option for the payment records, and othre things",
+    "impact": "Task reverts to unpaid; audit trail broken.",
+    "possible_solution": "Confirmation modal and log activity event on payment deletion."
+  },
+  {
+    "id": 75,
+    "category": "Payments, Udhari & Collections",
+    "issue": "Recording payment on an already deleted task",
+    "priority": "High",
+    "client_feedback_linked": "Edit option for the payment records, and othre things",
+    "impact": "SQLite foreign key crash.",
+    "possible_solution": "Validate task existence before saving payment."
+  },
+  {
+    "id": 76,
+    "category": "Payments, Udhari & Collections",
+    "issue": "Accidental payment logged on a ₹0 billing task",
+    "priority": "Medium",
+    "client_feedback_linked": "paid, pending, total amount",
+    "impact": "Paid amount > billing amount; anomalous status.",
+    "possible_solution": "Prompt to update task billing amount if payment exceeds total."
+  },
+  {
+    "id": 77,
+    "category": "Payments, Udhari & Collections",
+    "issue": "Clicking 'Add Payment' twice adds double payment",
+    "priority": "High",
+    "client_feedback_linked": "Edit option for the payment records, and othre things",
+    "impact": "Customer gets double credit; shop loses revenue.",
+    "possible_solution": "Disable button with isAddingPayment state guard (completed)."
+  },
+  {
+    "id": 78,
+    "category": "Payments, Udhari & Collections",
+    "issue": "Exporting payments CSV without converting integer paise to rupees",
+    "priority": "Critical",
+    "client_feedback_linked": "paid, pending, total amount",
+    "impact": "Turnover exported as 100x actual amounts, creating severe tax liability risk.",
+    "possible_solution": "Ensure all CSV exports use Math.floor(amount / 100) (completed)."
+  },
+  {
+    "id": 79,
+    "category": "Payments, Udhari & Collections",
+    "issue": "Payment table displays 'Unknown Customer' for orphan task",
+    "priority": "Medium",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Cashier cannot tell who made the payment.",
+    "possible_solution": "Graceful fallback joining customer through task or general walk-in record."
+  },
+  {
+    "id": 80,
+    "category": "Payments, Udhari & Collections",
+    "issue": "Payment timestamp saved in UTC causing date shifts across midnight",
+    "priority": "High",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Payments made late evening appear under yesterday's or tomorrow's tally.",
+    "possible_solution": "Store ISO string with local timezone offset or format via date-fns/local date utils."
+  },
+  {
+    "id": 81,
+    "category": "Hardware, System & OS Failures",
+    "issue": "Sudden power cut / inverter trip while typing in modal",
+    "priority": "Critical",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "All in-progress typed information lost upon PC reboot.",
+    "possible_solution": "Auto-save active modal form draft to sessionStorage on every keystroke and offer restore on open."
+  },
+  {
+    "id": 82,
+    "category": "Hardware, System & OS Failures",
+    "issue": "Windows crash / Blue Screen during database write",
+    "priority": "Critical",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Database corruption if journal mode is unsafe.",
+    "possible_solution": "Enforce PRAGMA journal_mode = WAL and synchronous = NORMAL in SQLite (completed in db.rs)."
+  },
+  {
+    "id": 83,
+    "category": "Hardware, System & OS Failures",
+    "issue": "USB pen drive removed during database backup creation",
+    "priority": "High",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Corrupted partial backup file on pen drive.",
+    "possible_solution": "Write to temp file first, verify file integrity, then atomic rename to destination."
+  },
+  {
+    "id": 84,
+    "category": "Hardware, System & OS Failures",
+    "issue": "Antivirus software locks desklog.db during scheduled scan",
+    "priority": "High",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Tauri throws 'database is locked' (SQLite busy error).",
+    "possible_solution": "Configure SQLite busy_timeout(5000) so connection retries for 5 seconds."
+  },
+  {
+    "id": 85,
+    "category": "Hardware, System & OS Failures",
+    "issue": "C: drive runs out of disk space (0 bytes free)",
+    "priority": "Critical",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "SQLite writes fail with I/O error; app crashes.",
+    "possible_solution": "Check disk space on startup and warn user if free space < 100 MB."
+  },
+  {
+    "id": 86,
+    "category": "Hardware, System & OS Failures",
+    "issue": "App installed without write permissions to AppData directory",
+    "priority": "High",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Cannot create or read SQLite database.",
+    "possible_solution": "Detect permission error and show clear error dialog with run-as-admin advice."
+  },
+  {
+    "id": 87,
+    "category": "Hardware, System & OS Failures",
+    "issue": "Motherboard CMOS battery dies, resetting system clock to year 2000",
+    "priority": "High",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "All transactions saved with date in 2000; today's dashboard appears empty.",
+    "possible_solution": "Detect if system year < 2026 and alert shopkeeper: 'Computer clock is incorrect'."
+  },
+  {
+    "id": 88,
+    "category": "Hardware, System & OS Failures",
+    "issue": "Employee terminates app via Task Manager during database migration",
+    "priority": "Critical",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Half-migrated schema causing missing columns.",
+    "possible_solution": "Wrap each migration step in an atomic SQLite transaction."
+  },
+  {
+    "id": 89,
+    "category": "Hardware, System & OS Failures",
+    "issue": "Low resolution display (1024x768) cuts off modal save button",
+    "priority": "Medium",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Shopkeeper cannot reach the Save button to submit.",
+    "possible_solution": "Enforce max-h-[90vh] and overflow-y-auto on all modal bodies."
+  },
+  {
+    "id": 90,
+    "category": "Hardware, System & OS Failures",
+    "issue": "Shop internet goes down for multiple days",
+    "priority": "High",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "App must run 100% locally without cloud blocking or freezing.",
+    "possible_solution": "Tauri SQLite local-first architecture ensures 100% offline capability (completed)."
+  },
+  {
+    "id": 91,
+    "category": "Search & Filtering",
+    "issue": "Searching with special regex characters (+, (, [) crashes the page",
+    "priority": "Critical",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "White screen crash on search input typing.",
+    "possible_solution": "Escape regex characters before constructing RegExp (completed in CustomerCard)."
+  },
+  {
+    "id": 92,
+    "category": "Search & Filtering",
+    "issue": "Customer searched by maiden surname after updating to married surname",
+    "priority": "Medium",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Search returns zero results; customer profile duplicated.",
+    "possible_solution": "Include customer notes in universal search query."
+  },
+  {
+    "id": 93,
+    "category": "Search & Filtering",
+    "issue": "Searching amount with currency symbol ('₹500')",
+    "priority": "Low",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Search fails to match numeric amount.",
+    "possible_solution": "Strip non-numeric characters when matching amounts in search filter."
+  },
+  {
+    "id": 94,
+    "category": "Search & Filtering",
+    "issue": "Date filter set to 'This Month' on 1st day of month hides yesterday's records",
+    "priority": "Medium",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Shopkeeper thinks records were lost overnight.",
+    "possible_solution": "Show active filter banner: 'Filtering by This Month. Click to Show All'."
+  },
+  {
+    "id": 95,
+    "category": "Search & Filtering",
+    "issue": "Searching Aadhaar by last 4 digits fails if requiring exact 12-digit match",
+    "priority": "High",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Shopkeeper has to type all 12 digits every time.",
+    "possible_solution": "Allow substring and suffix matching on Aadhaar digits."
+  },
+  {
+    "id": 96,
+    "category": "Search & Filtering",
+    "issue": "Pasting search text with trailing spaces ('9820012345 ')",
+    "priority": "Medium",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Exact mobile search fails.",
+    "possible_solution": "Trim query string automatically before search execution (completed)."
+  },
+  {
+    "id": 97,
+    "category": "Search & Filtering",
+    "issue": "Status filter set to 'FAILD' while searching for successful transaction",
+    "priority": "Medium",
+    "client_feedback_linked": "refund and commission fields",
+    "impact": "Returns empty state; operator confused.",
+    "possible_solution": "Highlight active filters with clear badge and 'Reset Filters' button."
+  },
+  {
+    "id": 98,
+    "category": "Search & Filtering",
+    "issue": "Keyboard shortcuts clashing with regional language IME (Mangal / Inscript)",
+    "priority": "Medium",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Modals pop up unexpectedly while typing Marathi customer names.",
+    "possible_solution": "Ignore hotkeys when event target is an active input or textarea (completed)."
+  },
+  {
+    "id": 99,
+    "category": "Search & Filtering",
+    "issue": "Searching transactions across Indian Financial Year boundary (March-April)",
+    "priority": "Medium",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Calendar month filters do not align with FY quarterly tax filing.",
+    "possible_solution": "Add preset date filter for 'Current Financial Year (FY 2026-27)'."
+  },
+  {
+    "id": 100,
+    "category": "Search & Filtering",
+    "issue": "Clicking search result for a record that was deleted in another window",
+    "priority": "Medium",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "App crashes or renders blank profile page.",
+    "possible_solution": "Check entity existence before navigating; show toast 'Record has been removed'."
+  },
+  {
+    "id": 101,
+    "category": "Human & Counter Operation Errors",
+    "issue": "Accidentally pressing Escape key dismisses modal and loses all filled data",
+    "priority": "High",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "3 minutes of typed application details wiped instantly.",
+    "possible_solution": "Show confirmation 'Discard unsaved changes?' before dismissing if form is dirty."
+  },
+  {
+    "id": 102,
+    "category": "Human & Counter Operation Errors",
+    "issue": "Accidental mouse click on dark backdrop outside modal closes it",
+    "priority": "High",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "In-progress data entry lost.",
+    "possible_solution": "Disable backdrop click dismiss for data entry modals; only close on explicit Cancel button."
+  },
+  {
+    "id": 103,
+    "category": "Human & Counter Operation Errors",
+    "issue": "Barcode/QR scanner sends trailing Enter key prematurely submitting form",
+    "priority": "High",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Form submits with only the scanned field filled; remaining fields empty.",
+    "possible_solution": "Prevent Enter key from submitting form inside scanner-targeted input fields."
+  },
+  {
+    "id": 104,
+    "category": "Human & Counter Operation Errors",
+    "issue": "Shop assistant records test transaction in production ledger and forgets to delete",
+    "priority": "High",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Distorts month-end profit figures and ledger audits.",
+    "possible_solution": "Allow marking transaction as 'TEST' or provide easy delete/void with supervisor PIN."
+  },
+  {
+    "id": 105,
+    "category": "Human & Counter Operation Errors",
+    "issue": "Placing SQLite database in shared Google Drive / Dropbox folder across two PCs",
+    "priority": "Critical",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Sync conflicts corrupt SQLite database file.",
+    "possible_solution": "Keep database in local AppData and provide manual export/import or backup sync."
+  },
+  {
+    "id": 106,
+    "category": "Human & Counter Operation Errors",
+    "issue": "Exporting CSV and opening in Excel strips leading zeros from mobile numbers",
+    "priority": "High",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Mobile directory opened in Excel corrupts 10-digit format (098200 becomes 98200).",
+    "possible_solution": "Prefix telephone/Aadhaar fields with tab or formula format (=\"98200...\") in CSV export."
+  },
+  {
+    "id": 107,
+    "category": "Human & Counter Operation Errors",
+    "issue": "Formula injection attack in customer note (=cmd|' /C calc'!A0)",
+    "priority": "Critical",
+    "client_feedback_linked": "search result for aadhar, and other",
+    "impact": "Opening exported CSV executes arbitrary OS commands in spreadsheet software.",
+    "possible_solution": "Sanitize cell with cleanCSVCell stripping leading =, +, -, @ symbols (completed)."
+  },
+  {
+    "id": 108,
+    "category": "Human & Counter Operation Errors",
+    "issue": "Cash drawer shortage blamed on software calculation bug",
+    "priority": "High",
+    "client_feedback_linked": "refund and commission fields",
+    "impact": "Disputes between shop owner and employee cashiers.",
+    "possible_solution": "Immutable activity audit trail for every addition, update, and deletion with timestamps."
+  },
+  {
+    "id": 109,
+    "category": "Human & Counter Operation Errors",
+    "issue": "Assistant marks task 'Ready' instead of 'Delivered'",
+    "priority": "Low",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Document stays in Ready queue indefinitely.",
+    "possible_solution": "Show duration since ready (e.g. 'Ready 14 days ago') with reminder to deliver."
+  },
+  {
+    "id": 110,
+    "category": "Human & Counter Operation Errors",
+    "issue": "Operator restores old database backup by accident, erasing recent transactions",
+    "priority": "Critical",
+    "client_feedback_linked": "dashboard of showng the wallet collectio or status like today vai ABC bank how many transactions, amounts, recived/sent for all banks, wallets, cards etc.",
+    "impact": "Recent days of transactions and customer registrations wiped.",
+    "possible_solution": "Automatically create a safety pre-restore backup (backup_before_restore_TIMESTAMP.db) before applying restore."
+  }
+]

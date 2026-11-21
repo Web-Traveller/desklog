@@ -12,7 +12,7 @@ import { createActivityEvent } from '../services/activityService';
 import { saveTauriActivity } from '../api/tauri';
 import { useUI } from './UIContext';
 
-interface CustomerContextType {
+export interface CustomerContextType {
   customers: Customer[];
   selectedCustomerId: string | null;
   setSelectedCustomerId: (id: string | null) => void;
@@ -188,9 +188,9 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       if (target) {
         const act = createActivityEvent({
-          type: 'customer_updated',
+          type: 'customer_deleted',
           title: `Removed customer: ${target.name}`,
-          description: `Customer marked inactive in database.`,
+          description: `Customer profile deleted from records.`,
           customerId: id,
           customerName: target.name,
           customerPhone: target.mobile,
@@ -236,7 +236,7 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   );
 };
 
-export const useCustomers = () => {
+export const useCustomers = (): CustomerContextType => {
   const context = useContext(CustomerContext);
   if (!context) {
     console.warn('useCustomers called outside CustomerProvider');
@@ -244,7 +244,11 @@ export const useCustomers = () => {
       customers: [],
       selectedCustomerId: null,
       setSelectedCustomerId: () => {},
-      addCustomer: async () => ({} as any),
+      addCustomer: async () => {
+        // Fallback when invoked outside CustomerProvider — returns GENERAL_CUSTOMER as a safe no-op
+        console.error('[DeskLog] addCustomer called outside CustomerProvider — returning GENERAL_CUSTOMER stub.');
+        return GENERAL_CUSTOMER;
+      },
       editCustomer: async () => {},
       deleteCustomer: async () => {},
       confirmDeleteCustomer: () => {},

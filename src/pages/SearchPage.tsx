@@ -12,6 +12,7 @@ export const SearchPage: React.FC = () => {
     bankingTransactions,
     services,
     setCurrentPage,
+    navigateToBankingTx,
   } = useDesk();
 
   const [activeFilter, setActiveFilter] = useState<'all' | 'banking' | 'customers' | 'tasks' | 'services'>('all');
@@ -39,6 +40,23 @@ export const SearchPage: React.FC = () => {
       if (tx.customer_name?.toLowerCase().includes(rawQ)) return true;
       if (tx.customer_mobile && tx.customer_mobile.replace(/[\s-]/g, '').includes(cleanQ)) return true;
 
+      // Linked Customer profile lookup (Name, Mobile, Aadhaar)
+      const txMobileClean = tx.customer_mobile ? tx.customer_mobile.replace(/[\s-]/g, '') : '';
+      const txAcctClean = tx.account_or_aadhaar ? tx.account_or_aadhaar.replace(/[\s-]/g, '') : '';
+      const linkedCust = (tx.customer_id && tx.customer_id !== 'cust-general')
+        ? customers.find((c) => c.id === tx.customer_id)
+        : customers.find((c) =>
+            (txMobileClean && c.mobile && c.mobile.replace(/[\s-]/g, '') === txMobileClean) ||
+            (txAcctClean && c.aadhaar_number && c.aadhaar_number.replace(/[\s-]/g, '') === txAcctClean) ||
+            (tx.customer_name && tx.customer_name.trim() !== 'Walk-in Customer' && c.name.toLowerCase() === tx.customer_name.trim().toLowerCase())
+          );
+
+      if (linkedCust) {
+        if (linkedCust.name.toLowerCase().includes(rawQ)) return true;
+        if (linkedCust.mobile && linkedCust.mobile.replace(/[\s-]/g, '').includes(cleanQ)) return true;
+        if (linkedCust.aadhaar_number && linkedCust.aadhaar_number.replace(/[\s-]/g, '').includes(cleanQ)) return true;
+      }
+
       // Account / Aadhaar / Ref
       if (tx.account_or_aadhaar && tx.account_or_aadhaar.replace(/[\s-]/g, '').toLowerCase().includes(cleanQ)) return true;
       if (tx.transaction_ref_no?.toLowerCase().includes(rawQ)) return true;
@@ -60,6 +78,12 @@ export const SearchPage: React.FC = () => {
       if (amtRupees.includes(cleanQ)) return true;
       const feeRupees = String(Math.floor((tx.charges || 0) / 100));
       if (feeRupees.includes(cleanQ)) return true;
+      const companyChargeRupees = String(Math.floor((tx.company_charge || 0) / 100));
+      if (companyChargeRupees.includes(cleanQ)) return true;
+      const refundRupees = String(Math.floor((tx.refund || 0) / 100));
+      if (refundRupees.includes(cleanQ)) return true;
+      const commissionRupees = String(Math.floor(((tx.charges || 0) - (tx.company_charge || 0)) / 100));
+      if (commissionRupees.includes(cleanQ)) return true;
 
       return false;
     });
@@ -79,6 +103,9 @@ export const SearchPage: React.FC = () => {
     let tsks = tasks.filter((t) => {
       if (!rawQ) return true;
       if (t.title.toLowerCase().includes(rawQ)) return true;
+      if (t.work_type?.toLowerCase().includes(rawQ)) return true;
+      if (t.tracker_id && t.tracker_id.toLowerCase().includes(rawQ)) return true;
+      if (t.document_number && t.document_number.toLowerCase().includes(rawQ)) return true;
       if (t.notes?.toLowerCase().includes(rawQ)) return true;
       if (t.status.toLowerCase().includes(rawQ)) return true;
       if (t.cancellation_reason?.toLowerCase().includes(rawQ)) return true;
@@ -314,98 +341,124 @@ export const SearchPage: React.FC = () => {
               </div>
 
               <div className="flex flex-col gap-2">
-                {visibleBanking.map((tx) => (
-                  <div
-                    key={tx.id || Math.random()}
-                    onClick={() => setCurrentPage('banking')}
-                    className="p-3.5 rounded-2xl bg-surface-container-lowest border border-surface-container/60 hover:border-primary/40 hover:shadow-xs transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center shrink-0">
-                        <span className="material-symbols-outlined text-primary text-xl">
-                          {tx.transaction_type === 'AEPS' ? 'fingerprint' :
-                           tx.transaction_type === 'UPI' || tx.transaction_type === 'UPI CASH' ? 'qr_code_2' :
-                           tx.transaction_type === 'BILL' ? 'receipt_long' :
-                           tx.transaction_type === 'CREDIT' ? 'credit_card' : 'send_money'}
-                        </span>
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-primary/10 text-primary border border-primary/20">
-                            {tx.transaction_type}
-                          </span>
-                          <span className="font-semibold text-xs text-on-surface">
-                            {tx.customer_name || 'Walk-in Customer'}
-                          </span>
-                          {tx.customer_mobile && (
-                            <span className="font-mono text-xs text-outline">
-                              {tx.customer_mobile}
-                            </span>
-                          )}
-                          <span className="text-[11px] text-outline">
-                            · {new Date(tx.transaction_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-on-surface-variant flex-wrap">
-                          {tx.bank_name && (
-                            <span className="font-medium text-on-surface">
-                              {tx.bank_name}
-                            </span>
-                          )}
-                          {tx.account_or_aadhaar && (
-                            <span className="font-mono text-[11px] text-outline">
-                              Ref: {tx.account_or_aadhaar}
-                            </span>
-                          )}
-                          {tx.company_name && (
-                            <span className="px-1.5 py-0.5 rounded bg-surface-container text-[10px] font-semibold text-outline">
-                              {tx.company_name}
-                            </span>
-                          )}
-                        </div>
-                        {tx.remark && (
-                          <p className="text-[11px] text-outline italic mt-0.5">
-                            "{tx.remark}"
-                          </p>
-                        )}
-                      </div>
-                    </div>
+                {visibleBanking.map((tx) => {
+                  const txMobileClean = tx.customer_mobile ? tx.customer_mobile.replace(/[\s-]/g, '') : '';
+                  const txAcctClean = tx.account_or_aadhaar ? tx.account_or_aadhaar.replace(/[\s-]/g, '') : '';
+                  const linkedCust = (tx.customer_id && tx.customer_id !== 'cust-general')
+                    ? customers.find((c) => c.id === tx.customer_id)
+                    : customers.find((c) =>
+                        (txMobileClean && c.mobile && c.mobile.replace(/[\s-]/g, '') === txMobileClean) ||
+                        (txAcctClean && c.aadhaar_number && c.aadhaar_number.replace(/[\s-]/g, '') === txAcctClean) ||
+                        (tx.customer_name && tx.customer_name.trim() !== 'Walk-in Customer' && c.name.toLowerCase() === tx.customer_name.trim().toLowerCase())
+                      );
+                  const displayName = (tx.customer_name && tx.customer_name.trim() && tx.customer_name.trim() !== 'Walk-in Customer')
+                    ? tx.customer_name.trim()
+                    : (linkedCust?.name || 'Customer');
+                  const displayMobile = tx.customer_mobile || linkedCust?.mobile || '';
 
-                    <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
-                      <div className="flex flex-col items-end">
-                        <span className="font-mono font-bold text-sm text-on-surface">
-                          ₹{((tx.amount || 0) / 100).toLocaleString('en-IN')}
-                        </span>
-                        {tx.charges ? (
-                          <span className="text-[11px] font-mono text-outline">
-                            Fee: ₹{((tx.charges || 0) / 100).toLocaleString('en-IN')}
+                  return (
+                    <div
+                      key={tx.id || Math.random()}
+                      onClick={() => tx.id && navigateToBankingTx(tx.id)}
+                      className="p-3.5 rounded-2xl bg-surface-container-lowest border border-surface-container/60 hover:border-primary/40 hover:shadow-xs transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center shrink-0">
+                          <span className="material-symbols-outlined text-primary text-xl">
+                            {tx.transaction_type === 'AEPS' ? 'fingerprint' :
+                             tx.transaction_type === 'UPI' || tx.transaction_type === 'UPI CASH' ? 'qr_code_2' :
+                             tx.transaction_type === 'BILL' ? 'receipt_long' :
+                             tx.transaction_type === 'CREDIT' ? 'credit_card' : 'send_money'}
                           </span>
-                        ) : null}
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-primary/10 text-primary border border-primary/20">
+                              {tx.transaction_type}
+                            </span>
+                            <span className="font-semibold text-xs text-on-surface">
+                              {displayName}
+                            </span>
+                            {displayMobile && (
+                              <span className="font-mono text-xs text-outline">
+                                {displayMobile}
+                              </span>
+                            )}
+                            <span className="text-[11px] text-outline">
+                              · {new Date(tx.transaction_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-on-surface-variant flex-wrap">
+                            {tx.bank_name && (
+                              <span className="font-medium text-on-surface">
+                                {tx.bank_name}
+                              </span>
+                            )}
+                            {tx.account_or_aadhaar && (
+                              <span className="font-mono text-[11px] text-outline">
+                                Ref: {tx.account_or_aadhaar}
+                              </span>
+                            )}
+                            {tx.company_name && (
+                              <span className="px-1.5 py-0.5 rounded bg-surface-container text-[10px] font-semibold text-outline">
+                                {tx.company_name}
+                              </span>
+                            )}
+                          </div>
+                          {tx.remark && (
+                            <p className="text-[11px] text-outline italic mt-0.5">
+                              "{tx.remark}"
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        tx.status === 'SUCCESS' ? 'bg-emerald-500/10 text-emerald-600' :
-                        tx.status === 'FAILD' ? 'bg-red-500/10 text-red-600' :
-                        'bg-amber-500/10 text-amber-600'
-                      }`}>
-                        {tx.status || 'SUCCESS'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const identifier = tx.account_or_aadhaar || tx.transaction_ref_no || '-';
-                          const text = `=== DESKLOG TRANSACTION RECEIPT ===\nDate: ${tx.transaction_date ? new Date(tx.transaction_date).toLocaleDateString() : ''}\nMode: ${tx.transaction_type}\nCustomer: ${tx.customer_name || 'Walk-in'} ${tx.customer_mobile ? `(${tx.customer_mobile})` : ''}\nBank: ${tx.bank_name || '-'}\nRef/Account: ${identifier}\nPortal: ${tx.company_name || '-'}\nAmount: ₹${Math.floor((tx.amount || 0) / 100)}\nFee: ₹${Math.floor((tx.charges || 0) / 100)}\nStatus: ${tx.status || 'SUCCESS'}\n===================================`;
-                          navigator.clipboard.writeText(text);
-                        }}
-                        title="Copy Quick Slip"
-                        className="p-1 rounded-lg text-outline hover:text-primary hover:bg-surface-container transition-colors"
-                      >
-                        <span className="material-symbols-outlined text-sm">content_copy</span>
-                      </button>
-                      <span className="material-symbols-outlined text-outline text-base">chevron_right</span>
+
+                      <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                        <div className="flex flex-col items-end">
+                          <span className="font-mono font-bold text-sm text-on-surface">
+                            ₹{((tx.amount || 0) / 100).toLocaleString('en-IN')}
+                          </span>
+                          {tx.charges ? (
+                            <span className="text-[11px] font-mono text-outline">
+                              Fee: ₹{((tx.charges || 0) / 100).toLocaleString('en-IN')}
+                            </span>
+                          ) : null}
+                          {tx.refund ? (
+                            <span className="text-[10px] font-mono text-error font-medium">
+                              Refund: ₹{((tx.refund || 0) / 100).toLocaleString('en-IN')}
+                            </span>
+                          ) : null}
+                          {tx.company_charge !== undefined && tx.charges !== undefined ? (
+                            <span className="text-[10px] font-mono text-emerald-600 font-medium">
+                              Comm: ₹{Math.max(0, Math.floor(((tx.charges || 0) - (tx.company_charge || 0)) / 100)).toLocaleString('en-IN')}
+                            </span>
+                          ) : null}
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          tx.status === 'SUCCESS' ? 'bg-emerald-500/10 text-emerald-600' :
+                          tx.status === 'FAILD' ? 'bg-red-500/10 text-red-600' :
+                          'bg-amber-500/10 text-amber-600'
+                        }`}>
+                          {tx.status || 'SUCCESS'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const identifier = tx.account_or_aadhaar || tx.transaction_ref_no || '-';
+                            const text = `=== DESKLOG TRANSACTION RECEIPT ===\nDate: ${tx.transaction_date ? new Date(tx.transaction_date).toLocaleDateString() : ''}\nMode: ${tx.transaction_type}\nCustomer: ${displayName} ${displayMobile ? `(${displayMobile})` : ''}\nBank: ${tx.bank_name || '-'}\nRef/Account: ${identifier}\nPortal: ${tx.company_name || '-'}\nAmount: ₹${Math.floor((tx.amount || 0) / 100)}\nFee: ₹${Math.floor((tx.charges || 0) / 100)}\nStatus: ${tx.status || 'SUCCESS'}\n===================================`;
+                            navigator.clipboard.writeText(text);
+                          }}
+                          title="Copy Quick Slip"
+                          className="p-1 rounded-lg text-outline hover:text-primary hover:bg-surface-container transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-sm">content_copy</span>
+                        </button>
+                        <span className="material-symbols-outlined text-outline text-base">chevron_right</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {matchingBanking.length > 10 && (

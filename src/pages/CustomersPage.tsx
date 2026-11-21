@@ -12,13 +12,14 @@ export const CustomersPage: React.FC = () => {
 
   const filteredCustomers = React.useMemo(() => {
     if (!customerSearch.trim()) return customers;
-    const q = customerSearch.toLowerCase();
+    const q = customerSearch.toLowerCase().trim();
+    const cleanQ = customerSearch.replace(/[\s-]/g, '').toLowerCase();
     return customers.filter((cust) => {
-      return (
-        cust.name.toLowerCase().includes(q) ||
-        (cust.mobile || "").includes(q) ||
-        (cust.aadhaar_number || "").includes(q)
-      );
+      const nameMatch = cust.name.toLowerCase().includes(q);
+      const mobileMatch = cust.mobile ? cust.mobile.replace(/[\s-]/g, '').includes(cleanQ) : false;
+      const aadhaarMatch = cust.aadhaar_number ? cust.aadhaar_number.replace(/[\s-]/g, '').includes(cleanQ) : false;
+      const noteMatch = cust.note ? cust.note.toLowerCase().includes(q) : false;
+      return nameMatch || mobileMatch || aadhaarMatch || noteMatch;
     });
   }, [customers, customerSearch]);
 
