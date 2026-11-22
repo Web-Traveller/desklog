@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { useDesk } from '../context/DeskContext';
 import { rupeesToPaise } from '../utils/currencyUtils';
+import { Modal } from './Modal';
 import {
   validateMobileNumber,
   validateTransactionAmountRupees,
@@ -283,32 +283,16 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
     }
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-scrim/40 backdrop-blur-xs animate-fadeIn overflow-y-auto">
-      <div className="bg-surface-container-lowest w-full max-w-lg rounded-2xl shadow-xl border border-surface-container/70 p-4 sm:p-5 flex flex-col gap-3.5 my-6 animate-scaleUp">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-surface-container/60 pb-2.5">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary text-xl">account_balance</span>
-            <div>
-              <h2 className="font-tagline text-base font-semibold text-on-surface">
-                New Counter Transaction
-              </h2>
-              <p className="text-[11px] text-on-surface-variant">
-                Fast walk-in banking ledger entry
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-full transition-colors"
-            type="button"
-          >
-            <span className="material-symbols-outlined text-lg">close</span>
-          </button>
-        </div>
-
+  return (
+    <Modal
+      isOpen={isAddBankingOpen}
+      onClose={onClose}
+      title="New Counter Transaction"
+      subtitle="Fast walk-in banking ledger entry"
+      icon="account_balance"
+      maxWidth="lg"
+    >
+      <div className="flex flex-col gap-3.5">
         {/* Mode Selector Tabs (Clean, Horizontal Strip) */}
         <div className="flex items-center gap-1 overflow-x-auto pb-1">
           {BANKING_MODE_KEYS.map((modeKey) => {
@@ -715,7 +699,6 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
           </div>
         </form>
       </div>
-    </div>,
-    document.body
+    </Modal>
   );
 };

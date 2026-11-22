@@ -367,3 +367,70 @@ export function saveLearnedCompany(company: string): void {
     }
   } catch {}
 }
+
+/**
+ * Bank Account Opening Master Definitions (sourced from Banking.xlsm)
+ */
+export const ACCOUNT_OPENING_SCHEMES = [
+  'FINO',
+  'BARODA',
+  'KOTAK',
+  'AXIS',
+  'Airtel Bank',
+  'PUNJAB',
+  'State Bank of India',
+  'Union Bank of India',
+  'Bank of Maharashtra',
+  'HDFC Bank',
+  'ICICI Bank',
+  'Canara Bank',
+  'Indian Bank',
+];
+
+export const ACCOUNT_OPENING_VISIT_TYPES = [
+  'Walk-in',
+  'Branch',
+  'Referral',
+  'Google',
+  'Camp',
+  'KYC Other',
+];
+
+export const ACCOUNT_OPENING_KYC_STATUSES = [
+  'Verified',
+  'Pending',
+  'Rejected',
+];
+
+export const INDIAN_STATES = [
+  'Maharashtra',
+  'Uttar Pradesh',
+  'Madhya Pradesh',
+  'Bihar',
+  'Delhi',
+  'Gujarat',
+  'Karnataka',
+  'Rajasthan',
+  'West Bengal',
+  'Andhra Pradesh',
+  'Tamil Nadu',
+  'Telangana',
+  'Kerala',
+  'Punjab',
+  'Haryana',
+  'Odisha',
+  'Assam',
+  'Jharkhand',
+  'Chhattisgarh',
+  'Uttarakhand',
+  'Himachal Pradesh',
+  'Goa',
+  'Jammu and Kashmir',
+  'Arunachal Pradesh',
+  'Manipur',
+  'Meghalaya',
+  'Mizoram',
+  'Nagaland',
+  'Sikkim',
+  'Tripura',
+];

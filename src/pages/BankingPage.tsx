@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { useBanking, useCustomers, useUI, useTasks } from '../context/DeskContext';
 import { BankingTransaction } from '../types';
 import { EmptyState } from '../components/EmptyState';
 import { MetricCard } from '../components/MetricCard';
+import { Modal } from '../components/Modal';
 import { EditBankingTransactionModal } from '../components/EditBankingTransactionModal';
+import { AccountOpeningsView } from '../components/AccountOpeningsView';
 import { formatDisplayDate } from '../utils/dateUtils';
 import { formatRupees } from '../utils/currencyUtils';
 import {
@@ -14,9 +15,17 @@ import {
 } from '../constants/bankingData';
 
 export const BankingPage: React.FC = () => {
-  const { bankingTransactions, deleteBankingTransaction, updateBankingTransaction } = useBanking();
+  const { bankingTransactions, deleteBankingTransaction, updateBankingTransaction, accountOpenings } = useBanking();
   const { customers } = useCustomers();
-  const { showConfirm, setIsAddBankingOpen, showToast, highlightedBankingTxId, setHighlightedBankingTxId } = useUI();
+  const { 
+    showConfirm, 
+    setIsAddBankingOpen, 
+    showToast, 
+    highlightedBankingTxId, 
+    setHighlightedBankingTxId,
+    bankingActiveTab,
+    setBankingActiveTab
+  } = useUI();
   const { saveAppSetting, getSettingValue } = useTasks();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -363,32 +372,80 @@ ${tx.remark ? `Remark: ${tx.remark}\n` : ''}===================================`
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-surface-container">
         <div>
           <h1 className="font-display-md text-2xl text-on-surface font-semibold tracking-tight">
-            Banking & Counter Ledger
+            Banking & Account Services
           </h1>
           <p className="text-xs text-on-surface-variant">
-            Counter money transfers, AePS cash, UPI, and bill payments
+            {bankingActiveTab === 'account_opening'
+              ? 'Master Bank Account Opening Service & Digital Passbook Records'
+              : 'Counter money transfers, AePS cash, UPI, and bill payments'}
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-          <button
-            type="button"
-            onClick={() => setShowCashCalculator(!showCashCalculator)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface font-button-utility text-xs font-semibold transition-all border border-surface-container-high/40 shadow-xs"
-          >
-            <span className="material-symbols-outlined text-base text-primary">point_of_sale</span>
-            <span>{showCashCalculator ? 'Hide Balances & Cash' : 'Counter Cash & Balances'}</span>
-          </button>
+        {bankingActiveTab === 'counter' && (
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={() => setShowCashCalculator(!showCashCalculator)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface font-button-utility text-xs font-semibold transition-all border border-surface-container-high/40 shadow-xs"
+            >
+              <span className="material-symbols-outlined text-base text-primary">point_of_sale</span>
+              <span>{showCashCalculator ? 'Hide Balances & Cash' : 'Counter Cash & Balances'}</span>
+            </button>
 
-          <button
-            onClick={() => setIsAddBankingOpen(true)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-on-primary hover:bg-primary-container hover:text-on-primary-container transition-all active:scale-95 font-button-utility text-xs font-semibold shadow-sm"
-          >
-            <span className="material-symbols-outlined text-base">add</span>
-            <span>+ New Transaction</span>
-          </button>
-        </div>
+            <button
+              onClick={() => setIsAddBankingOpen(true)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-on-primary hover:bg-primary-container hover:text-on-primary-container transition-all active:scale-95 font-button-utility text-xs font-semibold shadow-sm"
+            >
+              <span className="material-symbols-outlined text-base">add</span>
+              <span>+ New Transaction</span>
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Primary Section Switcher Tabs */}
+      <div className="flex items-center gap-2 p-1 bg-surface-container rounded-2xl w-fit border border-surface-container-high/40 shadow-xs">
+        <button
+          type="button"
+          onClick={() => setBankingActiveTab('counter')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
+            bankingActiveTab === 'counter'
+              ? 'bg-primary text-on-primary shadow-xs'
+              : 'text-on-surface-variant hover:text-on-surface'
+          }`}
+        >
+          <span className="material-symbols-outlined text-base">point_of_sale</span>
+          <span>Money Transfers & Counter Ledger</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
+            bankingActiveTab === 'counter' ? 'bg-white/20 text-white' : 'bg-surface-container-high text-outline'
+          }`}>
+            {bankingTransactions?.length || 0}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setBankingActiveTab('account_opening')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
+            bankingActiveTab === 'account_opening'
+              ? 'bg-primary text-on-primary shadow-xs'
+              : 'text-on-surface-variant hover:text-on-surface'
+          }`}
+        >
+          <span className="material-symbols-outlined text-base">account_balance</span>
+          <span>Bank Account Opening Service</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
+            bankingActiveTab === 'account_opening' ? 'bg-white/20 text-white' : 'bg-surface-container-high text-outline'
+          }`}>
+            {accountOpenings?.length || 0}
+          </span>
+        </button>
+      </div>
+
+      {bankingActiveTab === 'account_opening' ? (
+        <AccountOpeningsView />
+      ) : (
+        <>
 
       {/* Collapsible Counter Cash & Wallet Balances Panel (from Balances Dashboard) */}
       {showCashCalculator && (
@@ -671,6 +728,7 @@ ${tx.remark ? `Remark: ${tx.remark}\n` : ''}===================================`
           <table className="w-full text-left border-collapse text-xs">
             <thead className="bg-surface-container-low/70 border-b border-surface-container/60">
               <tr>
+                <th className="py-3 px-2 font-semibold text-outline text-center w-10">#</th>
                 <th className="py-3 px-3 font-semibold text-outline whitespace-nowrap">Date</th>
                 <th className="py-3 px-2 font-semibold text-outline whitespace-nowrap">Mode</th>
                 <th className="py-3 px-3 font-semibold text-outline">Customer & Ref</th>
@@ -687,7 +745,7 @@ ${tx.remark ? `Remark: ${tx.remark}\n` : ''}===================================`
               {filteredTransactions.length === 0 ? (
                 <EmptyState
                   isTableRow
-                  colSpan={10}
+                  colSpan={11}
                   icon="account_balance_wallet"
                   title="No banking records found"
                   description={
@@ -699,7 +757,7 @@ ${tx.remark ? `Remark: ${tx.remark}\n` : ''}===================================`
                   onAction={() => setIsAddBankingOpen(true)}
                 />
               ) : (
-                paginatedTransactions.map((tx) => {
+                paginatedTransactions.map((tx, index) => {
                   const txStatus = tx.status || 'SUCCESS';
                   const isSuccess = txStatus === 'SUCCESS';
                   const isFailed = txStatus === 'FAILD';
@@ -716,6 +774,11 @@ ${tx.remark ? `Remark: ${tx.remark}\n` : ''}===================================`
                           : 'hover:bg-surface-container-lowest/90'
                       }`}
                     >
+                      {/* Row # */}
+                      <td className="py-3 px-2 font-mono text-[11px] text-outline text-center whitespace-nowrap">
+                        {safePage * PAGE_SIZE + index + 1}
+                      </td>
+
                       {/* Date */}
                       <td className="py-3 px-4 whitespace-nowrap text-on-surface-variant font-medium">
                         {formatDisplayDate(tx.transaction_date)}
@@ -861,32 +924,20 @@ ${tx.remark ? `Remark: ${tx.remark}\n` : ''}===================================`
           </div>
         )}
       </div>
+      </>
+      )}
 
       {/* Transaction Details & Receipt Slip Modal */}
-      {selectedTxForDetails && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-2xl max-w-md w-full border border-surface-container/60 flex flex-col gap-4">
-            <div className="flex items-center justify-between pb-3 border-b border-surface-container/60">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-xl">receipt_long</span>
-                <div>
-                  <h3 className="font-semibold text-sm text-on-surface">
-                    {selectedTxForDetails.transaction_type} Receipt Slip
-                  </h3>
-                  <span className="text-[11px] text-outline font-mono">
-                    {formatDisplayDate(selectedTxForDetails.transaction_date)}
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedTxForDetails(null)}
-                className="text-outline hover:text-on-surface p-1 rounded-full hover:bg-surface-container"
-              >
-                <span className="material-symbols-outlined text-base">close</span>
-              </button>
-            </div>
-
+      {selectedTxForDetails && (
+        <Modal
+          isOpen={!!selectedTxForDetails}
+          onClose={() => setSelectedTxForDetails(null)}
+          title={`${selectedTxForDetails.transaction_type} Receipt Slip`}
+          subtitle={formatDisplayDate(selectedTxForDetails.transaction_date)}
+          icon="receipt_long"
+          maxWidth="md"
+        >
+          <div className="flex flex-col gap-4">
             {/* Slip Summary Body */}
             <div className="p-3.5 rounded-xl bg-surface-container-low border border-surface-container/60 flex flex-col gap-2.5 font-mono text-xs">
               <div className="flex justify-between items-center pb-2 border-b border-surface-container/40">
@@ -1009,8 +1060,7 @@ ${tx.remark ? `Remark: ${tx.remark}\n` : ''}===================================`
               </div>
             </div>
           </div>
-        </div>,
-        document.body
+        </Modal>
       )}
 
       {/* Edit Banking Transaction Modal */}

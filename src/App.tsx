@@ -76,6 +76,10 @@ const MainContent: React.FC<{ onOpenHelpModal: () => void }> = ({
   );
 };
 
+// Heartbeat frequency: check once every 12 hours (twice daily) to conserve server bandwidth
+// Launch check runs asynchronously in the background so app loads instantly for the user
+const HEARTBEAT_INTERVAL_MS = 12 * 60 * 60 * 1000;
+
 function App() {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [allowed, setAllowed] = useState<boolean>(() => !isDeviceBlockedLocally());
@@ -100,18 +104,28 @@ function App() {
       );
     }
 
-    // 1. Silent diagnostic check-in on app launch
-    sendHeartbeat().then((res) => {
-      if (res) {
-        setAllowed(res.allowed);
-      }
-    }).catch((err) => {
-      console.warn('Startup diagnostic error:', err);
-    });
+    // 1. Silent background diagnostic check-in
+    // Normal users get instant app launch with zero latency.
+    // The background check verifies device status asynchronously and locks the screen only if revoked.
+    const performCheck = () => {
+      sendHeartbeat().then((res) => {
+        if (res) {
+          setAllowed(res.allowed);
+        }
+      }).catch((err) => {
+        console.warn('Diagnostic check-in error:', err);
+      });
+    };
+
+    // Defer the initial check by 1.5 seconds so React completes initial render and paint instantly
+    const initialCheckTimer = setTimeout(performCheck, 1500);
+    const heartbeatTimer = setInterval(performCheck, HEARTBEAT_INTERVAL_MS);
 
     // 2. Completely silent background auto-updater (downloads quietly, installs on exit)
     const cleanupUpdater = initSilentAutoUpdater();
     return () => {
+      clearTimeout(initialCheckTimer);
+      clearInterval(heartbeatTimer);
       cleanupUpdater();
     };
   }, []);

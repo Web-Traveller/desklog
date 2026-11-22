@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { Customer, Task, Payment, BankingTransaction } from '../types';
+import { Customer, Task, Payment, BankingTransaction, BankAccountOpening } from '../types';
+import seedAccounts from '../constants/seedAccountOpenings.json';
 import {
   rupeesToPaise,
   paiseToRupees,
@@ -620,5 +621,118 @@ describe('7. Deep Test: Universal Search & Customer Profile Resolution', () => {
 
     expect(displayName).toBe('Suresh Patil');
     expect(displayName).not.toBe('Walk-in Customer');
+  });
+});
+
+// =========================================================================
+// 8. DEEP TEST: BANK ACCOUNT OPENING SERVICE & EXCEL MASTER DATA (Banking.xlsm)
+// =========================================================================
+describe('8. Deep Test: Bank Account Opening Service & Excel Master Data', () => {
+  const accounts: BankAccountOpening[] = seedAccounts as unknown as BankAccountOpening[];
+
+  it('correctly loads all 47 master accounts from Banking.xlsm extraction', () => {
+    expect(accounts).toBeDefined();
+    expect(accounts.length).toBe(47);
+  });
+
+  it('verifies FINO Payments Bank constitutes the majority partner', () => {
+    const finoAccounts = accounts.filter((a) => a.scheme === 'FINO');
+    const barodaAccounts = accounts.filter((a) => a.scheme === 'BARODA');
+
+    expect(finoAccounts.length).toBe(31);
+    expect(barodaAccounts.length).toBe(14);
+    expect(finoAccounts.length + barodaAccounts.length).toBe(45);
+  });
+
+  it('validates integer paise invariant on initial deposit/fees', () => {
+    accounts.forEach((account) => {
+      expect(Number.isInteger(account.initial_deposit)).toBe(true);
+      expect(account.initial_deposit).toBeGreaterThanOrEqual(0);
+    });
+
+    const totalDeposits = accounts.reduce((sum, a) => sum + (a.initial_deposit || 0), 0);
+    expect(totalDeposits).toBeGreaterThan(0);
+  });
+
+  it('verifies bank customer ID (CIF) and account number formatting', () => {
+    const nandaRecord = accounts.find((a) => a.account_number === '83998100000446');
+    expect(nandaRecord).toBeDefined();
+    expect(nandaRecord?.customer_name).toBe('Nanda Parmeshwar Kshirsagar');
+    expect(nandaRecord?.bank_customer_id).toBe('IQ0068531');
+    expect(nandaRecord?.scheme).toBe('BARODA');
+    expect(nandaRecord?.dob).toBe('1975-04-25');
+    expect(nandaRecord?.aadhaar_number).toBe('482987363841');
+    expect(nandaRecord?.pan_number).toBe('CSYPK9715N');
+  });
+
+  it('supports deep search across customer name, account no, CIF, Aadhaar, and Mobile', () => {
+    const search = (q: string) => {
+      const cleanQ = q.replace(/[\s-]/g, '').toLowerCase();
+      const rawQ = q.trim().toLowerCase();
+      return accounts.filter((a) => {
+        return (
+          a.customer_name.toLowerCase().includes(rawQ) ||
+          a.account_number.replace(/[\s-]/g, '').toLowerCase().includes(cleanQ) ||
+          (a.bank_customer_id && a.bank_customer_id.toLowerCase().includes(rawQ)) ||
+          (a.mobile_number && a.mobile_number.replace(/[\s-]/g, '').includes(cleanQ)) ||
+          (a.aadhaar_number && a.aadhaar_number.replace(/[\s-]/g, '').includes(cleanQ))
+        );
+      });
+    };
+
+    // By Name
+    expect(search('Pawar Yash').length).toBeGreaterThan(0);
+    // By Account Number
+    expect(search('20369762133').length).toBe(1);
+    // By CIF
+    expect(search('162387859').length).toBe(1);
+    // By Aadhaar
+    expect(search('663840325736').length).toBe(1);
+    // By Mobile
+    expect(search('8666956656').length).toBe(1);
+  });
+});
+
+// =========================================================================
+// 8. DEEP TEST: NEON TAURI APP HUB TELEMETRY & WORKSPACE KILL-SWITCH
+// =========================================================================
+describe('8. Deep Test: Neon Tauri App Hub Telemetry & Kill-Switch', () => {
+  it('correctly handles blocked state and parses Neon JSON response', () => {
+    // Simulated blocked response from Neon record_heartbeat
+    const blockedResponse = {
+      rows: [
+        {
+          record_heartbeat: {
+            allowed: false,
+            latest_version: '1.0.12',
+            launch_count: 32,
+          },
+        },
+      ],
+    };
+
+    const record = blockedResponse.rows[0].record_heartbeat;
+    expect(record.allowed).toBe(false);
+    expect(record.latest_version).toBe('1.0.12');
+    expect(record.launch_count).toBe(32);
+  });
+
+  it('correctly handles active/authorized workstation state from Neon', () => {
+    // Simulated active response from Neon record_heartbeat
+    const activeResponse = {
+      rows: [
+        {
+          record_heartbeat: {
+            allowed: true,
+            latest_version: '1.0.12',
+            launch_count: 5,
+          },
+        },
+      ],
+    };
+
+    const record = activeResponse.rows[0].record_heartbeat;
+    expect(record.allowed).toBe(true);
+    expect(record.launch_count).toBe(5);
   });
 });

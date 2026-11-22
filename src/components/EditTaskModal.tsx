@@ -3,6 +3,7 @@ import { useDesk } from '../context/DeskContext';
 import { TaskStatus } from '../types';
 import { formatRupees, rupeesToPaise, paiseToRupees } from '../utils/currencyUtils';
 import { CLIENT_WORK_TYPES } from '../constants/bankingData';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 export const EditTaskModal: React.FC = () => {
   const { isEditTaskOpen, setIsEditTaskOpen, selectedTaskToEdit, updateTask, payments, addPayment, showToast } = useDesk();
@@ -39,6 +40,8 @@ export const EditTaskModal: React.FC = () => {
       setFieldErrors({});
     }
   }, [selectedTaskToEdit]);
+
+  useBodyScrollLock(isEditTaskOpen);
 
   if (!isEditTaskOpen || !selectedTaskToEdit) return null;
 
@@ -121,7 +124,7 @@ export const EditTaskModal: React.FC = () => {
   const duePaise = Math.max(0, currentBillingPaise - totalPaid);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 backdrop-blur-sm p-4 animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 backdrop-blur-sm p-4 animate-fadeIn overscroll-contain">
       <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-2xl max-w-2xl w-full border border-surface-container/60 flex flex-col gap-space-md max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between pb-space-xs border-b border-surface-container">
           <div className="flex items-center gap-space-xs">

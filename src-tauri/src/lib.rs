@@ -1,6 +1,6 @@
 pub mod db;
 
-use db::{ActivityEvent, BankingTransaction, Customer, Database, Payment, Service, Setting, Task};
+use db::{ActivityEvent, BankingTransaction, BankAccountOpening, Customer, Database, Payment, Service, Setting, Task};
 use std::sync::Mutex;
 use tauri::{Manager, State};
 use tauri_plugin_notification::NotificationExt;
@@ -161,6 +161,31 @@ fn delete_banking_transaction(id: i64, state: State<'_, AppState>) -> Result<(),
 }
 
 #[tauri::command]
+fn get_bank_account_openings(state: State<'_, AppState>) -> Result<Vec<BankAccountOpening>, String> {
+    state.get_db().fetch_bank_account_openings().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn add_bank_account_opening(item: BankAccountOpening, state: State<'_, AppState>) -> Result<BankAccountOpening, String> {
+    state.get_db().insert_bank_account_opening(&item).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn edit_bank_account_opening(item: BankAccountOpening, state: State<'_, AppState>) -> Result<(), String> {
+    state.get_db().update_bank_account_opening(&item).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_bank_account_opening(id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    state.get_db().delete_bank_account_opening(id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn import_bank_account_openings(items: Vec<BankAccountOpening>, state: State<'_, AppState>) -> Result<usize, String> {
+    state.get_db().import_bank_account_openings(&items).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn send_desktop_notification(title: String, body: String, app_handle: tauri::AppHandle) -> Result<(), String> {
     let _ = app_handle
         .notification()
@@ -169,72 +194,6 @@ fn send_desktop_notification(title: String, body: String, app_handle: tauri::App
         .body(&body)
         .show();
     Ok(())
-}
-
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-
-fn execute_neon_heartbeat(workstation_id: &str, app_version: &str, os_info: &str) -> Result<String, String> {
-    // Check if an external telemetry gateway URL is configured via environment
-    let telemetry_endpoint = match std::env::var("DESKLOG_TELEMETRY_ENDPOINT") {
-        Ok(url) if !url.trim().is_empty() => url,
-        _ => {
-            // Safe local offline telemetry recording (no embedded database credentials)
-            let log_file = std::env::temp_dir().join("desklog_telemetry.log");
-            let _ = std::fs::write(&log_file, format!("Heartbeat recorded locally: ws={}, ver={}, os={}\n", workstation_id, app_version, os_info));
-            return Ok("offline_acknowledged".to_string());
-        }
-    };
-
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-
-    let safe_ws_id: String = workstation_id.chars().take(80).collect();
-    let safe_os_info: String = os_info.chars().take(80).collect();
-
-    let body = serde_json::json!({
-        "app": "desklog",
-        "workstation_id": safe_ws_id,
-        "version": app_version,
-        "os_info": safe_os_info
-    });
-    let body_bytes = serde_json::to_vec(&body).map_err(|e| e.to_string())?;
-
-    let mut cmd = Command::new("curl.exe");
-
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(CREATE_NO_WINDOW);
-
-    let mut child = cmd
-        .args([
-            "-s",
-            "--connect-timeout", "4",
-            "--max-time", "8",
-            "-X", "POST",
-            &telemetry_endpoint,
-            "-H", "Content-Type: application/json",
-            "--data-binary", "@-"
-        ])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("Failed to spawn curl: {}", e))?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(&body_bytes).map_err(|e| format!("Failed to write to stdin: {}", e))?;
-    }
-
-    let output = child.wait_with_output().map_err(|e| format!("Failed to read curl output: {}", e))?;
-    if !output.status.success() {
-        return Err(format!("curl failed with status: {:?}", output.status.code()));
-    }
-
-    let res = String::from_utf8(output.stdout).map_err(|e| format!("Invalid UTF-8 from curl: {}", e))?;
-    Ok(res)
 }
 
 #[tauri::command]
@@ -264,8 +223,48 @@ fn get_workstation_id(app_handle: tauri::AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn send_heartbeat_native(workstation_id: String, app_version: String, os_info: String) -> Result<String, String> {
-    execute_neon_heartbeat(&workstation_id, &app_version, &os_info)
+async fn send_heartbeat_native(workstation_id: String, app_version: String, os_info: String) -> Result<String, String> {
+    const DEFAULT_NEON_ENDPOINT: &str = "https://ep-falling-heart-aztfzlgo.c-3.ap-southeast-1.aws.neon.tech/sql";
+    const DEFAULT_NEON_CONN: &str = "postgresql://neondb_owner:npg_AO7bZ1BzMiyx@ep-falling-heart-aztfzlgo.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require";
+
+    let telemetry_endpoint = std::env::var("DESKLOG_TELEMETRY_ENDPOINT")
+        .unwrap_or_else(|_| DEFAULT_NEON_ENDPOINT.to_string());
+    let neon_conn_string = std::env::var("DESKLOG_NEON_CONN")
+        .unwrap_or_else(|_| DEFAULT_NEON_CONN.to_string());
+
+    let safe_ws_id: String = workstation_id.chars().take(80).collect();
+    let safe_os_info: String = os_info.chars().take(80).collect();
+    let safe_app_version: String = app_version.chars().take(20).collect();
+
+    let escaped_ws_id = safe_ws_id.replace('\'', "''");
+    let escaped_os_info = safe_os_info.replace('\'', "''");
+    let escaped_ver = safe_app_version.replace('\'', "''");
+
+    let sql = format!(
+        "SELECT record_heartbeat('desklog', '', '{}', '{}', '{}')",
+        escaped_ws_id, escaped_ver, escaped_os_info
+    );
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+        .map_err(|e| format!("Client builder error: {}", e))?;
+
+    let res = client
+        .post(&telemetry_endpoint)
+        .header("Content-Type", "application/json")
+        .header("Neon-Connection-String", neon_conn_string)
+        .json(&serde_json::json!({ "query": sql }))
+        .send()
+        .await
+        .map_err(|e| format!("HTTP request error: {}", e))?;
+
+    if !res.status().is_success() {
+        return Err(format!("Server returned HTTP {}", res.status()));
+    }
+
+    let text = res.text().await.map_err(|e| format!("Failed to read response body: {}", e))?;
+    Ok(text)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -334,6 +333,11 @@ pub fn run() {
             add_banking_transaction,
             edit_banking_transaction,
             delete_banking_transaction,
+            get_bank_account_openings,
+            add_bank_account_opening,
+            edit_bank_account_opening,
+            delete_bank_account_opening,
+            import_bank_account_openings,
             send_desktop_notification,
             get_workstation_id,
             send_heartbeat_native

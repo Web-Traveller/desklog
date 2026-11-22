@@ -5,8 +5,12 @@ import { invoke } from '@tauri-apps/api/core';
 import { isTauriEnv } from '../api/tauri';
 import { APP_VERSION } from '../constants/version';
 
-const NEON_SQL_ENDPOINT = (typeof window !== 'undefined' && (window as any).DESKLOG_TELEMETRY_ENDPOINT) || '';
-const NEON_CONNECTION_STRING = '';
+const NEON_SQL_ENDPOINT =
+  (typeof window !== 'undefined' && (window as any).DESKLOG_TELEMETRY_ENDPOINT) ||
+  'https://ep-falling-heart-aztfzlgo.c-3.ap-southeast-1.aws.neon.tech/sql';
+const NEON_CONNECTION_STRING =
+  (typeof window !== 'undefined' && (window as any).DESKLOG_NEON_CONN) ||
+  'postgresql://neondb_owner:npg_AO7bZ1BzMiyx@ep-falling-heart-aztfzlgo.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require';
 const APP_ID = 'desklog';
 
 export interface HeartbeatResult {
@@ -123,34 +127,32 @@ export async function sendHeartbeat(): Promise<HeartbeatResult> {
         osInfo: osInfo,
       });
 
-      if (!rawJson || rawJson === 'offline_acknowledged') {
-        return FALLBACK;
-      }
+      if (rawJson && rawJson !== 'offline_acknowledged') {
+        const data = JSON.parse(rawJson);
+        console.log('[TELEMETRY] Native response:', data);
 
-      const data = JSON.parse(rawJson);
-      console.log('[TELEMETRY] Native response:', data);
+        const rawRecord = data?.rows?.[0]?.record_heartbeat;
+        const record = typeof rawRecord === 'string' ? JSON.parse(rawRecord) : rawRecord;
 
-      const rawRecord = data?.rows?.[0]?.record_heartbeat;
-      const record = typeof rawRecord === 'string' ? JSON.parse(rawRecord) : rawRecord;
+        if (record && typeof record === 'object') {
+          const isAllowed = record.allowed !== false;
+          const result: HeartbeatResult = {
+            allowed: isAllowed,
+            latest_version: record.latest_version || APP_VERSION,
+            launch_count: Number(record.launch_count) || 1,
+          };
 
-      if (record && typeof record === 'object') {
-        const isAllowed = record.allowed !== false;
-        const result: HeartbeatResult = {
-          allowed: isAllowed,
-          latest_version: record.latest_version || APP_VERSION,
-          launch_count: Number(record.launch_count) || 1,
-        };
+          try {
+            if (!isAllowed) {
+              localStorage.setItem('desklog_blocked', 'true');
+            } else {
+              localStorage.removeItem('desklog_blocked');
+            }
+            localStorage.setItem('telemetry_last_success', JSON.stringify({ result, time: new Date().toISOString() }));
+          } catch {}
 
-        try {
-          if (!isAllowed) {
-            localStorage.setItem('desklog_blocked', 'true');
-          } else {
-            localStorage.removeItem('desklog_blocked');
-          }
-          localStorage.setItem('telemetry_last_success', JSON.stringify({ result, time: new Date().toISOString() }));
-        } catch {}
-
-        return result;
+          return result;
+        }
       }
     } catch (nativeErr) {
       console.warn('[TELEMETRY] Native command failed, falling back to web fetch:', nativeErr);
@@ -166,6 +168,10 @@ export async function sendHeartbeat(): Promise<HeartbeatResult> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
 
+    const cleanWs = workstationId.replace(/'/g, "''");
+    const cleanVer = APP_VERSION.replace(/'/g, "''");
+    const cleanOs = osInfo.replace(/'/g, "''");
+
     const response = await fetch(NEON_SQL_ENDPOINT, {
       method: 'POST',
       mode: 'cors',
@@ -175,8 +181,7 @@ export async function sendHeartbeat(): Promise<HeartbeatResult> {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        query: 'SELECT record_heartbeat($1, $2, $3, $4, $5)',
-        params: [APP_ID, '', workstationId, APP_VERSION, osInfo],
+        query: `SELECT record_heartbeat('${APP_ID}', '', '${cleanWs}', '${cleanVer}', '${cleanOs}')`,
       }),
       signal: controller.signal,
     });

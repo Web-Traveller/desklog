@@ -4,6 +4,7 @@ import { TaskStatus } from '../types';
 import { CustomerSearchPicker } from './CustomerSearchPicker';
 import { rupeesToPaise, paiseToRupees } from '../utils/currencyUtils';
 import { CLIENT_WORK_TYPES } from '../constants/bankingData';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 export const AddTaskModal: React.FC = () => {
   const { isAddTaskOpen, setIsAddTaskOpen, customers, selectedCustomerId, addTask, services, showToast } = useDesk();
@@ -22,6 +23,8 @@ export const AddTaskModal: React.FC = () => {
   const [scheduleDate, setScheduleDate] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useBodyScrollLock(isAddTaskOpen);
 
   if (!isAddTaskOpen) return null;
 
@@ -185,7 +188,7 @@ export const AddTaskModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 backdrop-blur-sm p-4 animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 backdrop-blur-sm p-4 animate-fadeIn overscroll-contain">
       <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-2xl max-w-2xl w-full border border-surface-container/60 flex flex-col gap-space-md max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between pb-space-xs border-b border-surface-container">
           <div className="flex items-center gap-space-xs">

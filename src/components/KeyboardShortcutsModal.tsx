@@ -1,4 +1,5 @@
 import React from 'react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 interface KeyboardShortcutsModalProps {
   isOpen: boolean;
@@ -9,6 +10,8 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
   isOpen,
   onClose,
 }) => {
+  useBodyScrollLock(isOpen);
+
   if (!isOpen) return null;
 
   const shortcuts = [
@@ -31,7 +34,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
   const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().includes('MAC');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 backdrop-blur-sm p-4 animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 backdrop-blur-sm p-4 animate-fadeIn overscroll-contain">
       <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-2xl max-w-lg w-full border border-surface-container/60 flex flex-col gap-space-md">
         <div className="flex items-center justify-between pb-space-xs border-b border-surface-container">
           <div className="flex items-center gap-space-xs">

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { useDesk } from '../context/DeskContext';
 import { BankingTransaction } from '../types';
+import { Modal } from './Modal';
 import { rupeesToPaise, paiseToRupees } from '../utils/currencyUtils';
 import {
   validateMobileNumber,
@@ -250,33 +250,18 @@ export const EditBankingTransactionModal: React.FC<EditBankingTransactionModalPr
     }
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-scrim/40 backdrop-blur-xs animate-fadeIn overflow-y-auto">
-      <div className="bg-surface-container-lowest w-full max-w-xl rounded-2xl shadow-xl border border-surface-container/70 p-4 sm:p-5 flex flex-col gap-3.5 my-6 animate-scaleUp">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-surface-container/60 pb-2.5">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary text-xl">edit_document</span>
-            <div>
-              <h3 className="font-tagline font-bold text-sm text-on-surface">
-                Edit Banking Transaction #{transaction.id}
-              </h3>
-              <p className="text-[11px] text-outline">
-                Modify transaction details, charges, refund, or commission
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 rounded-full text-outline hover:text-on-surface hover:bg-surface-container transition-colors"
-          >
-            <span className="material-symbols-outlined text-lg">close</span>
-          </button>
-        </div>
+  if (!isOpen || !transaction) return null;
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`Edit Banking Transaction #${transaction.id}`}
+      subtitle="Modify transaction details, charges, refund, or commission"
+      icon="edit_document"
+      maxWidth="xl"
+    >
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           
           {/* Mode Pill Strip */}
           <div className="flex flex-col gap-1">
@@ -604,8 +589,6 @@ export const EditBankingTransactionModal: React.FC<EditBankingTransactionModalPr
             </button>
           </div>
         </form>
-      </div>
-    </div>,
-    document.body
+    </Modal>
   );
 };

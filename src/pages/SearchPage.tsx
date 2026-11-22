@@ -3,6 +3,7 @@ import { useDesk } from '../context/DeskContext';
 import { CustomerCard } from '../components/CustomerCard';
 import { TaskCard } from '../components/TaskCard';
 import { EmptyState } from '../components/EmptyState';
+import { StatusBadge } from '../components/StatusBadge';
 
 export const SearchPage: React.FC = () => {
   const {
@@ -10,22 +11,26 @@ export const SearchPage: React.FC = () => {
     customers,
     tasks,
     bankingTransactions,
+    accountOpenings,
     services,
     setCurrentPage,
     navigateToBankingTx,
+    navigateToAccountOpening,
   } = useDesk();
 
-  const [activeFilter, setActiveFilter] = useState<'all' | 'banking' | 'customers' | 'tasks' | 'services'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'banking' | 'accounts' | 'customers' | 'tasks' | 'services'>('all');
   const [sortBy, setSortBy] = useState<'relevance' | 'recent' | 'name'>('relevance');
   const [showAllCustomers, setShowAllCustomers] = useState(false);
   const [showAllTasks, setShowAllTasks] = useState(false);
   const [showAllBanking, setShowAllBanking] = useState(false);
+  const [showAllAccounts, setShowAllAccounts] = useState(false);
 
   const rawQ = searchQuery.trim().toLowerCase();
   const cleanQ = searchQuery.replace(/[\s-]/g, '').toLowerCase();
 
   const {
     matchingBanking,
+    matchingAccountOpenings,
     matchingCustomers,
     matchingTasks,
     matchingServices,
@@ -88,6 +93,25 @@ export const SearchPage: React.FC = () => {
       return false;
     });
 
+    // 1b. Bank Account Openings Universal Match
+    let accts = (accountOpenings || []).filter((a) => {
+      if (!rawQ) return true;
+      if (a.customer_name?.toLowerCase().includes(rawQ)) return true;
+      if (a.account_number?.replace(/[\s-]/g, '').toLowerCase().includes(cleanQ)) return true;
+      if (a.bank_customer_id?.toLowerCase().includes(rawQ)) return true;
+      if (a.passbook_number?.toLowerCase().includes(rawQ)) return true;
+      if (a.mobile_number && a.mobile_number.replace(/[\s-]/g, '').includes(cleanQ)) return true;
+      if (a.aadhaar_number && a.aadhaar_number.replace(/[\s-]/g, '').includes(cleanQ)) return true;
+      if (a.pan_number?.toLowerCase().includes(rawQ)) return true;
+      if (a.scheme?.toLowerCase().includes(rawQ)) return true;
+      if (a.city?.toLowerCase().includes(rawQ)) return true;
+      if (a.area?.toLowerCase().includes(rawQ)) return true;
+      if (a.notes?.toLowerCase().includes(rawQ)) return true;
+      const amtRupees = String(Math.floor((a.initial_deposit || 0) / 100));
+      if (amtRupees.includes(cleanQ)) return true;
+      return false;
+    });
+
     // 2. Customers Universal Match
     let custs = customers.filter(
       (c) =>
@@ -143,6 +167,7 @@ export const SearchPage: React.FC = () => {
       custs = [...custs].sort((a, b) => a.name.localeCompare(b.name));
       tsks = [...tsks].sort((a, b) => a.title.localeCompare(b.title));
       bts = [...bts].sort((a, b) => (a.customer_name || '').localeCompare(b.customer_name || ''));
+      accts = [...accts].sort((a, b) => (a.customer_name || '').localeCompare(b.customer_name || ''));
       svcs = [...svcs].sort((a, b) => a.name.localeCompare(b.name));
     } else if (sortBy === 'recent') {
       custs = [...custs].sort(
@@ -154,18 +179,26 @@ export const SearchPage: React.FC = () => {
       bts = [...bts].sort(
         (a, b) => new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime()
       );
+      accts = [...accts].sort(
+        (a, b) => new Date(b.account_date || '').getTime() - new Date(a.account_date || '').getTime()
+      );
     }
 
-    const total = bts.length + custs.length + tsks.length + svcs.length;
+    const total = bts.length + accts.length + custs.length + tsks.length + svcs.length;
 
     return {
       matchingBanking: bts,
+      matchingAccountOpenings: accts,
       matchingCustomers: custs,
       matchingTasks: tsks,
       matchingServices: svcs,
       totalMatches: total,
     };
-  }, [bankingTransactions, customers, tasks, services, rawQ, cleanQ, sortBy]);
+  }, [bankingTransactions, accountOpenings, customers, tasks, services, rawQ, cleanQ, sortBy]);
+
+  const visibleAccounts = React.useMemo(() => {
+    return showAllAccounts ? matchingAccountOpenings : matchingAccountOpenings.slice(0, 10);
+  }, [matchingAccountOpenings, showAllAccounts]);
 
   const visibleCustomers = React.useMemo(() => {
     return showAllCustomers ? matchingCustomers : matchingCustomers.slice(0, 8);
@@ -252,9 +285,25 @@ export const SearchPage: React.FC = () => {
             type="button"
           >
             <span className="material-symbols-outlined text-sm">account_balance</span>
-            <span>Banking Ledger</span>
+            <span>Counter Transfers</span>
             <span className="px-1.5 py-0.2 rounded-full bg-surface-container-highest text-on-surface-variant text-[11px] font-semibold">
               {matchingBanking.length}
+            </span>
+          </button>
+
+          <button
+            className={`filter-pill flex items-center gap-space-xs px-space-md py-space-xs rounded-full font-button-utility text-button-utility whitespace-nowrap transition-all ${
+              activeFilter === 'accounts'
+                ? 'bg-primary text-on-primary font-semibold shadow-xs'
+                : 'bg-surface-container hover:bg-surface-container-high text-on-surface'
+            }`}
+            onClick={() => setActiveFilter('accounts')}
+            type="button"
+          >
+            <span className="material-symbols-outlined text-sm">badge</span>
+            <span>Bank Accounts</span>
+            <span className="px-1.5 py-0.2 rounded-full bg-surface-container-highest text-on-surface-variant text-[11px] font-semibold">
+              {matchingAccountOpenings.length}
             </span>
           </button>
 
@@ -468,6 +517,100 @@ export const SearchPage: React.FC = () => {
                   className="self-center mt-2 px-4 py-2 rounded-full border border-surface-container-high text-xs font-semibold text-primary hover:bg-surface-container transition-all"
                 >
                   {showAllBanking ? 'Show Fewer Banking Records' : `Show All ${matchingBanking.length} Banking Records`}
+                </button>
+              )}
+            </section>
+          )}
+
+          {/* 1b. Bank Account Openings Results */}
+          {(activeFilter === 'all' || activeFilter === 'accounts') && matchingAccountOpenings.length > 0 && (
+            <section className="flex flex-col gap-space-md">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-space-xs">
+                  <span className="material-symbols-outlined text-primary text-xl">badge</span>
+                  <h2 className="font-tagline text-tagline text-on-surface font-semibold">
+                    Bank Account Openings
+                  </h2>
+                  <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-fine-print text-fine-print font-medium">
+                    {matchingAccountOpenings.length} accounts
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                {visibleAccounts.map((account) => {
+                  return (
+                    <div
+                      key={account.id}
+                      onClick={() => account.id ? navigateToAccountOpening(String(account.id)) : null}
+                      className="group flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-surface-container-lowest hover:bg-surface-container/60 border border-surface-container/70 shadow-xs cursor-pointer transition-all hover:scale-[1.002] active:scale-[0.998]"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="p-2.5 rounded-xl bg-primary/10 text-primary shrink-0 mt-0.5 group-hover:bg-primary group-hover:text-on-primary transition-colors">
+                          <span className="material-symbols-outlined text-xl">account_balance</span>
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-sm text-on-surface">
+                              {account.customer_name}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-surface-container text-primary border border-surface-container-high">
+                              {account.scheme}
+                            </span>
+                            <span className="text-[10px] text-outline font-medium">
+                              {account.visit_type || 'Walk-in'}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-outline font-mono">
+                            <span>A/C: <strong className="text-on-surface">{account.account_number}</strong></span>
+                            {account.bank_customer_id && (
+                              <span>CIF: <strong className="text-on-surface-variant">{account.bank_customer_id}</strong></span>
+                            )}
+                            {account.mobile_number && (
+                              <span>Ph: {account.mobile_number}</span>
+                            )}
+                            {account.aadhaar_number && (
+                              <span>Aadhaar: •••• {account.aadhaar_number.slice(-4)}</span>
+                            )}
+                          </div>
+
+                          {account.city && (
+                            <p className="text-[11px] text-outline mt-0.5">
+                              Location: {[account.area, account.city, account.state].filter(Boolean).join(', ')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                        <div className="flex flex-col items-end">
+                          <span className="font-mono font-bold text-sm text-on-surface">
+                            ₹{(((account.initial_deposit || 0)) / 100).toLocaleString('en-IN')}
+                          </span>
+                          <span className="text-[10px] text-outline">
+                            {account.account_date || 'N/A'}
+                          </span>
+                        </div>
+
+                        <StatusBadge status={account.kyc_status || 'Verified'} />
+
+                        <span className="material-symbols-outlined text-outline text-base group-hover:text-primary transition-colors">
+                          chevron_right
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {matchingAccountOpenings.length > 10 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllAccounts((v) => !v)}
+                  className="self-center mt-2 px-4 py-2 rounded-full border border-surface-container-high text-xs font-semibold text-primary hover:bg-surface-container transition-all"
+                >
+                  {showAllAccounts ? 'Show Fewer Accounts' : `Show All ${matchingAccountOpenings.length} Accounts`}
                 </button>
               )}
             </section>

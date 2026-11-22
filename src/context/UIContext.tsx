@@ -21,6 +21,10 @@ interface UIContextType {
   setHighlightedTaskId: (id: string | null) => void;
   highlightedBankingTxId: number | null;
   setHighlightedBankingTxId: (id: number | null) => void;
+  highlightedAccountOpeningId: string | null;
+  setHighlightedAccountOpeningId: (id: string | null) => void;
+  bankingActiveTab: 'counter' | 'account_opening';
+  setBankingActiveTab: (tab: 'counter' | 'account_opening') => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   taskDateFilter: string;
@@ -50,6 +54,7 @@ interface UIContextType {
   navigateToCustomerProfile: (customerId: string, setSelectedCustomerId: (id: string) => void) => void;
   navigateToCustomerTaskProfile: (customerId: string, taskId: string, setSelectedCustomerId: (id: string) => void) => void;
   navigateToBankingTx: (txId: number) => void;
+  navigateToAccountOpening: (openingId: string) => void;
   performSearch: (query: string) => void;
 }
 
@@ -60,6 +65,8 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [previousPage, setPreviousPage] = useState<ActivePage>('dashboard');
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(null);
   const [highlightedBankingTxId, setHighlightedBankingTxId] = useState<number | null>(null);
+  const [highlightedAccountOpeningId, setHighlightedAccountOpeningId] = useState<string | null>(null);
+  const [bankingActiveTab, setBankingActiveTab] = useState<'counter' | 'account_opening'>('counter');
   const [searchQuery, setSearchQuery] = useState('');
   const [taskDateFilter, setTaskDateFilter] = useState('Last 7 days');
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string>(getFormattedToday());
@@ -127,6 +134,13 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 
   const navigateToBankingTx = (txId: number) => {
     setHighlightedBankingTxId(txId);
+    setBankingActiveTab('counter');
+    setCurrentPage('banking');
+  };
+
+  const navigateToAccountOpening = (openingId: string) => {
+    setHighlightedAccountOpeningId(openingId);
+    setBankingActiveTab('account_opening');
     setCurrentPage('banking');
   };
 
@@ -147,6 +161,10 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         setHighlightedTaskId,
         highlightedBankingTxId,
         setHighlightedBankingTxId,
+        highlightedAccountOpeningId,
+        setHighlightedAccountOpeningId,
+        bankingActiveTab,
+        setBankingActiveTab,
         searchQuery,
         setSearchQuery,
         taskDateFilter,
@@ -173,6 +191,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         navigateToCustomerProfile,
         navigateToCustomerTaskProfile,
         navigateToBankingTx,
+        navigateToAccountOpening,
         performSearch,
       }}
     >
@@ -207,6 +226,10 @@ export const useUI = () => {
       setHighlightedTaskId: () => {},
       highlightedBankingTxId: null,
       setHighlightedBankingTxId: () => {},
+      highlightedAccountOpeningId: null,
+      setHighlightedAccountOpeningId: () => {},
+      bankingActiveTab: 'counter' as const,
+      setBankingActiveTab: () => {},
       searchQuery: '',
       setSearchQuery: () => {},
       taskDateFilter: 'Last 7 days',
@@ -233,6 +256,7 @@ export const useUI = () => {
       navigateToCustomerProfile: () => {},
       navigateToCustomerTaskProfile: () => {},
       navigateToBankingTx: () => {},
+      navigateToAccountOpening: () => {},
       performSearch: () => {},
     };
   }

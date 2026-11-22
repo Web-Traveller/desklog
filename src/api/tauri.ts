@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
-import { Customer, Task, ActivityEvent, Service, Payment, Setting, BankingTransaction } from '../types';
+import { Customer, Task, ActivityEvent, Service, Payment, Setting, BankingTransaction, BankAccountOpening } from '../types';
 
 export const isTauriEnv = (): boolean => {
   return typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
@@ -274,6 +274,45 @@ export async function deleteTauriBankingTransaction(id: number): Promise<boolean
   if (!isTauriEnv()) return true;
   await invoke('delete_banking_transaction', { id });
   return true;
+}
+
+// --- BANK ACCOUNT OPENINGS ---
+export async function fetchTauriBankAccountOpenings(): Promise<BankAccountOpening[] | null> {
+  if (!isTauriEnv()) return null;
+  try {
+    return await invoke<BankAccountOpening[]>('get_bank_account_openings');
+  } catch (err) {
+    console.warn('Failed to fetch bank account openings:', err);
+    return null;
+  }
+}
+
+export async function saveTauriBankAccountOpening(account: BankAccountOpening): Promise<BankAccountOpening> {
+  if (!isTauriEnv()) return account;
+  const res = await invoke<BankAccountOpening>('add_bank_account_opening', { item: account });
+  return res || account;
+}
+
+export async function updateTauriBankAccountOpening(account: BankAccountOpening): Promise<boolean> {
+  if (!isTauriEnv()) return true;
+  await invoke('edit_bank_account_opening', { item: account });
+  return true;
+}
+
+export async function deleteTauriBankAccountOpening(id: number): Promise<boolean> {
+  if (!isTauriEnv()) return true;
+  await invoke('delete_bank_account_opening', { id });
+  return true;
+}
+
+export async function importTauriBankAccountOpenings(items: BankAccountOpening[]): Promise<number> {
+  if (!isTauriEnv()) return items.length;
+  try {
+    return await invoke<number>('import_bank_account_openings', { items });
+  } catch (err) {
+    console.warn('Failed to import bank account openings:', err);
+    return 0;
+  }
 }
 
 // --- DESKTOP NOTIFICATIONS ---

@@ -1,14 +1,20 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as Sentry from '@sentry/react';
-import { BankingTransaction } from '../types';
+import { BankingTransaction, BankAccountOpening } from '../types';
 import {
   fetchTauriBankingTransactions,
   saveTauriBankingTransaction,
   updateTauriBankingTransaction,
   deleteTauriBankingTransaction,
+  fetchTauriBankAccountOpenings,
+  saveTauriBankAccountOpening,
+  updateTauriBankAccountOpening,
+  deleteTauriBankAccountOpening,
+  importTauriBankAccountOpenings,
   saveTauriActivity,
   isTauriEnv,
 } from '../api/tauri';
+import seedAccountOpenings from '../constants/seedAccountOpenings.json';
 import { createActivityEvent } from '../services/activityService';
 import { formatRupees } from '../utils/currencyUtils';
 import { useUI } from './UIContext';
@@ -19,12 +25,20 @@ interface BankingContextType {
   updateBankingTransaction: (id: number, updates: Partial<BankingTransaction>) => Promise<void>;
   deleteBankingTransaction: (id: number) => Promise<void>;
   reloadBankingTransactions: () => Promise<void>;
+
+  accountOpenings: BankAccountOpening[];
+  addAccountOpening: (item: Omit<BankAccountOpening, 'id'>) => Promise<BankAccountOpening>;
+  updateAccountOpening: (id: number, updates: Partial<BankAccountOpening>) => Promise<void>;
+  deleteAccountOpening: (id: number) => Promise<void>;
+  importAccountOpenings: (items: BankAccountOpening[]) => Promise<number>;
+  reloadAccountOpenings: () => Promise<void>;
 }
 
 const BankingContext = createContext<BankingContextType | undefined>(undefined);
 
 export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [bankingTransactions, setBankingTransactions] = useState<BankingTransaction[]>([]);
+  const [accountOpenings, setAccountOpenings] = useState<BankAccountOpening[]>([]);
   const { showToast } = useUI();
 
   const reloadBankingTransactions = async () => {
@@ -47,8 +61,46 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
+  const reloadAccountOpenings = async () => {
+    try {
+      let list = await fetchTauriBankAccountOpenings();
+      if (list && list.length > 0) {
+        setAccountOpenings(list);
+      } else if (list && list.length === 0) {
+        // First run: pre-populate with the 47 real records from Banking.xlsm
+        try {
+          await importTauriBankAccountOpenings(seedAccountOpenings as BankAccountOpening[]);
+          const reloaded = await fetchTauriBankAccountOpenings();
+          if (reloaded && reloaded.length > 0) {
+            setAccountOpenings(reloaded);
+            return;
+          }
+        } catch (e) {
+          console.warn('Auto seed account openings failed', e);
+        }
+        setAccountOpenings([]);
+      } else {
+        // Browser fallback (localStorage)
+        try {
+          const cached = localStorage.getItem('desklog_account_openings');
+          if (cached) {
+            setAccountOpenings(JSON.parse(cached));
+          } else {
+            setAccountOpenings(seedAccountOpenings as BankAccountOpening[]);
+            localStorage.setItem('desklog_account_openings', JSON.stringify(seedAccountOpenings));
+          }
+        } catch {
+          setAccountOpenings(seedAccountOpenings as BankAccountOpening[]);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load bank account openings:', err);
+    }
+  };
+
   useEffect(() => {
     reloadBankingTransactions();
+    reloadAccountOpenings();
   }, []);
 
   const addBankingTransaction = async (txData: Omit<BankingTransaction, 'id' | 'is_deleted'>) => {
@@ -160,6 +212,118 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
+  const addAccountOpening = async (itemData: Omit<BankAccountOpening, 'id'>): Promise<BankAccountOpening> => {
+    const newAccount: BankAccountOpening = {
+      ...itemData,
+      is_deleted: false,
+      account_date: itemData.account_date || new Date().toISOString().slice(0, 10),
+      kyc_status: itemData.kyc_status || 'Verified',
+      visit_type: itemData.visit_type || 'Walk-in',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    try {
+      let saved = await saveTauriBankAccountOpening(newAccount);
+      if (!isTauriEnv() || !saved?.id) {
+        saved = { ...newAccount, id: Date.now() };
+      }
+      setAccountOpenings(prev => [saved, ...prev]);
+      if (!isTauriEnv()) {
+        try {
+          localStorage.setItem('desklog_account_openings', JSON.stringify([saved, ...accountOpenings]));
+        } catch {}
+      }
+      showToast(`Bank account opened for ${saved.customer_name} (${saved.scheme})`, 'success');
+
+      // Audit trail
+      const activityEvent = createActivityEvent({
+        type: 'banking_transaction_added',
+        title: `Bank Account Opened: ${saved.scheme}`,
+        description: `Account: ${saved.account_number} | Customer: ${saved.customer_name} | CIF: ${saved.bank_customer_id || '-'}`,
+        customerId: saved.customer_id,
+        customerName: saved.customer_name,
+        customerPhone: saved.mobile_number,
+      });
+      await saveTauriActivity(activityEvent);
+      return saved;
+    } catch (err) {
+      console.error('Failed to save bank account opening:', err);
+      showToast(`Failed to open account: ${err instanceof Error ? err.message : String(err)}`, 'error');
+      throw err;
+    }
+  };
+
+  const updateAccountOpening = async (id: number, updates: Partial<BankAccountOpening>) => {
+    try {
+      const existing = accountOpenings.find(a => a.id === id);
+      if (existing) {
+        const merged: BankAccountOpening = { ...existing, ...updates, id, updated_at: new Date().toISOString() };
+        if (isTauriEnv()) {
+          await updateTauriBankAccountOpening(merged);
+        }
+      }
+      setAccountOpenings(prev => {
+        const updated = prev.map(a => (a.id === id ? { ...a, ...updates, updated_at: new Date().toISOString() } : a));
+        if (!isTauriEnv()) {
+          try {
+            localStorage.setItem('desklog_account_openings', JSON.stringify(updated));
+          } catch {}
+        }
+        return updated;
+      });
+      showToast('Account record updated successfully.', 'success');
+    } catch (err) {
+      console.error('Failed to update bank account opening:', err);
+      showToast('Failed to update account record.', 'error');
+    }
+  };
+
+  const deleteAccountOpening = async (id: number) => {
+    try {
+      if (isTauriEnv()) {
+        await deleteTauriBankAccountOpening(id);
+      }
+      setAccountOpenings(prev => {
+        const filtered = prev.filter(a => a.id !== id);
+        if (!isTauriEnv()) {
+          try {
+            localStorage.setItem('desklog_account_openings', JSON.stringify(filtered));
+          } catch {}
+        }
+        return filtered;
+      });
+      showToast('Account record deleted.', 'info');
+    } catch (err) {
+      console.error('Failed to delete bank account opening:', err);
+      showToast('Failed to delete account record.', 'error');
+    }
+  };
+
+  const importAccountOpenings = async (items: BankAccountOpening[]): Promise<number> => {
+    try {
+      let count = 0;
+      if (isTauriEnv()) {
+        count = await importTauriBankAccountOpenings(items);
+        await reloadAccountOpenings();
+      } else {
+        const existingAccts = new Set(accountOpenings.map(a => a.account_number));
+        const newItems = items.filter(i => !existingAccts.has(i.account_number));
+        count = newItems.length;
+        const merged = [...accountOpenings, ...newItems];
+        setAccountOpenings(merged);
+        try {
+          localStorage.setItem('desklog_account_openings', JSON.stringify(merged));
+        } catch {}
+      }
+      showToast(`Imported ${count} bank account records from Excel.`, 'success');
+      return count;
+    } catch (err) {
+      console.error('Failed to import bank accounts:', err);
+      showToast('Failed to import accounts from Excel.', 'error');
+      return 0;
+    }
+  };
+
   return (
     <BankingContext.Provider
       value={{
@@ -168,6 +332,12 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updateBankingTransaction,
         deleteBankingTransaction,
         reloadBankingTransactions,
+        accountOpenings,
+        addAccountOpening,
+        updateAccountOpening,
+        deleteAccountOpening,
+        importAccountOpenings,
+        reloadAccountOpenings,
       }}
     >
       {children}
@@ -185,6 +355,12 @@ export const useBanking = (): BankingContextType => {
       updateBankingTransaction: async () => {},
       deleteBankingTransaction: async () => {},
       reloadBankingTransactions: async () => {},
+      accountOpenings: [],
+      addAccountOpening: async () => ({} as BankAccountOpening),
+      updateAccountOpening: async () => {},
+      deleteAccountOpening: async () => {},
+      importAccountOpenings: async () => 0,
+      reloadAccountOpenings: async () => {},
     };
   }
   return context;

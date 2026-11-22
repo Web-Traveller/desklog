@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useDesk } from "../context/DeskContext";
 import { findCustomersByMobile } from "../services/customerService";
 import { validateMobileNumber, validateAadhaarNumber } from "../utils/validationUtils";
+import { useBodyScrollLock } from "../hooks/useBodyScrollLock";
 
 export const AddCustomerModal: React.FC = () => {
   const {
@@ -20,6 +21,8 @@ export const AddCustomerModal: React.FC = () => {
   const [notes, setNotes] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useBodyScrollLock(isAddCustomerOpen);
 
   if (!isAddCustomerOpen) return null;
 
@@ -97,7 +100,7 @@ export const AddCustomerModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 backdrop-blur-sm p-4 animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 backdrop-blur-sm p-4 animate-fadeIn overscroll-contain">
       <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-2xl max-w-xl w-full border border-surface-container/60 flex flex-col gap-space-md max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between pb-space-xs border-b border-surface-container">
           <div className="flex items-center gap-space-xs">

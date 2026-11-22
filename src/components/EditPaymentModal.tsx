@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { useDesk } from '../context/DeskContext';
 import { Payment, Task, Customer } from '../types';
 import { formatRupees, rupeesToPaise, paiseToRupees } from '../utils/currencyUtils';
+import { Modal } from './Modal';
 
 interface EditPaymentModalProps {
   payment: Payment | null;
@@ -94,26 +94,15 @@ export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({
     });
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-inverse-surface/40 backdrop-blur-sm p-4 animate-fadeIn">
-      <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-2xl max-w-lg w-full border border-surface-container/60 flex flex-col gap-space-md max-h-[92vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-space-xs border-b border-surface-container">
-          <div className="flex items-center gap-space-xs">
-            <span className="material-symbols-outlined text-primary text-xl">payments</span>
-            <h3 className="font-tagline text-tagline font-semibold text-on-surface">
-              Edit Payment Record
-            </h3>
-          </div>
-          <button
-            className="text-outline hover:text-on-surface p-1 rounded-full hover:bg-surface-container"
-            onClick={onClose}
-            type="button"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
-        </div>
-
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Edit Payment Record"
+      icon="payments"
+      maxWidth="lg"
+    >
+      <div className="flex flex-col gap-space-md">
         {/* Linked Details Card */}
         <div className="p-3 rounded-xl bg-surface-container-low border border-surface-container/60 flex flex-col gap-1.5 text-xs font-mono">
           <div className="flex justify-between items-center text-on-surface">
@@ -190,7 +179,7 @@ export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({
                 Cancel
               </button>
               <button
-                className="px-space-md py-1.5 rounded-full bg-primary-container text-on-primary font-button-utility text-button-utility font-medium shadow-sm hover:bg-primary transition-all disabled:opacity-50"
+                className="px-space-md py-1.5 rounded-full bg-primary text-on-primary font-button-utility text-button-utility font-medium shadow-sm hover:bg-primary-container transition-all disabled:opacity-50"
                 type="submit"
                 disabled={isSubmitting}
               >
@@ -200,7 +189,6 @@ export const EditPaymentModal: React.FC<EditPaymentModalProps> = ({
           </div>
         </form>
       </div>
-    </div>,
-    document.body
+    </Modal>
   );
 };

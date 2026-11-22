@@ -121,6 +121,55 @@ pub struct BankingTransaction {
     pub refund: Option<i64>,
 }
 
+#[allow(non_snake_case)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct BankAccountOpening {
+    pub id: Option<i64>,
+    pub customer_id: Option<String>,
+    #[serde(default)]
+    pub visit_type: Option<String>,
+    pub account_date: String,
+    #[serde(default)]
+    pub passbook_number: Option<String>,
+    #[serde(default)]
+    pub bank_customer_id: Option<String>,
+    pub account_number: String,
+    pub customer_name: String,
+    #[serde(default)]
+    pub dob: Option<String>,
+    #[serde(default)]
+    pub aadhaar_number: Option<String>,
+    #[serde(default)]
+    pub pan_number: Option<String>,
+    pub scheme: String,
+    #[serde(default)]
+    pub mobile_number: Option<String>,
+    #[serde(default)]
+    pub mailing_address: Option<String>,
+    #[serde(default)]
+    pub area: Option<String>,
+    #[serde(default)]
+    pub city: Option<String>,
+    #[serde(default)]
+    pub state: Option<String>,
+    #[serde(default)]
+    pub zip: Option<String>,
+    #[serde(default)]
+    pub initial_deposit: Option<i64>,
+    #[serde(default)]
+    pub kyc_status: Option<String>,
+    #[serde(default)]
+    pub notes: Option<String>,
+    #[serde(default)]
+    pub document_status: Option<String>,
+    #[serde(default)]
+    pub is_deleted: bool,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
+}
+
 pub struct Database {
     pub conn: Mutex<Connection>,
     pub app_dir: PathBuf,
@@ -418,6 +467,50 @@ impl Database {
                 "CREATE INDEX IF NOT EXISTS idx_tasks_tracker_id ON tasks(tracker_id);
                  CREATE INDEX IF NOT EXISTS idx_tasks_document_number ON tasks(document_number);
                  PRAGMA user_version = 5;"
+            )?;
+            tx.commit()?;
+        }
+
+        // Migration v6: Bank Account Opening Service Ledger (from Banking.xlsm)
+        let current_version: i32 = conn.query_row("PRAGMA user_version;", [], |row| row.get(0))?;
+        if current_version < 6 {
+            let tx = conn.transaction()?;
+            tx.execute_batch(
+                "CREATE TABLE IF NOT EXISTS bank_account_openings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    customer_id TEXT,
+                    visit_type TEXT DEFAULT 'Walk-in',
+                    account_date TEXT NOT NULL,
+                    passbook_number TEXT,
+                    bank_customer_id TEXT,
+                    account_number TEXT NOT NULL,
+                    customer_name TEXT NOT NULL,
+                    dob TEXT,
+                    aadhaar_number TEXT,
+                    pan_number TEXT,
+                    scheme TEXT NOT NULL,
+                    mobile_number TEXT,
+                    mailing_address TEXT,
+                    area TEXT,
+                    city TEXT,
+                    state TEXT,
+                    zip TEXT,
+                    initial_deposit INTEGER DEFAULT 0,
+                    kyc_status TEXT DEFAULT 'Verified',
+                    notes TEXT,
+                    document_status TEXT,
+                    is_deleted BOOLEAN DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE INDEX IF NOT EXISTS idx_bao_account_number ON bank_account_openings(account_number);
+                CREATE INDEX IF NOT EXISTS idx_bao_customer_id ON bank_account_openings(customer_id);
+                CREATE INDEX IF NOT EXISTS idx_bao_aadhaar ON bank_account_openings(aadhaar_number);
+                CREATE INDEX IF NOT EXISTS idx_bao_mobile ON bank_account_openings(mobile_number);
+                CREATE INDEX IF NOT EXISTS idx_bao_bank_cif ON bank_account_openings(bank_customer_id);
+                CREATE INDEX IF NOT EXISTS idx_bao_scheme ON bank_account_openings(scheme);
+                CREATE INDEX IF NOT EXISTS idx_bao_account_date ON bank_account_openings(account_date);
+                PRAGMA user_version = 6;"
             )?;
             tx.commit()?;
         }
@@ -1032,6 +1125,222 @@ impl Database {
         let conn = self.get_conn();
         conn.execute("UPDATE banking_transactions SET is_deleted = 1 WHERE id = ?1;", params![id])?;
         Ok(())
+    }
+
+    pub fn fetch_bank_account_openings(&self) -> Result<Vec<BankAccountOpening>> {
+        let conn = self.get_conn();
+        let mut stmt = conn.prepare_cached(
+            "SELECT id, customer_id, visit_type, account_date, passbook_number, bank_customer_id,
+                    account_number, customer_name, dob, aadhaar_number, pan_number, scheme,
+                    mobile_number, mailing_address, area, city, state, zip, initial_deposit,
+                    kyc_status, notes, document_status, is_deleted, created_at, updated_at
+             FROM bank_account_openings WHERE is_deleted = 0 ORDER BY account_date DESC, id DESC;"
+        )?;
+        let iter = stmt.query_map([], |row| {
+            Ok(BankAccountOpening {
+                id: row.get(0)?,
+                customer_id: row.get(1)?,
+                visit_type: row.get(2)?,
+                account_date: row.get(3)?,
+                passbook_number: row.get(4)?,
+                bank_customer_id: row.get(5)?,
+                account_number: row.get(6)?,
+                customer_name: row.get(7)?,
+                dob: row.get(8)?,
+                aadhaar_number: row.get(9)?,
+                pan_number: row.get(10)?,
+                scheme: row.get(11)?,
+                mobile_number: row.get(12)?,
+                mailing_address: row.get(13)?,
+                area: row.get(14)?,
+                city: row.get(15)?,
+                state: row.get(16)?,
+                zip: row.get(17)?,
+                initial_deposit: row.get(18)?,
+                kyc_status: row.get(19)?,
+                notes: row.get(20)?,
+                document_status: row.get(21)?,
+                is_deleted: row.get::<_, i64>(22).unwrap_or(0) != 0,
+                created_at: row.get(23)?,
+                updated_at: row.get(24)?,
+            })
+        })?;
+        let mut list = Vec::new();
+        for item in iter {
+            list.push(item?);
+        }
+        Ok(list)
+    }
+
+    pub fn insert_bank_account_opening(&self, item: &BankAccountOpening) -> Result<BankAccountOpening> {
+        let conn = self.get_conn();
+        let now = chrono::Local::now().to_rfc3339();
+        let date = if item.account_date.trim().is_empty() {
+            now.clone()
+        } else {
+            item.account_date.clone()
+        };
+        conn.execute(
+            "INSERT INTO bank_account_openings (
+                customer_id, visit_type, account_date, passbook_number, bank_customer_id,
+                account_number, customer_name, dob, aadhaar_number, pan_number, scheme,
+                mobile_number, mailing_address, area, city, state, zip, initial_deposit,
+                kyc_status, notes, document_status, is_deleted, created_at, updated_at
+             )
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, 0, ?22, ?22);",
+            params![
+                item.customer_id,
+                item.visit_type.as_deref().unwrap_or("Walk-in"),
+                date,
+                item.passbook_number,
+                item.bank_customer_id,
+                item.account_number.trim(),
+                item.customer_name.trim(),
+                item.dob,
+                item.aadhaar_number,
+                item.pan_number,
+                item.scheme.trim(),
+                item.mobile_number,
+                item.mailing_address,
+                item.area,
+                item.city,
+                item.state,
+                item.zip,
+                item.initial_deposit.unwrap_or(0),
+                item.kyc_status.as_deref().unwrap_or("Verified"),
+                item.notes,
+                item.document_status,
+                now
+            ],
+        )?;
+        let id = conn.last_insert_rowid();
+        let mut inserted = item.clone();
+        inserted.id = Some(id);
+        inserted.account_date = date;
+        inserted.created_at = Some(now.clone());
+        inserted.updated_at = Some(now);
+        Ok(inserted)
+    }
+
+    pub fn update_bank_account_opening(&self, item: &BankAccountOpening) -> Result<()> {
+        let id = item.id.ok_or_else(|| {
+            rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_MISUSE),
+                Some("Account ID required for update".to_string()),
+            )
+        })?;
+        let conn = self.get_conn();
+        let now = chrono::Local::now().to_rfc3339();
+        conn.execute(
+            "UPDATE bank_account_openings SET
+                customer_id = ?1,
+                visit_type = ?2,
+                account_date = ?3,
+                passbook_number = ?4,
+                bank_customer_id = ?5,
+                account_number = ?6,
+                customer_name = ?7,
+                dob = ?8,
+                aadhaar_number = ?9,
+                pan_number = ?10,
+                scheme = ?11,
+                mobile_number = ?12,
+                mailing_address = ?13,
+                area = ?14,
+                city = ?15,
+                state = ?16,
+                zip = ?17,
+                initial_deposit = ?18,
+                kyc_status = ?19,
+                notes = ?20,
+                document_status = ?21,
+                updated_at = ?22
+             WHERE id = ?23;",
+            params![
+                item.customer_id,
+                item.visit_type.as_deref().unwrap_or("Walk-in"),
+                item.account_date,
+                item.passbook_number,
+                item.bank_customer_id,
+                item.account_number.trim(),
+                item.customer_name.trim(),
+                item.dob,
+                item.aadhaar_number,
+                item.pan_number,
+                item.scheme.trim(),
+                item.mobile_number,
+                item.mailing_address,
+                item.area,
+                item.city,
+                item.state,
+                item.zip,
+                item.initial_deposit.unwrap_or(0),
+                item.kyc_status.as_deref().unwrap_or("Verified"),
+                item.notes,
+                item.document_status,
+                now,
+                id
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_bank_account_opening(&self, id: i64) -> Result<()> {
+        let conn = self.get_conn();
+        conn.execute("UPDATE bank_account_openings SET is_deleted = 1 WHERE id = ?1;", params![id])?;
+        Ok(())
+    }
+
+    pub fn import_bank_account_openings(&self, items: &[BankAccountOpening]) -> Result<usize> {
+        let mut conn = self.get_conn();
+        let tx = conn.transaction()?;
+        let now = chrono::Local::now().to_rfc3339();
+        let mut inserted_count = 0;
+        for item in items {
+            let exists: i64 = tx.query_row(
+                "SELECT COUNT(*) FROM bank_account_openings WHERE (account_number = ?1 AND account_number != '') OR (bank_customer_id = ?2 AND bank_customer_id IS NOT NULL AND bank_customer_id != '');",
+                params![item.account_number.trim(), item.bank_customer_id.as_deref().unwrap_or("")],
+                |row| row.get(0)
+            )?;
+            if exists == 0 {
+                tx.execute(
+                    "INSERT INTO bank_account_openings (
+                        customer_id, visit_type, account_date, passbook_number, bank_customer_id,
+                        account_number, customer_name, dob, aadhaar_number, pan_number, scheme,
+                        mobile_number, mailing_address, area, city, state, zip, initial_deposit,
+                        kyc_status, notes, document_status, is_deleted, created_at, updated_at
+                     )
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, 0, ?22, ?22);",
+                    params![
+                        item.customer_id,
+                        item.visit_type.as_deref().unwrap_or("Walk-in"),
+                        item.account_date,
+                        item.passbook_number,
+                        item.bank_customer_id,
+                        item.account_number.trim(),
+                        item.customer_name.trim(),
+                        item.dob,
+                        item.aadhaar_number,
+                        item.pan_number,
+                        item.scheme.trim(),
+                        item.mobile_number,
+                        item.mailing_address,
+                        item.area,
+                        item.city,
+                        item.state,
+                        item.zip,
+                        item.initial_deposit.unwrap_or(0),
+                        item.kyc_status.as_deref().unwrap_or("Verified"),
+                        item.notes,
+                        item.document_status,
+                        now
+                    ],
+                )?;
+                inserted_count += 1;
+            }
+        }
+        tx.commit()?;
+        Ok(inserted_count)
     }
 
     pub fn create_backup(&self) -> Result<String> {

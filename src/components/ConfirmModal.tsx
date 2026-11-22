@@ -1,4 +1,5 @@
 import React from 'react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -21,10 +22,12 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   onConfirm,
   onCancel,
 }) => {
+  useBodyScrollLock(isOpen);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-inverse-surface/50 backdrop-blur-md p-4 animate-fadeIn">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-inverse-surface/50 backdrop-blur-md p-4 animate-fadeIn overscroll-contain">
       <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-2xl max-w-md w-full border border-surface-container/80 flex flex-col gap-space-md transition-all scale-100">
         <div className="flex items-start gap-space-md">
           <div

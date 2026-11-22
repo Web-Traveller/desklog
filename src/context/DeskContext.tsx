@@ -1,5 +1,5 @@
 import React from 'react';
-import { Customer, Task, Service, Payment, Setting, BankingTransaction, ActivityEvent, ActivePage, TaskStatus } from '../types';
+import { Customer, Task, Service, Payment, Setting, BankingTransaction, BankAccountOpening, ActivityEvent, ActivePage, TaskStatus } from '../types';
 import { UIProvider, useUI, ConfirmOptions } from './UIContext';
 import { CustomerProvider, useCustomers } from './CustomerContext';
 import { TaskProvider, useTasks } from './TaskContext';
@@ -17,6 +17,10 @@ export interface DeskContextType {
   setHighlightedTaskId: (id: string | null) => void;
   highlightedBankingTxId: number | null;
   setHighlightedBankingTxId: (id: number | null) => void;
+  highlightedAccountOpeningId: string | null;
+  setHighlightedAccountOpeningId: (id: string | null) => void;
+  bankingActiveTab: 'counter' | 'account_opening';
+  setBankingActiveTab: (tab: 'counter' | 'account_opening') => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   taskDateFilter: string;
@@ -27,6 +31,7 @@ export interface DeskContextType {
   customers: Customer[];
   tasks: Task[];
   bankingTransactions: BankingTransaction[];
+  accountOpenings: BankAccountOpening[];
   activities: ActivityEvent[];
   services: Service[];
   payments: Payment[];
@@ -46,6 +51,12 @@ export interface DeskContextType {
   addBankingTransaction: (tx: Omit<BankingTransaction, 'id' | 'is_deleted'>) => Promise<void>;
   updateBankingTransaction: (id: number, updates: Partial<BankingTransaction>) => Promise<void>;
   deleteBankingTransaction: (id: number) => Promise<void>;
+
+  addAccountOpening: (item: Omit<BankAccountOpening, 'id'>) => Promise<BankAccountOpening>;
+  updateAccountOpening: (id: number, updates: Partial<BankAccountOpening>) => Promise<void>;
+  deleteAccountOpening: (id: number) => Promise<void>;
+  importAccountOpenings: (items: BankAccountOpening[]) => Promise<number>;
+  reloadAccountOpenings: () => Promise<void>;
 
   addTask: (taskData: Omit<Task, 'id' | 'created_at' | 'updated_at'>, initialPaidAmount?: number) => Promise<Task | null>;
   updateTaskStatus: (taskId: string, newStatus: TaskStatus, cancellationReason?: string) => Promise<void>;
@@ -77,6 +88,7 @@ export interface DeskContextType {
   navigateToCustomerProfile: (customerId: string) => void;
   navigateToCustomerTaskProfile: (customerId: string, taskId: string) => void;
   navigateToBankingTx: (txId: number) => void;
+  navigateToAccountOpening: (openingId: string) => void;
   performSearch: (query: string) => void;
 
   taskPage: number;

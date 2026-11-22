@@ -190,6 +190,35 @@ export interface BankingTransaction {
   remark?: string;
 }
 
+export interface BankAccountOpening {
+  id?: number;
+  customer_id?: string;
+  visit_type?: string; // 'Walk-in', 'Branch', 'Referral', 'Google', 'Camp', 'KYC Other'
+  account_date: string; // Opening date YYYY-MM-DD or ISO
+  passbook_number?: string;
+  bank_customer_id?: string; // Bank CIF / Customer ID
+  account_number: string; // Bank Account Number
+  customer_name: string;
+  dob?: string;
+  aadhaar_number?: string;
+  pan_number?: string;
+  scheme: string; // Bank / Scheme name: 'FINO', 'BARODA', 'KOTAK', 'AXIS', 'Airtel Bank', etc.
+  mobile_number?: string;
+  mailing_address?: string;
+  area?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  /** Stored in integer paise, 1 INR = 100 Paise */
+  initial_deposit?: number;
+  kyc_status?: 'Verified' | 'Pending' | 'Rejected' | string;
+  notes?: string;
+  document_status?: string;
+  is_deleted?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export type ActivePage =
   | 'dashboard'
   | 'customers'

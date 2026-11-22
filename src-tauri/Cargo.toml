@@ -1,6 +1,6 @@
 [package]
 name = "desklog"
-version = "1.0.12"
+version = "1.0.13"
 description = "DeskLog Manager Desktop App"
 authors = ["you"]
 edition = "2021"
@@ -23,6 +23,7 @@ rusqlite = { version = "0.32", features = ["bundled", "backup"] }
 chrono = "0.4"
 tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json"] }
 
 [profile.release]
 codegen-units = 1
