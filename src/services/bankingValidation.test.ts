@@ -8,6 +8,7 @@ import {
 } from '../utils/validationUtils';
 import { rupeesToPaise, paiseToRupees } from '../utils/currencyUtils';
 import { calculateAge } from '../utils/dateUtils';
+import { parseDocPaths, formatDocPathsForStorage } from '../utils/documentUtils';
 
 describe('Enterprise Input Validation & Rules', () => {
   describe('Mobile Number Validation', () => {
@@ -110,6 +111,33 @@ describe('Enterprise Input Validation & Rules', () => {
       // If born today exactly 20 years ago
       const dobExact = `${today.getFullYear() - 20}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
       expect(calculateAge(dobExact)).toBe(20);
+    });
+  });
+
+  describe('Multi-Document Storage & Serialization', () => {
+    it('parses null, empty or undefined paths into empty arrays', () => {
+      expect(parseDocPaths(null)).toEqual([]);
+      expect(parseDocPaths(undefined)).toEqual([]);
+      expect(parseDocPaths('')).toEqual([]);
+      expect(parseDocPaths('   ')).toEqual([]);
+    });
+
+    it('parses legacy single path strings seamlessly', () => {
+      expect(parseDocPaths('C:\\data\\aadhaar.jpg')).toEqual(['C:\\data\\aadhaar.jpg']);
+    });
+
+    it('parses JSON string arrays of multiple document paths', () => {
+      const paths = ['C:\\data\\aadhaar_front.jpg', 'C:\\data\\aadhaar_back.jpg'];
+      const serialized = JSON.stringify(paths);
+      expect(parseDocPaths(serialized)).toEqual(paths);
+    });
+
+    it('formats single and multiple document paths for storage properly', () => {
+      expect(formatDocPathsForStorage([])).toBeUndefined();
+      expect(formatDocPathsForStorage(['C:\\data\\pan.jpg'])).toBe('C:\\data\\pan.jpg');
+      expect(formatDocPathsForStorage(['C:\\data\\pan_1.jpg', 'C:\\data\\pan_2.jpg'])).toBe(
+        JSON.stringify(['C:\\data\\pan_1.jpg', 'C:\\data\\pan_2.jpg'])
+      );
     });
   });
 });

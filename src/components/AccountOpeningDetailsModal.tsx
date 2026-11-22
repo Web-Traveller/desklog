@@ -3,6 +3,7 @@ import { BankAccountOpening } from '../types';
 import { Modal } from './Modal';
 import { StatusBadge } from './StatusBadge';
 import { calculateAge } from '../utils/dateUtils';
+import { parseDocPaths } from '../utils/documentUtils';
 import { getTauriDocumentDataUrl, openTauriDocument } from '../api/tauri';
 
 interface AccountOpeningDetailsModalProps {
@@ -20,26 +21,34 @@ export const AccountOpeningDetailsModal: React.FC<AccountOpeningDetailsModalProp
 }) => {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [aadhaarUrl, setAadhaarUrl] = useState<string | null>(null);
-  const [panUrl, setPanUrl] = useState<string | null>(null);
+  const [aadhaarDocs, setAadhaarDocs] = useState<{ path: string; dataUrl: string }[]>([]);
+  const [panDocs, setPanDocs] = useState<{ path: string; dataUrl: string }[]>([]);
   const [zoomDoc, setZoomDoc] = useState<{ title: string; url: string; path?: string } | null>(null);
 
   useEffect(() => {
     if (account && isOpen) {
       setPhotoUrl(null);
-      setAadhaarUrl(null);
-      setPanUrl(null);
+      setAadhaarDocs([]);
+      setPanDocs([]);
       setZoomDoc(null);
 
       if (account.photo_path) {
         getTauriDocumentDataUrl(account.photo_path).then(setPhotoUrl);
       }
-      if (account.aadhaar_doc_path) {
-        getTauriDocumentDataUrl(account.aadhaar_doc_path).then(setAadhaarUrl);
-      }
-      if (account.pan_doc_path) {
-        getTauriDocumentDataUrl(account.pan_doc_path).then(setPanUrl);
-      }
+
+      const aadhaarPaths = parseDocPaths(account.aadhaar_doc_path);
+      aadhaarPaths.forEach(path => {
+        getTauriDocumentDataUrl(path).then(dataUrl => {
+          if (dataUrl) setAadhaarDocs(prev => [...prev, { path, dataUrl }]);
+        });
+      });
+
+      const panPaths = parseDocPaths(account.pan_doc_path);
+      panPaths.forEach(path => {
+        getTauriDocumentDataUrl(path).then(dataUrl => {
+          if (dataUrl) setPanDocs(prev => [...prev, { path, dataUrl }]);
+        });
+      });
     }
   }, [account, isOpen]);
 
@@ -348,40 +357,44 @@ export const AccountOpeningDetailsModal: React.FC<AccountOpeningDetailsModalProp
                 )}
               </div>
 
-              {/* Aadhaar Slot */}
+              {/* Aadhaar Slot (Multiple Files Support) */}
               <div className="p-2.5 rounded-lg bg-surface-container-low border border-surface-container/60 flex flex-col items-center justify-between text-center min-h-[120px]">
-                <span className="text-[10px] font-bold text-outline uppercase tracking-wider">Aadhaar Card</span>
-                {aadhaarUrl ? (
-                  <div className="flex flex-col items-center gap-1.5 my-1">
-                    {aadhaarUrl.startsWith('data:application/pdf') ? (
-                      <span className="material-symbols-outlined text-3xl text-red-500">picture_as_pdf</span>
-                    ) : (
-                      <img
-                        src={aadhaarUrl}
-                        alt="Aadhaar"
-                        onClick={() => setZoomDoc({ title: 'Aadhaar Card', url: aadhaarUrl, path: account.aadhaar_doc_path })}
-                        className="w-16 h-12 rounded object-cover border border-surface-container cursor-pointer hover:scale-105 transition"
-                      />
-                    )}
-                    <div className="flex items-center gap-2 mt-1">
-                      <button
-                        type="button"
-                        onClick={() => setZoomDoc({ title: 'Aadhaar Card', url: aadhaarUrl, path: account.aadhaar_doc_path })}
-                        className="text-[10px] text-primary hover:underline font-semibold"
-                      >
-                        Preview
-                      </button>
-                      {account.aadhaar_doc_path && (
-                        <button
-                          type="button"
-                          onClick={() => openTauriDocument(account.aadhaar_doc_path!)}
-                          className="text-[10px] text-outline hover:text-on-surface font-semibold"
-                          title="Open with default Windows viewer"
-                        >
-                          Open File
-                        </button>
-                      )}
-                    </div>
+                <span className="text-[10px] font-bold text-outline uppercase tracking-wider">
+                  Aadhaar Card {aadhaarDocs.length > 0 && `(${aadhaarDocs.length})`}
+                </span>
+                {aadhaarDocs.length > 0 ? (
+                  <div className="flex flex-col gap-2 my-1 w-full items-center">
+                    {aadhaarDocs.map((doc, idx) => (
+                      <div key={idx} className="flex flex-col items-center gap-1 w-full pb-1.5 border-b border-surface-container/40 last:border-b-0">
+                        {doc.dataUrl.startsWith('data:application/pdf') ? (
+                          <span className="material-symbols-outlined text-2xl text-red-500">picture_as_pdf</span>
+                        ) : (
+                          <img
+                            src={doc.dataUrl}
+                            alt={`Aadhaar ${idx + 1}`}
+                            onClick={() => setZoomDoc({ title: `Aadhaar Card (${idx + 1})`, url: doc.dataUrl, path: doc.path })}
+                            className="w-16 h-12 rounded object-cover border border-surface-container cursor-pointer hover:scale-105 transition"
+                          />
+                        )}
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setZoomDoc({ title: `Aadhaar Card (${idx + 1})`, url: doc.dataUrl, path: doc.path })}
+                            className="text-[10px] text-primary hover:underline font-semibold"
+                          >
+                            Preview
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openTauriDocument(doc.path)}
+                            className="text-[10px] text-outline hover:text-on-surface font-semibold"
+                            title="Open with default Windows viewer"
+                          >
+                            Open File
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-1 my-2 text-outline">
@@ -391,40 +404,44 @@ export const AccountOpeningDetailsModal: React.FC<AccountOpeningDetailsModalProp
                 )}
               </div>
 
-              {/* PAN Slot */}
+              {/* PAN Slot (Multiple Files Support) */}
               <div className="p-2.5 rounded-lg bg-surface-container-low border border-surface-container/60 flex flex-col items-center justify-between text-center min-h-[120px]">
-                <span className="text-[10px] font-bold text-outline uppercase tracking-wider">PAN Card</span>
-                {panUrl ? (
-                  <div className="flex flex-col items-center gap-1.5 my-1">
-                    {panUrl.startsWith('data:application/pdf') ? (
-                      <span className="material-symbols-outlined text-3xl text-red-500">picture_as_pdf</span>
-                    ) : (
-                      <img
-                        src={panUrl}
-                        alt="PAN"
-                        onClick={() => setZoomDoc({ title: 'PAN Card', url: panUrl, path: account.pan_doc_path })}
-                        className="w-16 h-12 rounded object-cover border border-surface-container cursor-pointer hover:scale-105 transition"
-                      />
-                    )}
-                    <div className="flex items-center gap-2 mt-1">
-                      <button
-                        type="button"
-                        onClick={() => setZoomDoc({ title: 'PAN Card', url: panUrl, path: account.pan_doc_path })}
-                        className="text-[10px] text-primary hover:underline font-semibold"
-                      >
-                        Preview
-                      </button>
-                      {account.pan_doc_path && (
-                        <button
-                          type="button"
-                          onClick={() => openTauriDocument(account.pan_doc_path!)}
-                          className="text-[10px] text-outline hover:text-on-surface font-semibold"
-                          title="Open with default Windows viewer"
-                        >
-                          Open File
-                        </button>
-                      )}
-                    </div>
+                <span className="text-[10px] font-bold text-outline uppercase tracking-wider">
+                  PAN Card {panDocs.length > 0 && `(${panDocs.length})`}
+                </span>
+                {panDocs.length > 0 ? (
+                  <div className="flex flex-col gap-2 my-1 w-full items-center">
+                    {panDocs.map((doc, idx) => (
+                      <div key={idx} className="flex flex-col items-center gap-1 w-full pb-1.5 border-b border-surface-container/40 last:border-b-0">
+                        {doc.dataUrl.startsWith('data:application/pdf') ? (
+                          <span className="material-symbols-outlined text-2xl text-red-500">picture_as_pdf</span>
+                        ) : (
+                          <img
+                            src={doc.dataUrl}
+                            alt={`PAN ${idx + 1}`}
+                            onClick={() => setZoomDoc({ title: `PAN Card (${idx + 1})`, url: doc.dataUrl, path: doc.path })}
+                            className="w-16 h-12 rounded object-cover border border-surface-container cursor-pointer hover:scale-105 transition"
+                          />
+                        )}
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setZoomDoc({ title: `PAN Card (${idx + 1})`, url: doc.dataUrl, path: doc.path })}
+                            className="text-[10px] text-primary hover:underline font-semibold"
+                          >
+                            Preview
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openTauriDocument(doc.path)}
+                            className="text-[10px] text-outline hover:text-on-surface font-semibold"
+                            title="Open with default Windows viewer"
+                          >
+                            Open File
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-1 my-2 text-outline">

@@ -1382,8 +1382,9 @@ impl Database {
     pub fn save_account_document(&self, account_id: i64, doc_type: &str, file_name: &str, file_bytes: &[u8]) -> Result<String> {
         let docs_dir = self.app_dir.join("documents").join(format!("acc_{}", account_id));
         let _ = fs::create_dir_all(&docs_dir);
+        let timestamp = chrono::Local::now().timestamp_millis();
         let safe_name = file_name.replace(|c: char| !c.is_alphanumeric() && c != '.' && c != '-' && c != '_', "_");
-        let target_file = docs_dir.join(format!("{}_{}", doc_type, safe_name));
+        let target_file = docs_dir.join(format!("{}_{}_{}", doc_type, timestamp, safe_name));
         fs::write(&target_file, file_bytes).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
         let path_str = target_file.to_string_lossy().to_string();
 
@@ -1397,15 +1398,47 @@ impl Database {
                 )?;
             }
             "aadhaar" => {
+                let current_raw: Option<String> = conn.query_row(
+                    "SELECT aadhaar_doc_path FROM bank_account_openings WHERE id = ?1;",
+                    params![account_id],
+                    |row| row.get(0),
+                ).ok().flatten();
+                let mut paths: Vec<String> = match current_raw {
+                    Some(raw) if raw.trim().starts_with('[') => {
+                        serde_json::from_str(&raw).unwrap_or_else(|_| vec![raw])
+                    }
+                    Some(raw) if !raw.trim().is_empty() => vec![raw],
+                    _ => vec![],
+                };
+                if !paths.contains(&path_str) {
+                    paths.push(path_str.clone());
+                }
+                let new_val = serde_json::to_string(&paths).unwrap_or_else(|_| path_str.clone());
                 conn.execute(
                     "UPDATE bank_account_openings SET aadhaar_doc_path = ?1, updated_at = ?2 WHERE id = ?3;",
-                    params![path_str, now, account_id],
+                    params![new_val, now, account_id],
                 )?;
             }
             "pan" => {
+                let current_raw: Option<String> = conn.query_row(
+                    "SELECT pan_doc_path FROM bank_account_openings WHERE id = ?1;",
+                    params![account_id],
+                    |row| row.get(0),
+                ).ok().flatten();
+                let mut paths: Vec<String> = match current_raw {
+                    Some(raw) if raw.trim().starts_with('[') => {
+                        serde_json::from_str(&raw).unwrap_or_else(|_| vec![raw])
+                    }
+                    Some(raw) if !raw.trim().is_empty() => vec![raw],
+                    _ => vec![],
+                };
+                if !paths.contains(&path_str) {
+                    paths.push(path_str.clone());
+                }
+                let new_val = serde_json::to_string(&paths).unwrap_or_else(|_| path_str.clone());
                 conn.execute(
                     "UPDATE bank_account_openings SET pan_doc_path = ?1, updated_at = ?2 WHERE id = ?3;",
-                    params![path_str, now, account_id],
+                    params![new_val, now, account_id],
                 )?;
             }
             _ => {}

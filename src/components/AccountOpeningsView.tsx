@@ -6,6 +6,7 @@ import { EditAccountOpeningModal } from './EditAccountOpeningModal';
 import { AccountOpeningDetailsModal } from './AccountOpeningDetailsModal';
 import { StatusBadge } from './StatusBadge';
 import { calculateAge } from '../utils/dateUtils';
+import { parseDocPaths } from '../utils/documentUtils';
 import { ACCOUNT_OPENING_SCHEMES, ACCOUNT_OPENING_VISIT_TYPES, ACCOUNT_OPENING_KYC_STATUSES } from '../constants/bankingData';
 
 export const AccountOpeningsView: React.FC = () => {
@@ -641,18 +642,24 @@ export const AccountOpeningsView: React.FC = () => {
                       {/* Documents (Local) */}
                       <td className="py-3 px-3 align-top whitespace-nowrap">
                         {(() => {
-                          const docCount = (account.photo_path ? 1 : 0) + (account.aadhaar_doc_path ? 1 : 0) + (account.pan_doc_path ? 1 : 0);
+                          const aadhaarCount = parseDocPaths(account.aadhaar_doc_path).length;
+                          const panCount = parseDocPaths(account.pan_doc_path).length;
+                          const photoCount = account.photo_path ? 1 : 0;
+                          const isForm60 = (account.pan_number || '').toLowerCase().includes('form 60') || (account.pan_number || '').toLowerCase().includes('not available');
+                          const totalFiles = photoCount + aadhaarCount + panCount;
+                          const isComplete = photoCount > 0 && aadhaarCount > 0 && (panCount > 0 || isForm60);
+
                           return (
                             <div className="flex flex-col gap-1 items-start">
-                              {docCount === 3 ? (
+                              {isComplete ? (
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                                   <span className="material-symbols-outlined text-[11px]">folder_check</span>
-                                  <span>Attached (3/3)</span>
+                                  <span>Complete ({totalFiles} {totalFiles === 1 ? 'file' : 'files'})</span>
                                 </span>
-                              ) : docCount > 0 ? (
+                              ) : totalFiles > 0 ? (
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
                                   <span className="material-symbols-outlined text-[11px]">folder_open</span>
-                                  <span>Attached ({docCount}/3)</span>
+                                  <span>Attached ({totalFiles} {totalFiles === 1 ? 'file' : 'files'})</span>
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-outline bg-surface-container">

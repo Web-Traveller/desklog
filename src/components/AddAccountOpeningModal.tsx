@@ -56,14 +56,14 @@ export const AddAccountOpeningModal: React.FC<AddAccountOpeningModalProps> = ({
   // Document Uploads & Finder Flags
   const [noPanAvailable, setNoPanAvailable] = useState(false);
   const [photoDoc, setPhotoDoc] = useState<SelectedDoc | null>(null);
-  const [aadhaarDoc, setAadhaarDoc] = useState<SelectedDoc | null>(null);
-  const [panDoc, setPanDoc] = useState<SelectedDoc | null>(null);
+  const [aadhaarDocs, setAadhaarDocs] = useState<SelectedDoc[]>([]);
+  const [panDocs, setPanDocs] = useState<SelectedDoc[]>([]);
 
   const photoInputRef = useRef<HTMLInputElement>(null);
   const aadhaarInputRef = useRef<HTMLInputElement>(null);
   const panInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (
+  const handleSingleFileChange = (
     e: React.ChangeEvent<HTMLInputElement>,
     setter: (doc: SelectedDoc | null) => void
   ) => {
@@ -82,6 +82,34 @@ export const AddAccountOpeningModal: React.FC<AddAccountOpeningModalProps> = ({
       });
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleMultipleFilesChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setter: React.Dispatch<React.SetStateAction<SelectedDoc[]>>
+  ) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    for (const file of files) {
+      if (file.size > 15 * 1024 * 1024) {
+        showToast(`"${file.name}" exceeds 15MB limit. Please select a smaller file.`, 'warning');
+        continue;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        setter(prev => [
+          ...prev,
+          {
+            name: file.name,
+            dataUrl: reader.result as string,
+            size: file.size,
+          }
+        ]);
+      };
+      reader.readAsDataURL(file);
+    }
+    e.target.value = '';
   };
 
   // Reset form when opened
@@ -108,8 +136,8 @@ export const AddAccountOpeningModal: React.FC<AddAccountOpeningModalProps> = ({
       setKycStatus('Verified');
       setNotes('1000/- Account');
       setPhotoDoc(null);
-      setAadhaarDoc(null);
-      setPanDoc(null);
+      setAadhaarDocs([]);
+      setPanDocs([]);
     }
   }, [isOpen]);
 
@@ -213,8 +241,8 @@ export const AddAccountOpeningModal: React.FC<AddAccountOpeningModalProps> = ({
       // Compute attached documents status
       let docCount = 0;
       if (photoDoc) docCount++;
-      if (aadhaarDoc) docCount++;
-      if (panDoc) docCount++;
+      if (aadhaarDocs.length > 0) docCount++;
+      if (panDocs.length > 0 || noPanAvailable) docCount++;
       const computedDocStatus = docCount === 3 ? 'Attached (3/3)' : docCount > 0 ? `Partial (${docCount}/3)` : 'No Docs';
       const finalPan = noPanAvailable ? 'Form 60 (No PAN)' : panNumber.trim().toUpperCase() || undefined;
 
@@ -247,11 +275,11 @@ export const AddAccountOpeningModal: React.FC<AddAccountOpeningModalProps> = ({
         if (photoDoc) {
           await saveTauriAccountDocument(saved.id, 'photo', photoDoc.name, photoDoc.dataUrl).catch(console.warn);
         }
-        if (aadhaarDoc) {
-          await saveTauriAccountDocument(saved.id, 'aadhaar', aadhaarDoc.name, aadhaarDoc.dataUrl).catch(console.warn);
+        for (const doc of aadhaarDocs) {
+          await saveTauriAccountDocument(saved.id, 'aadhaar', doc.name, doc.dataUrl).catch(console.warn);
         }
-        if (panDoc) {
-          await saveTauriAccountDocument(saved.id, 'pan', panDoc.name, panDoc.dataUrl).catch(console.warn);
+        for (const doc of panDocs) {
+          await saveTauriAccountDocument(saved.id, 'pan', doc.name, doc.dataUrl).catch(console.warn);
         }
       }
 
@@ -648,7 +676,7 @@ export const AddAccountOpeningModal: React.FC<AddAccountOpeningModalProps> = ({
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={(e) => handleFileChange(e, setPhotoDoc)}
+                  onChange={(e) => handleSingleFileChange(e, setPhotoDoc)}
                 />
                 {photoDoc ? (
                   <div className="flex flex-col items-center gap-1.5 w-full">
@@ -680,36 +708,50 @@ export const AddAccountOpeningModal: React.FC<AddAccountOpeningModalProps> = ({
                 )}
               </div>
 
-              {/* Slot 2: Aadhaar Document */}
+              {/* Slot 2: Aadhaar Document (Multiple Images / PDFs) */}
               <div className="p-2.5 rounded-lg bg-surface-container-lowest border border-surface-container flex flex-col items-center justify-center text-center gap-2 min-h-[110px]">
                 <input
                   ref={aadhaarInputRef}
                   type="file"
+                  multiple
                   accept="image/*,application/pdf"
                   className="hidden"
-                  onChange={(e) => handleFileChange(e, setAadhaarDoc)}
+                  onChange={(e) => handleMultipleFilesChange(e, setAadhaarDocs)}
                 />
-                {aadhaarDoc ? (
-                  <div className="flex flex-col items-center gap-1.5 w-full">
-                    {aadhaarDoc.name.toLowerCase().endsWith('.pdf') ? (
-                      <span className="material-symbols-outlined text-3xl text-red-500">picture_as_pdf</span>
-                    ) : (
-                      <img
-                        src={aadhaarDoc.dataUrl}
-                        alt="Aadhaar"
-                        className="w-16 h-12 rounded object-cover border border-surface-container shadow-xs"
-                      />
-                    )}
-                    <span className="text-[11px] font-semibold text-on-surface truncate max-w-full">
-                      {aadhaarDoc.name}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setAadhaarDoc(null)}
-                      className="text-[10px] text-red-500 hover:underline font-semibold"
-                    >
-                      Remove Document
-                    </button>
+                {aadhaarDocs.length > 0 ? (
+                  <div className="flex flex-col gap-1.5 w-full">
+                    <div className="flex items-center justify-between pb-1 border-b border-surface-container/50">
+                      <span className="text-[11px] font-bold text-on-surface">
+                        Aadhaar ({aadhaarDocs.length} {aadhaarDocs.length === 1 ? 'file' : 'files'})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => aadhaarInputRef.current?.click()}
+                        className="text-[10px] text-primary hover:underline font-semibold"
+                      >
+                        + Add More
+                      </button>
+                    </div>
+                    <div className="flex flex-col gap-1 max-h-36 overflow-y-auto">
+                      {aadhaarDocs.map((doc, idx) => (
+                        <div key={idx} className="flex items-center gap-1.5 p-1 rounded bg-surface-container/60 border border-surface-container-high text-left">
+                          {doc.name.toLowerCase().endsWith('.pdf') ? (
+                            <span className="material-symbols-outlined text-base text-red-500">picture_as_pdf</span>
+                          ) : (
+                            <img src={doc.dataUrl} alt={doc.name} className="w-6 h-6 rounded object-cover" />
+                          )}
+                          <span className="text-[10px] text-on-surface truncate flex-1" title={doc.name}>{doc.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setAadhaarDocs(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-red-500 hover:text-red-700 p-0.5 text-xs font-bold"
+                            title="Remove this file"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   <div
@@ -718,41 +760,55 @@ export const AddAccountOpeningModal: React.FC<AddAccountOpeningModalProps> = ({
                   >
                     <span className="material-symbols-outlined text-2xl text-outline">fingerprint</span>
                     <span className="text-[11px] font-semibold text-primary">+ Aadhaar Card</span>
-                    <span className="text-[9px] text-outline">Front & Back (Image/PDF)</span>
+                    <span className="text-[9px] text-outline">Front & Back (Multi-Images / PDF)</span>
                   </div>
                 )}
               </div>
 
-              {/* Slot 3: PAN Card Document */}
+              {/* Slot 3: PAN Card Document (Multiple Images / PDFs) */}
               <div className="p-2.5 rounded-lg bg-surface-container-lowest border border-surface-container flex flex-col items-center justify-center text-center gap-2 min-h-[110px]">
                 <input
                   ref={panInputRef}
                   type="file"
+                  multiple
                   accept="image/*,application/pdf"
                   className="hidden"
-                  onChange={(e) => handleFileChange(e, setPanDoc)}
+                  onChange={(e) => handleMultipleFilesChange(e, setPanDocs)}
                 />
-                {panDoc ? (
-                  <div className="flex flex-col items-center gap-1.5 w-full">
-                    {panDoc.name.toLowerCase().endsWith('.pdf') ? (
-                      <span className="material-symbols-outlined text-3xl text-red-500">picture_as_pdf</span>
-                    ) : (
-                      <img
-                        src={panDoc.dataUrl}
-                        alt="PAN"
-                        className="w-16 h-12 rounded object-cover border border-surface-container shadow-xs"
-                      />
-                    )}
-                    <span className="text-[11px] font-semibold text-on-surface truncate max-w-full">
-                      {panDoc.name}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setPanDoc(null)}
-                      className="text-[10px] text-red-500 hover:underline font-semibold"
-                    >
-                      Remove Document
-                    </button>
+                {panDocs.length > 0 ? (
+                  <div className="flex flex-col gap-1.5 w-full">
+                    <div className="flex items-center justify-between pb-1 border-b border-surface-container/50">
+                      <span className="text-[11px] font-bold text-on-surface">
+                        PAN ({panDocs.length} {panDocs.length === 1 ? 'file' : 'files'})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => panInputRef.current?.click()}
+                        className="text-[10px] text-primary hover:underline font-semibold"
+                      >
+                        + Add More
+                      </button>
+                    </div>
+                    <div className="flex flex-col gap-1 max-h-36 overflow-y-auto">
+                      {panDocs.map((doc, idx) => (
+                        <div key={idx} className="flex items-center gap-1.5 p-1 rounded bg-surface-container/60 border border-surface-container-high text-left">
+                          {doc.name.toLowerCase().endsWith('.pdf') ? (
+                            <span className="material-symbols-outlined text-base text-red-500">picture_as_pdf</span>
+                          ) : (
+                            <img src={doc.dataUrl} alt={doc.name} className="w-6 h-6 rounded object-cover" />
+                          )}
+                          <span className="text-[10px] text-on-surface truncate flex-1" title={doc.name}>{doc.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setPanDocs(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-red-500 hover:text-red-700 p-0.5 text-xs font-bold"
+                            title="Remove this file"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   <div
@@ -760,8 +816,8 @@ export const AddAccountOpeningModal: React.FC<AddAccountOpeningModalProps> = ({
                     className="flex flex-col items-center gap-1 cursor-pointer py-2 w-full hover:bg-surface-container/30 rounded-lg transition"
                   >
                     <span className="material-symbols-outlined text-2xl text-outline">credit_card</span>
-                    <span className="text-[11px] font-semibold text-primary">+ PAN Card</span>
-                    <span className="text-[9px] text-outline">Card scan or Photo</span>
+                    <span className="text-[11px] font-semibold text-primary">+ PAN / Form 60</span>
+                    <span className="text-[9px] text-outline">Multi-Images / PDF</span>
                   </div>
                 )}
               </div>
