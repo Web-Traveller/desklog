@@ -5,13 +5,13 @@ import { AddAccountOpeningModal } from './AddAccountOpeningModal';
 import { EditAccountOpeningModal } from './EditAccountOpeningModal';
 import { AccountOpeningDetailsModal } from './AccountOpeningDetailsModal';
 import { StatusBadge } from './StatusBadge';
+import { calculateAge } from '../utils/dateUtils';
 import { ACCOUNT_OPENING_SCHEMES, ACCOUNT_OPENING_VISIT_TYPES, ACCOUNT_OPENING_KYC_STATUSES } from '../constants/bankingData';
 
 export const AccountOpeningsView: React.FC = () => {
   const { 
     accountOpenings, 
     deleteAccountOpening, 
-    importAccountOpenings,
   } = useBanking();
   const { 
     showToast, 
@@ -22,12 +22,26 @@ export const AccountOpeningsView: React.FC = () => {
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
+  const [quickLookupQuery, setQuickLookupQuery] = useState('');
   const [schemeFilter, setSchemeFilter] = useState('All');
   const [visitTypeFilter, setVisitTypeFilter] = useState('All');
   const [kycFilter, setKycFilter] = useState('All');
   const [dateFilter, setDateFilter] = useState('All Time');
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 15;
+
+  // Instant Customer & KYC lookup (Matching Excel Dashbord sheet)
+  const quickLookupResult = useMemo(() => {
+    if (!quickLookupQuery.trim() || quickLookupQuery.trim().length < 3) return null;
+    const cleanQ = quickLookupQuery.replace(/[\s-]/g, '').toLowerCase();
+    const rawQ = quickLookupQuery.trim().toLowerCase();
+    return (accountOpenings || []).find(a => 
+      (a.aadhaar_number && a.aadhaar_number.replace(/[\s-]/g, '').includes(cleanQ)) ||
+      (a.mobile_number && a.mobile_number.replace(/[\s-]/g, '').includes(cleanQ)) ||
+      (a.account_number && a.account_number.replace(/[\s-]/g, '').includes(cleanQ)) ||
+      (a.bank_customer_id && a.bank_customer_id.toLowerCase().includes(rawQ))
+    ) || null;
+  }, [quickLookupQuery, accountOpenings]);
 
   // Modals state
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -289,6 +303,76 @@ export const AccountOpeningsView: React.FC = () => {
         </div>
       </div>
 
+      {/* Instant KYC & Document Verification Terminal (Matching Excel Dashbord sheet) */}
+      <div className="p-3.5 rounded-2xl bg-surface-container-lowest border border-surface-container/60 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-2 border-b border-surface-container/40">
+          <div className="flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-primary text-base">quick_reference_all</span>
+            <span className="text-xs font-bold text-on-surface">Instant Customer & Document Verification</span>
+          </div>
+          <span className="text-[10px] text-outline">Search by Aadhaar (12 digits) or Mobile (10 digits) for immediate counter check</span>
+        </div>
+
+        <div className="flex items-center gap-2 mt-2.5">
+          <div className="relative flex-1">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-sm text-outline">fingerprint</span>
+            <input
+              type="text"
+              value={quickLookupQuery}
+              onChange={(e) => setQuickLookupQuery(e.target.value)}
+              placeholder="Enter customer Aadhaar or Mobile number for instant lookup..."
+              className="w-full pl-9 pr-8 py-1.5 rounded-xl bg-surface-container/60 border border-surface-container-high text-xs font-mono font-medium text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            {quickLookupQuery && (
+              <button
+                type="button"
+                onClick={() => setQuickLookupQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface text-sm"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Quick Result Preview Card */}
+        {quickLookupResult && (
+          <div className="mt-3 p-3 rounded-xl bg-surface-container-low border border-primary/30 flex flex-col sm:flex-row items-center justify-between gap-3 animate-fadeIn">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-full bg-surface-container flex items-center justify-center text-primary font-bold text-sm border border-surface-container-high">
+                {quickLookupResult.customer_name.slice(0, 1)}
+              </div>
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-on-surface">{quickLookupResult.customer_name}</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary">
+                    {quickLookupResult.scheme}
+                  </span>
+                  <StatusBadge status={quickLookupResult.kyc_status || 'Verified'} size="sm" />
+                </div>
+                <div className="flex flex-wrap items-center gap-x-3 text-[11px] text-outline font-mono">
+                  <span>A/C: {quickLookupResult.account_number}</span>
+                  {quickLookupResult.bank_customer_id && <span>CIF: {quickLookupResult.bank_customer_id}</span>}
+                  {quickLookupResult.mobile_number && <span>Mobile: {quickLookupResult.mobile_number}</span>}
+                  {quickLookupResult.dob && <span>Age: {calculateAge(quickLookupResult.dob)} yrs</span>}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedAccountForSlip(quickLookupResult)}
+                className="px-3.5 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold hover:bg-primary/90 transition shadow-xs flex items-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-sm">visibility</span>
+                <span>View Full Details & Docs</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Control & Filter Strip */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-3 rounded-2xl bg-surface-container-lowest border border-surface-container/60 shadow-xs">
         {/* Search */}
@@ -430,6 +514,7 @@ export const AccountOpeningsView: React.FC = () => {
                   <th className="py-2.5 px-3">Bank & Scheme</th>
                   <th className="py-2.5 px-3">Account No & CIF</th>
                   <th className="py-2.5 px-3">Identity & KYC</th>
+                  <th className="py-2.5 px-3">Documents</th>
                   <th className="py-2.5 px-3">Location</th>
                   <th className="py-2.5 px-3 text-right">Fee / Deposit</th>
                   <th className="py-2.5 px-3 text-center">Actions</th>
@@ -478,7 +563,7 @@ export const AccountOpeningsView: React.FC = () => {
                             </span>
                           )}
                           {account.dob && (
-                            <span>• DOB: {account.dob}</span>
+                            <span>• DOB: {account.dob} {calculateAge(account.dob) !== null && `(Age: ${calculateAge(account.dob)})`}</span>
                           )}
                         </div>
                       </td>
@@ -551,6 +636,41 @@ export const AccountOpeningsView: React.FC = () => {
                             <StatusBadge status={account.kyc_status || 'Verified'} />
                           </span>
                         </div>
+                      </td>
+
+                      {/* Documents (Local) */}
+                      <td className="py-3 px-3 align-top whitespace-nowrap">
+                        {(() => {
+                          const docCount = (account.photo_path ? 1 : 0) + (account.aadhaar_doc_path ? 1 : 0) + (account.pan_doc_path ? 1 : 0);
+                          return (
+                            <div className="flex flex-col gap-1 items-start">
+                              {docCount === 3 ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                  <span className="material-symbols-outlined text-[11px]">folder_check</span>
+                                  <span>Attached (3/3)</span>
+                                </span>
+                              ) : docCount > 0 ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                  <span className="material-symbols-outlined text-[11px]">folder_open</span>
+                                  <span>Attached ({docCount}/3)</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-outline bg-surface-container">
+                                  <span className="material-symbols-outlined text-[11px]">folder_off</span>
+                                  <span>No Docs</span>
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setSelectedAccountForSlip(account)}
+                                className="text-[10px] text-primary hover:underline font-medium flex items-center gap-0.5"
+                              >
+                                <span>View Docs</span>
+                                <span className="material-symbols-outlined text-[10px]">arrow_forward</span>
+                              </button>
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Location */}

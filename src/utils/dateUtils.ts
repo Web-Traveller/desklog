@@ -93,3 +93,24 @@ export function formatDisplayDate(dateStr?: string): string {
     return dateStr;
   }
 }
+
+/**
+ * Calculates current age from a Date of Birth string (YYYY-MM-DD or ISO).
+ * Returns null if invalid or in the future.
+ */
+export function calculateAge(dobStr?: string): number | null {
+  if (!dobStr || !dobStr.trim()) return null;
+  try {
+    const birthDate = new Date(dobStr);
+    if (isNaN(birthDate.getTime())) return null;
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age >= 0 && age < 130 ? age : null;
+  } catch {
+    return null;
+  }
+}

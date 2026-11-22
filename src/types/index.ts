@@ -214,6 +214,9 @@ export interface BankAccountOpening {
   kyc_status?: 'Verified' | 'Pending' | 'Rejected' | string;
   notes?: string;
   document_status?: string;
+  photo_path?: string;
+  aadhaar_doc_path?: string;
+  pan_doc_path?: string;
   is_deleted?: boolean;
   created_at?: string;
   updated_at?: string;

@@ -163,6 +163,12 @@ pub struct BankAccountOpening {
     #[serde(default)]
     pub document_status: Option<String>,
     #[serde(default)]
+    pub photo_path: Option<String>,
+    #[serde(default)]
+    pub aadhaar_doc_path: Option<String>,
+    #[serde(default)]
+    pub pan_doc_path: Option<String>,
+    #[serde(default)]
     pub is_deleted: bool,
     #[serde(default)]
     pub created_at: Option<String>,
@@ -499,6 +505,9 @@ impl Database {
                     kyc_status TEXT DEFAULT 'Verified',
                     notes TEXT,
                     document_status TEXT,
+                    photo_path TEXT,
+                    aadhaar_doc_path TEXT,
+                    pan_doc_path TEXT,
                     is_deleted BOOLEAN DEFAULT 0,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -512,6 +521,15 @@ impl Database {
                 CREATE INDEX IF NOT EXISTS idx_bao_account_date ON bank_account_openings(account_date);
                 PRAGMA user_version = 6;"
             )?;
+            tx.commit()?;
+        }
+
+        if current_version < 7 {
+            let tx = conn.transaction()?;
+            let _ = tx.execute("ALTER TABLE bank_account_openings ADD COLUMN photo_path TEXT;", []);
+            let _ = tx.execute("ALTER TABLE bank_account_openings ADD COLUMN aadhaar_doc_path TEXT;", []);
+            let _ = tx.execute("ALTER TABLE bank_account_openings ADD COLUMN pan_doc_path TEXT;", []);
+            tx.execute("PRAGMA user_version = 7;", [])?;
             tx.commit()?;
         }
 
@@ -1133,7 +1151,8 @@ impl Database {
             "SELECT id, customer_id, visit_type, account_date, passbook_number, bank_customer_id,
                     account_number, customer_name, dob, aadhaar_number, pan_number, scheme,
                     mobile_number, mailing_address, area, city, state, zip, initial_deposit,
-                    kyc_status, notes, document_status, is_deleted, created_at, updated_at
+                    kyc_status, notes, document_status, photo_path, aadhaar_doc_path, pan_doc_path,
+                    is_deleted, created_at, updated_at
              FROM bank_account_openings WHERE is_deleted = 0 ORDER BY account_date DESC, id DESC;"
         )?;
         let iter = stmt.query_map([], |row| {
@@ -1160,9 +1179,12 @@ impl Database {
                 kyc_status: row.get(19)?,
                 notes: row.get(20)?,
                 document_status: row.get(21)?,
-                is_deleted: row.get::<_, i64>(22).unwrap_or(0) != 0,
-                created_at: row.get(23)?,
-                updated_at: row.get(24)?,
+                photo_path: row.get(22)?,
+                aadhaar_doc_path: row.get(23)?,
+                pan_doc_path: row.get(24)?,
+                is_deleted: row.get::<_, i64>(25).unwrap_or(0) != 0,
+                created_at: row.get(26)?,
+                updated_at: row.get(27)?,
             })
         })?;
         let mut list = Vec::new();
@@ -1185,9 +1207,10 @@ impl Database {
                 customer_id, visit_type, account_date, passbook_number, bank_customer_id,
                 account_number, customer_name, dob, aadhaar_number, pan_number, scheme,
                 mobile_number, mailing_address, area, city, state, zip, initial_deposit,
-                kyc_status, notes, document_status, is_deleted, created_at, updated_at
+                kyc_status, notes, document_status, photo_path, aadhaar_doc_path, pan_doc_path,
+                is_deleted, created_at, updated_at
              )
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, 0, ?22, ?22);",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, 0, ?25, ?25);",
             params![
                 item.customer_id,
                 item.visit_type.as_deref().unwrap_or("Walk-in"),
@@ -1210,6 +1233,9 @@ impl Database {
                 item.kyc_status.as_deref().unwrap_or("Verified"),
                 item.notes,
                 item.document_status,
+                item.photo_path,
+                item.aadhaar_doc_path,
+                item.pan_doc_path,
                 now
             ],
         )?;
@@ -1254,8 +1280,11 @@ impl Database {
                 kyc_status = ?19,
                 notes = ?20,
                 document_status = ?21,
-                updated_at = ?22
-             WHERE id = ?23;",
+                photo_path = ?22,
+                aadhaar_doc_path = ?23,
+                pan_doc_path = ?24,
+                updated_at = ?25
+             WHERE id = ?26;",
             params![
                 item.customer_id,
                 item.visit_type.as_deref().unwrap_or("Walk-in"),
@@ -1278,6 +1307,9 @@ impl Database {
                 item.kyc_status.as_deref().unwrap_or("Verified"),
                 item.notes,
                 item.document_status,
+                item.photo_path,
+                item.aadhaar_doc_path,
+                item.pan_doc_path,
                 now,
                 id
             ],
@@ -1308,9 +1340,10 @@ impl Database {
                         customer_id, visit_type, account_date, passbook_number, bank_customer_id,
                         account_number, customer_name, dob, aadhaar_number, pan_number, scheme,
                         mobile_number, mailing_address, area, city, state, zip, initial_deposit,
-                        kyc_status, notes, document_status, is_deleted, created_at, updated_at
+                        kyc_status, notes, document_status, photo_path, aadhaar_doc_path, pan_doc_path,
+                        is_deleted, created_at, updated_at
                      )
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, 0, ?22, ?22);",
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, 0, ?25, ?25);",
                     params![
                         item.customer_id,
                         item.visit_type.as_deref().unwrap_or("Walk-in"),
@@ -1333,6 +1366,9 @@ impl Database {
                         item.kyc_status.as_deref().unwrap_or("Verified"),
                         item.notes,
                         item.document_status,
+                        item.photo_path,
+                        item.aadhaar_doc_path,
+                        item.pan_doc_path,
                         now
                     ],
                 )?;
@@ -1341,6 +1377,40 @@ impl Database {
         }
         tx.commit()?;
         Ok(inserted_count)
+    }
+
+    pub fn save_account_document(&self, account_id: i64, doc_type: &str, file_name: &str, file_bytes: &[u8]) -> Result<String> {
+        let docs_dir = self.app_dir.join("documents").join(format!("acc_{}", account_id));
+        let _ = fs::create_dir_all(&docs_dir);
+        let safe_name = file_name.replace(|c: char| !c.is_alphanumeric() && c != '.' && c != '-' && c != '_', "_");
+        let target_file = docs_dir.join(format!("{}_{}", doc_type, safe_name));
+        fs::write(&target_file, file_bytes).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+        let path_str = target_file.to_string_lossy().to_string();
+
+        let conn = self.get_conn();
+        let now = chrono::Local::now().to_rfc3339();
+        match doc_type {
+            "photo" => {
+                conn.execute(
+                    "UPDATE bank_account_openings SET photo_path = ?1, updated_at = ?2 WHERE id = ?3;",
+                    params![path_str, now, account_id],
+                )?;
+            }
+            "aadhaar" => {
+                conn.execute(
+                    "UPDATE bank_account_openings SET aadhaar_doc_path = ?1, updated_at = ?2 WHERE id = ?3;",
+                    params![path_str, now, account_id],
+                )?;
+            }
+            "pan" => {
+                conn.execute(
+                    "UPDATE bank_account_openings SET pan_doc_path = ?1, updated_at = ?2 WHERE id = ?3;",
+                    params![path_str, now, account_id],
+                )?;
+            }
+            _ => {}
+        }
+        Ok(path_str)
     }
 
     pub fn create_backup(&self) -> Result<String> {

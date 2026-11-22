@@ -186,6 +186,63 @@ fn import_bank_account_openings(items: Vec<BankAccountOpening>, state: State<'_,
 }
 
 #[tauri::command]
+fn save_account_document(
+    account_id: i64,
+    doc_type: String,
+    file_name: String,
+    base64_data: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    use base64::Engine;
+    let raw_b64 = if let Some(idx) = base64_data.find(";base64,") {
+        &base64_data[idx + 8..]
+    } else {
+        &base64_data
+    };
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(raw_b64.trim())
+        .map_err(|e| format!("Base64 decode error: {}", e))?;
+    state
+        .get_db()
+        .save_account_document(account_id, &doc_type, &file_name, &bytes)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_document_as_data_url(file_path: String) -> Result<String, String> {
+    use base64::Engine;
+    let path = std::path::Path::new(&file_path);
+    if !path.exists() {
+        return Err("File not found on local disk".to_string());
+    }
+    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    let mime = match ext.as_str() {
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        "pdf" => "application/pdf",
+        _ => "application/octet-stream",
+    };
+    let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(format!("data:{};base64,{}", mime, encoded))
+}
+
+#[tauri::command]
+fn open_document_file(file_path: String, app_handle: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    app_handle
+        .opener()
+        .open_path(&file_path, None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn send_desktop_notification(title: String, body: String, app_handle: tauri::AppHandle) -> Result<(), String> {
     let _ = app_handle
         .notification()
@@ -338,6 +395,9 @@ pub fn run() {
             edit_bank_account_opening,
             delete_bank_account_opening,
             import_bank_account_openings,
+            save_account_document,
+            get_document_as_data_url,
+            open_document_file,
             send_desktop_notification,
             get_workstation_id,
             send_heartbeat_native

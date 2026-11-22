@@ -315,6 +315,65 @@ export async function importTauriBankAccountOpenings(items: BankAccountOpening[]
   }
 }
 
+// --- LOCAL ACCOUNT DOCUMENTS ---
+export async function saveTauriAccountDocument(
+  accountId: number,
+  docType: 'photo' | 'aadhaar' | 'pan',
+  fileName: string,
+  base64Data: string
+): Promise<string> {
+  if (!isTauriEnv()) {
+    const key = `desklog_doc_${accountId}_${docType}`;
+    try {
+      localStorage.setItem(key, base64Data);
+    } catch {}
+    return key;
+  }
+  return await invoke<string>('save_account_document', {
+    accountId,
+    docType,
+    fileName,
+    base64Data,
+  });
+}
+
+export async function getTauriDocumentDataUrl(filePath: string): Promise<string | null> {
+  if (!filePath) return null;
+  if (filePath.startsWith('data:')) return filePath;
+  if (!isTauriEnv()) {
+    try {
+      return localStorage.getItem(filePath) || null;
+    } catch {
+      return null;
+    }
+  }
+  try {
+    return await invoke<string>('get_document_as_data_url', { filePath });
+  } catch (err) {
+    console.warn('Failed to load local document as data URL:', err);
+    return null;
+  }
+}
+
+export async function openTauriDocument(filePath: string): Promise<void> {
+  if (!filePath) return;
+  if (!isTauriEnv()) {
+    try {
+      const dataUrl = localStorage.getItem(filePath);
+      if (dataUrl) {
+        const win = window.open();
+        win?.document.write(`<iframe src="${dataUrl}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
+      }
+    } catch {}
+    return;
+  }
+  try {
+    await invoke('open_document_file', { filePath });
+  } catch (err) {
+    console.warn('Failed to open document file:', err);
+  }
+}
+
 // --- DESKTOP NOTIFICATIONS ---
 export async function triggerDesktopNotification(title: string, body: string): Promise<void> {
   if (!isTauriEnv()) {

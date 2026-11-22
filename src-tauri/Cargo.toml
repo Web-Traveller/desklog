@@ -1,6 +1,6 @@
 [package]
 name = "desklog"
-version = "1.0.14"
+version = "1.0.15"
 description = "DeskLog Manager Desktop App"
 authors = ["you"]
 edition = "2021"
@@ -24,6 +24,7 @@ chrono = "0.4"
 tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "json"] }
+base64 = "0.22"
 
 [profile.release]
 codegen-units = 1

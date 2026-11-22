@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useDesk } from '../context/DeskContext';
 import { BankAccountOpening } from '../types';
 import { Modal } from './Modal';
 import { rupeesToPaise, paiseToRupees } from '../utils/currencyUtils';
+import { calculateAge } from '../utils/dateUtils';
+import { saveTauriAccountDocument, getTauriDocumentDataUrl } from '../api/tauri';
 import {
   ACCOUNT_OPENING_SCHEMES,
   ACCOUNT_OPENING_VISIT_TYPES,
@@ -14,6 +16,12 @@ interface EditAccountOpeningModalProps {
   isOpen: boolean;
   account: BankAccountOpening | null;
   onClose: () => void;
+}
+
+interface SelectedDoc {
+  name: string;
+  dataUrl: string;
+  isExisting?: boolean;
 }
 
 export const EditAccountOpeningModal: React.FC<EditAccountOpeningModalProps> = ({
@@ -48,12 +56,45 @@ export const EditAccountOpeningModal: React.FC<EditAccountOpeningModalProps> = (
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Document Uploads & Finder Flags
+  const [noPanAvailable, setNoPanAvailable] = useState(false);
+  const [photoDoc, setPhotoDoc] = useState<SelectedDoc | null>(null);
+  const [aadhaarDoc, setAadhaarDoc] = useState<SelectedDoc | null>(null);
+  const [panDoc, setPanDoc] = useState<SelectedDoc | null>(null);
+
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const aadhaarInputRef = useRef<HTMLInputElement>(null);
+  const panInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setter: (doc: SelectedDoc | null) => void
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 15 * 1024 * 1024) {
+      showToast('File exceeds 15MB limit. Please select a smaller file.', 'warning');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setter({
+        name: file.name,
+        dataUrl: reader.result as string,
+        isExisting: false,
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
   useEffect(() => {
     if (account && isOpen) {
       setCustomerName(account.customer_name || '');
       setMobileNumber(account.mobile_number || '');
       setAadhaarNumber(account.aadhaar_number || '');
-      setPanNumber(account.pan_number || '');
+      const isForm60 = (account.pan_number || '').toLowerCase().includes('form 60') || (account.pan_number || '').toLowerCase().includes('not available');
+      setNoPanAvailable(isForm60);
+      setPanNumber(isForm60 ? 'Form 60 (No PAN)' : (account.pan_number || ''));
       setDob(account.dob || '');
       setScheme(account.scheme || 'FINO');
       setAccountNumber(account.account_number || '');
@@ -69,6 +110,27 @@ export const EditAccountOpeningModal: React.FC<EditAccountOpeningModalProps> = (
       setInitialDepositRupees(account.initial_deposit ? String(paiseToRupees(account.initial_deposit)) : '0');
       setKycStatus(account.kyc_status || 'Verified');
       setNotes(account.notes || '');
+
+      // Preload documents from disk if available
+      setPhotoDoc(null);
+      setAadhaarDoc(null);
+      setPanDoc(null);
+
+      if (account.photo_path) {
+        getTauriDocumentDataUrl(account.photo_path).then(dataUrl => {
+          if (dataUrl) setPhotoDoc({ name: 'Saved Customer Photo', dataUrl, isExisting: true });
+        });
+      }
+      if (account.aadhaar_doc_path) {
+        getTauriDocumentDataUrl(account.aadhaar_doc_path).then(dataUrl => {
+          if (dataUrl) setAadhaarDoc({ name: 'Saved Aadhaar Document', dataUrl, isExisting: true });
+        });
+      }
+      if (account.pan_doc_path) {
+        getTauriDocumentDataUrl(account.pan_doc_path).then(dataUrl => {
+          if (dataUrl) setPanDoc({ name: 'Saved PAN Document', dataUrl, isExisting: true });
+        });
+      }
     }
   }, [account, isOpen]);
 
@@ -85,6 +147,37 @@ export const EditAccountOpeningModal: React.FC<EditAccountOpeningModalProps> = (
     try {
       const depositPaise = initialDepositRupees ? rupeesToPaise(Number(initialDepositRupees)) : 0;
 
+      // Count attached docs
+      let docCount = 0;
+      if (photoDoc) docCount++;
+      if (aadhaarDoc) docCount++;
+      if (panDoc) docCount++;
+      const computedDocStatus = docCount === 3 ? 'Attached (3/3)' : docCount > 0 ? `Partial (${docCount}/3)` : 'No Docs';
+      const finalPan = noPanAvailable ? 'Form 60 (No PAN)' : panNumber.trim().toUpperCase() || undefined;
+
+      // Save new files locally if selected
+      let newPhotoPath = account.photo_path;
+      let newAadhaarPath = account.aadhaar_doc_path;
+      let newPanPath = account.pan_doc_path;
+
+      if (photoDoc && !photoDoc.isExisting) {
+        newPhotoPath = await saveTauriAccountDocument(account.id, 'photo', photoDoc.name, photoDoc.dataUrl).catch(() => newPhotoPath);
+      } else if (!photoDoc) {
+        newPhotoPath = undefined;
+      }
+
+      if (aadhaarDoc && !aadhaarDoc.isExisting) {
+        newAadhaarPath = await saveTauriAccountDocument(account.id, 'aadhaar', aadhaarDoc.name, aadhaarDoc.dataUrl).catch(() => newAadhaarPath);
+      } else if (!aadhaarDoc) {
+        newAadhaarPath = undefined;
+      }
+
+      if (panDoc && !panDoc.isExisting) {
+        newPanPath = await saveTauriAccountDocument(account.id, 'pan', panDoc.name, panDoc.dataUrl).catch(() => newPanPath);
+      } else if (!panDoc) {
+        newPanPath = undefined;
+      }
+
       await updateAccountOpening(account.id, {
         visit_type: visitType,
         account_date: accountDate,
@@ -94,7 +187,7 @@ export const EditAccountOpeningModal: React.FC<EditAccountOpeningModalProps> = (
         customer_name: customerName.trim(),
         dob: dob.trim() || undefined,
         aadhaar_number: aadhaarNumber.replace(/[\s-]/g, '').trim() || undefined,
-        pan_number: panNumber.trim().toUpperCase() || undefined,
+        pan_number: finalPan,
         scheme: scheme.trim(),
         mobile_number: mobileNumber.replace(/[\s-]/g, '').trim() || undefined,
         mailing_address: mailingAddress.trim() || undefined,
@@ -105,6 +198,10 @@ export const EditAccountOpeningModal: React.FC<EditAccountOpeningModalProps> = (
         initial_deposit: depositPaise,
         kyc_status: kycStatus,
         notes: notes.trim() || undefined,
+        document_status: computedDocStatus,
+        photo_path: newPhotoPath,
+        aadhaar_doc_path: newAadhaarPath,
+        pan_doc_path: newPanPath,
       });
 
       onClose();
@@ -271,22 +368,42 @@ export const EditAccountOpeningModal: React.FC<EditAccountOpeningModalProps> = (
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-medium text-on-surface">
-                  PAN Card Number
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-medium text-on-surface">
+                    PAN Card Number
+                  </label>
+                  <label className="flex items-center gap-1 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={noPanAvailable}
+                      onChange={(e) => setNoPanAvailable(e.target.checked)}
+                      className="rounded text-primary focus:ring-0 text-[10px]"
+                    />
+                    <span className="text-[10px] text-outline font-medium">Form 60 (No PAN)</span>
+                  </label>
+                </div>
                 <input
                   type="text"
                   maxLength={10}
-                  value={panNumber}
+                  disabled={noPanAvailable}
+                  value={noPanAvailable ? 'Form 60 (No PAN)' : panNumber}
                   onChange={(e) => setPanNumber(e.target.value.toUpperCase())}
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-surface-container-lowest text-xs font-mono uppercase text-on-surface border border-surface-container focus:outline-none focus:ring-1 focus:ring-primary"
+                  placeholder={noPanAvailable ? 'No PAN (Form 60 declared)' : 'e.g. CSYPK9715N'}
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-surface-container-lowest text-xs font-mono uppercase text-on-surface border border-surface-container focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
                 />
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-medium text-on-surface">
-                  Date of Birth
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-medium text-on-surface">
+                    Date of Birth
+                  </label>
+                  {calculateAge(dob) !== null && (
+                    <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                      Age: {calculateAge(dob)} yrs
+                    </span>
+                  )}
+                </div>
                 <input
                   type="date"
                   value={dob}
@@ -422,6 +539,146 @@ export const EditAccountOpeningModal: React.FC<EditAccountOpeningModalProps> = (
                   onChange={(e) => setNotes(e.target.value)}
                   className="w-full px-2.5 py-1.5 rounded-lg bg-surface-container-lowest text-xs text-on-surface border border-surface-container focus:outline-none focus:ring-1 focus:ring-primary"
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 5: Document & Photo Attachments (Offline Local Storage) */}
+          <div className="p-3 rounded-xl bg-surface-container-low border border-surface-container/50 flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-on-surface flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-sm text-primary">upload_file</span>
+                Document & Photo Attachments (100% Local Storage)
+              </span>
+              <span className="text-[10px] text-outline font-medium">
+                Photo, Aadhaar & PAN stays on your PC
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {/* Slot 1: Customer Photo */}
+              <div className="p-2.5 rounded-lg bg-surface-container-lowest border border-surface-container flex flex-col items-center justify-center text-center gap-2 min-h-[110px]">
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleFileChange(e, setPhotoDoc)}
+                />
+                {photoDoc ? (
+                  <div className="flex flex-col items-center gap-1.5 w-full">
+                    <img
+                      src={photoDoc.dataUrl}
+                      alt="Customer"
+                      className="w-16 h-16 rounded-full object-cover border-2 border-primary shadow-xs"
+                    />
+                    <span className="text-[11px] font-semibold text-on-surface truncate max-w-full">
+                      {photoDoc.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPhotoDoc(null)}
+                      className="text-[10px] text-red-500 hover:underline font-semibold"
+                    >
+                      Remove Photo
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => photoInputRef.current?.click()}
+                    className="flex flex-col items-center gap-1 cursor-pointer py-2 w-full hover:bg-surface-container/30 rounded-lg transition"
+                  >
+                    <span className="material-symbols-outlined text-2xl text-outline">account_box</span>
+                    <span className="text-[11px] font-semibold text-primary">+ Customer Photo</span>
+                    <span className="text-[9px] text-outline">Passport size (JPG/PNG)</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Slot 2: Aadhaar Document */}
+              <div className="p-2.5 rounded-lg bg-surface-container-lowest border border-surface-container flex flex-col items-center justify-center text-center gap-2 min-h-[110px]">
+                <input
+                  ref={aadhaarInputRef}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                  onChange={(e) => handleFileChange(e, setAadhaarDoc)}
+                />
+                {aadhaarDoc ? (
+                  <div className="flex flex-col items-center gap-1.5 w-full">
+                    {aadhaarDoc.name.toLowerCase().endsWith('.pdf') ? (
+                      <span className="material-symbols-outlined text-3xl text-red-500">picture_as_pdf</span>
+                    ) : (
+                      <img
+                        src={aadhaarDoc.dataUrl}
+                        alt="Aadhaar"
+                        className="w-16 h-12 rounded object-cover border border-surface-container shadow-xs"
+                      />
+                    )}
+                    <span className="text-[11px] font-semibold text-on-surface truncate max-w-full">
+                      {aadhaarDoc.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAadhaarDoc(null)}
+                      className="text-[10px] text-red-500 hover:underline font-semibold"
+                    >
+                      Remove Document
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => aadhaarInputRef.current?.click()}
+                    className="flex flex-col items-center gap-1 cursor-pointer py-2 w-full hover:bg-surface-container/30 rounded-lg transition"
+                  >
+                    <span className="material-symbols-outlined text-2xl text-outline">fingerprint</span>
+                    <span className="text-[11px] font-semibold text-primary">+ Aadhaar Card</span>
+                    <span className="text-[9px] text-outline">Front & Back (Image/PDF)</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Slot 3: PAN Card Document */}
+              <div className="p-2.5 rounded-lg bg-surface-container-lowest border border-surface-container flex flex-col items-center justify-center text-center gap-2 min-h-[110px]">
+                <input
+                  ref={panInputRef}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                  onChange={(e) => handleFileChange(e, setPanDoc)}
+                />
+                {panDoc ? (
+                  <div className="flex flex-col items-center gap-1.5 w-full">
+                    {panDoc.name.toLowerCase().endsWith('.pdf') ? (
+                      <span className="material-symbols-outlined text-3xl text-red-500">picture_as_pdf</span>
+                    ) : (
+                      <img
+                        src={panDoc.dataUrl}
+                        alt="PAN"
+                        className="w-16 h-12 rounded object-cover border border-surface-container shadow-xs"
+                      />
+                    )}
+                    <span className="text-[11px] font-semibold text-on-surface truncate max-w-full">
+                      {panDoc.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPanDoc(null)}
+                      className="text-[10px] text-red-500 hover:underline font-semibold"
+                    >
+                      Remove Document
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => panInputRef.current?.click()}
+                    className="flex flex-col items-center gap-1 cursor-pointer py-2 w-full hover:bg-surface-container/30 rounded-lg transition"
+                  >
+                    <span className="material-symbols-outlined text-2xl text-outline">credit_card</span>
+                    <span className="text-[11px] font-semibold text-primary">+ PAN Card</span>
+                    <span className="text-[9px] text-outline">Card scan or Photo</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

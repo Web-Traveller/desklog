@@ -7,6 +7,7 @@ import {
   TRANSACTION_AMOUNT_MAX_RUPEES,
 } from '../utils/validationUtils';
 import { rupeesToPaise, paiseToRupees } from '../utils/currencyUtils';
+import { calculateAge } from '../utils/dateUtils';
 
 describe('Enterprise Input Validation & Rules', () => {
   describe('Mobile Number Validation', () => {
@@ -86,6 +87,29 @@ describe('Enterprise Input Validation & Rules', () => {
       expect(rupeesToPaise(100.50)).toBe(10050);
       expect(paiseToRupees(10050)).toBe(100.50);
       expect(rupeesToPaise(0.01)).toBe(1);
+    });
+  });
+
+  describe('Customer Age Calculation (Matching Excel Finder & KYC Specs)', () => {
+    it('returns null for empty or undefined dates', () => {
+      expect(calculateAge('')).toBeNull();
+      expect(calculateAge(undefined)).toBeNull();
+      expect(calculateAge('invalid-date')).toBeNull();
+    });
+
+    it('calculates correct age for historical birth years', () => {
+      const thisYear = new Date().getFullYear();
+      const dob = `${thisYear - 25}-01-01`;
+      const age = calculateAge(dob);
+      expect(age).toBeGreaterThanOrEqual(24);
+      expect(age).toBeLessThanOrEqual(25);
+    });
+
+    it('handles leap years and month boundaries', () => {
+      const today = new Date();
+      // If born today exactly 20 years ago
+      const dobExact = `${today.getFullYear() - 20}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      expect(calculateAge(dobExact)).toBe(20);
     });
   });
 });
