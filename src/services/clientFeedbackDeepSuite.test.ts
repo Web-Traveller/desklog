@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { Customer, Task, Payment, BankingTransaction, BankAccountOpening } from '../types';
-import seedAccounts from '../constants/seedAccountOpenings.json';
 import {
   rupeesToPaise,
   paiseToRupees,
@@ -625,37 +624,68 @@ describe('7. Deep Test: Universal Search & Customer Profile Resolution', () => {
 });
 
 // =========================================================================
-// 8. DEEP TEST: BANK ACCOUNT OPENING SERVICE & EXCEL MASTER DATA (Banking.xlsm)
+// 8. DEEP TEST: BANK ACCOUNT OPENING DATA STRUCTURE & SEARCH
 // =========================================================================
-describe('8. Deep Test: Bank Account Opening Service & Excel Master Data', () => {
-  const accounts: BankAccountOpening[] = seedAccounts as unknown as BankAccountOpening[];
-
-  it('correctly loads all 47 master accounts from Banking.xlsm extraction', () => {
-    expect(accounts).toBeDefined();
-    expect(accounts.length).toBe(47);
-  });
-
-  it('verifies FINO Payments Bank constitutes the majority partner', () => {
-    const finoAccounts = accounts.filter((a) => a.scheme === 'FINO');
-    const barodaAccounts = accounts.filter((a) => a.scheme === 'BARODA');
-
-    expect(finoAccounts.length).toBe(31);
-    expect(barodaAccounts.length).toBe(14);
-    expect(finoAccounts.length + barodaAccounts.length).toBe(45);
-  });
+describe('8. Deep Test: Bank Account Opening Data Structure & Search', () => {
+  const mockAccounts: BankAccountOpening[] = [
+    {
+      id: 1,
+      account_opening_date: '2026-05-18T10:00:00.000Z',
+      visit_type: 'Walk-in',
+      customer_name: 'Nanda Parmeshwar Kshirsagar',
+      scheme: 'BARODA',
+      account_number: '83998100000446',
+      bank_customer_id: 'IQ0068531',
+      passbook_number: 'PB-101',
+      mobile_number: '9822001122',
+      dob: '1975-04-25',
+      aadhaar_number: '482987363841',
+      pan_number: 'CSYPK9715N',
+      address_line: 'Main Road',
+      area_locality: 'Market',
+      city: 'Pune',
+      state: 'Maharashtra',
+      pincode: '411001',
+      initial_deposit: 50000,
+      kyc_status: 'Approved',
+      notes: 'Test Account',
+    },
+    {
+      id: 2,
+      account_opening_date: '2026-05-19T11:00:00.000Z',
+      visit_type: 'Agent Visit',
+      customer_name: 'Pawar Yash',
+      scheme: 'FINO',
+      account_number: '20369762133',
+      bank_customer_id: '162387859',
+      passbook_number: 'PB-102',
+      mobile_number: '8666956656',
+      dob: '1998-08-14',
+      aadhaar_number: '663840325736',
+      pan_number: 'ABCDE1234F',
+      address_line: 'Station Road',
+      area_locality: 'Near Post Office',
+      city: 'Pune',
+      state: 'Maharashtra',
+      pincode: '411001',
+      initial_deposit: 100000,
+      kyc_status: 'Pending',
+      notes: 'Initial check',
+    },
+  ];
 
   it('validates integer paise invariant on initial deposit/fees', () => {
-    accounts.forEach((account) => {
+    mockAccounts.forEach((account) => {
       expect(Number.isInteger(account.initial_deposit)).toBe(true);
       expect(account.initial_deposit).toBeGreaterThanOrEqual(0);
     });
 
-    const totalDeposits = accounts.reduce((sum, a) => sum + (a.initial_deposit || 0), 0);
-    expect(totalDeposits).toBeGreaterThan(0);
+    const totalDeposits = mockAccounts.reduce((sum, a) => sum + (a.initial_deposit || 0), 0);
+    expect(totalDeposits).toBe(150000);
   });
 
   it('verifies bank customer ID (CIF) and account number formatting', () => {
-    const nandaRecord = accounts.find((a) => a.account_number === '83998100000446');
+    const nandaRecord = mockAccounts.find((a) => a.account_number === '83998100000446');
     expect(nandaRecord).toBeDefined();
     expect(nandaRecord?.customer_name).toBe('Nanda Parmeshwar Kshirsagar');
     expect(nandaRecord?.bank_customer_id).toBe('IQ0068531');
@@ -669,7 +699,7 @@ describe('8. Deep Test: Bank Account Opening Service & Excel Master Data', () =>
     const search = (q: string) => {
       const cleanQ = q.replace(/[\s-]/g, '').toLowerCase();
       const rawQ = q.trim().toLowerCase();
-      return accounts.filter((a) => {
+      return mockAccounts.filter((a) => {
         return (
           a.customer_name.toLowerCase().includes(rawQ) ||
           a.account_number.replace(/[\s-]/g, '').toLowerCase().includes(cleanQ) ||
@@ -681,7 +711,7 @@ describe('8. Deep Test: Bank Account Opening Service & Excel Master Data', () =>
     };
 
     // By Name
-    expect(search('Pawar Yash').length).toBeGreaterThan(0);
+    expect(search('Pawar Yash').length).toBe(1);
     // By Account Number
     expect(search('20369762133').length).toBe(1);
     // By CIF

@@ -14,7 +14,6 @@ import {
   saveTauriActivity,
   isTauriEnv,
 } from '../api/tauri';
-import seedAccountOpenings from '../constants/seedAccountOpenings.json';
 import { createActivityEvent } from '../services/activityService';
 import { formatRupees } from '../utils/currencyUtils';
 import { useUI } from './UIContext';
@@ -67,17 +66,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (list && list.length > 0) {
         setAccountOpenings(list);
       } else if (list && list.length === 0) {
-        // First run: pre-populate with the 47 real records from Banking.xlsm
-        try {
-          await importTauriBankAccountOpenings(seedAccountOpenings as BankAccountOpening[]);
-          const reloaded = await fetchTauriBankAccountOpenings();
-          if (reloaded && reloaded.length > 0) {
-            setAccountOpenings(reloaded);
-            return;
-          }
-        } catch (e) {
-          console.warn('Auto seed account openings failed', e);
-        }
+        // Clean default: starts empty for new installations
         setAccountOpenings([]);
       } else {
         // Browser fallback (localStorage)
@@ -86,11 +75,10 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           if (cached) {
             setAccountOpenings(JSON.parse(cached));
           } else {
-            setAccountOpenings(seedAccountOpenings as BankAccountOpening[]);
-            localStorage.setItem('desklog_account_openings', JSON.stringify(seedAccountOpenings));
+            setAccountOpenings([]);
           }
         } catch {
-          setAccountOpenings(seedAccountOpenings as BankAccountOpening[]);
+          setAccountOpenings([]);
         }
       }
     } catch (err) {

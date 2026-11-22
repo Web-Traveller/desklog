@@ -6,7 +6,6 @@ import { EditAccountOpeningModal } from './EditAccountOpeningModal';
 import { AccountOpeningDetailsModal } from './AccountOpeningDetailsModal';
 import { StatusBadge } from './StatusBadge';
 import { ACCOUNT_OPENING_SCHEMES, ACCOUNT_OPENING_VISIT_TYPES, ACCOUNT_OPENING_KYC_STATUSES } from '../constants/bankingData';
-import seedData from '../constants/seedAccountOpenings.json';
 
 export const AccountOpeningsView: React.FC = () => {
   const { 
@@ -180,23 +179,6 @@ export const AccountOpeningsView: React.FC = () => {
           showToast('Account opening record deleted.', 'success');
         } catch {
           showToast('Failed to delete account record.', 'error');
-        }
-      }
-    });
-  };
-
-  const handleReimportSeedData = () => {
-    showConfirm({
-      title: 'Import Master Spreadsheet (Banking.xlsm)?',
-      message: `This will import all 47 verified account records from the master spreadsheet. Existing records will be preserved. Continue?`,
-      confirmText: 'Import 47 Records',
-      variant: 'info',
-      onConfirm: async () => {
-        try {
-          const imported = await importAccountOpenings(seedData as unknown as BankAccountOpening[]);
-          showToast(`Successfully imported ${imported} accounts from master file.`, 'success');
-        } catch {
-          showToast('Failed to import accounts.', 'error');
         }
       }
     });
@@ -431,19 +413,10 @@ export const AccountOpeningsView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsAddOpen(true)}
-                className="px-4 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold shadow-xs"
+                className="px-4 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold shadow-xs hover:bg-primary/90 transition-colors"
               >
                 + Open New Account
               </button>
-              {accountOpenings.length === 0 && (
-                <button
-                  type="button"
-                  onClick={handleReimportSeedData}
-                  className="px-4 py-1.5 rounded-xl bg-surface-container text-on-surface text-xs font-semibold hover:bg-surface-container-high border border-surface-container-high"
-                >
-                  Import Master Records
-                </button>
-              )}
             </div>
           </div>
         ) : (
