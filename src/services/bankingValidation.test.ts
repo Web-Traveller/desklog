@@ -8,7 +8,7 @@ import {
 } from '../utils/validationUtils';
 import { rupeesToPaise, paiseToRupees } from '../utils/currencyUtils';
 import { calculateAge } from '../utils/dateUtils';
-import { parseDocPaths, formatDocPathsForStorage } from '../utils/documentUtils';
+import { parseDocPaths, formatDocPathsForStorage, extractFileName } from '../utils/documentUtils';
 
 describe('Enterprise Input Validation & Rules', () => {
   describe('Mobile Number Validation', () => {
@@ -132,12 +132,20 @@ describe('Enterprise Input Validation & Rules', () => {
       expect(parseDocPaths(serialized)).toEqual(paths);
     });
 
-    it('formats single and multiple document paths for storage properly', () => {
+    it('formats document paths consistently as JSON string array', () => {
       expect(formatDocPathsForStorage([])).toBeUndefined();
-      expect(formatDocPathsForStorage(['C:\\data\\pan.jpg'])).toBe('C:\\data\\pan.jpg');
+      expect(formatDocPathsForStorage(['C:\\data\\pan.jpg'])).toBe(
+        JSON.stringify(['C:\\data\\pan.jpg'])
+      );
       expect(formatDocPathsForStorage(['C:\\data\\pan_1.jpg', 'C:\\data\\pan_2.jpg'])).toBe(
         JSON.stringify(['C:\\data\\pan_1.jpg', 'C:\\data\\pan_2.jpg'])
       );
+    });
+
+    it('extracts clean file names from file paths and timestamps', () => {
+      expect(extractFileName('C:\\desklog\\documents\\acc_1\\aadhaar_1732300000000_front.jpg')).toBe('front.jpg');
+      expect(extractFileName('/desklog/documents/acc_1/pan_back.pdf')).toBe('pan_back.pdf');
+      expect(extractFileName(null, 'Fallback')).toBe('Fallback');
     });
   });
 });

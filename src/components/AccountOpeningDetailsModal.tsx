@@ -3,7 +3,7 @@ import { BankAccountOpening } from '../types';
 import { Modal } from './Modal';
 import { StatusBadge } from './StatusBadge';
 import { calculateAge } from '../utils/dateUtils';
-import { parseDocPaths } from '../utils/documentUtils';
+import { parseDocPaths, extractFileName } from '../utils/documentUtils';
 import { getTauriDocumentDataUrl, openTauriDocument } from '../api/tauri';
 
 interface AccountOpeningDetailsModalProps {
@@ -37,18 +37,28 @@ export const AccountOpeningDetailsModal: React.FC<AccountOpeningDetailsModalProp
       }
 
       const aadhaarPaths = parseDocPaths(account.aadhaar_doc_path);
-      aadhaarPaths.forEach(path => {
-        getTauriDocumentDataUrl(path).then(dataUrl => {
-          if (dataUrl) setAadhaarDocs(prev => [...prev, { path, dataUrl }]);
+      if (aadhaarPaths.length > 0) {
+        Promise.all(
+          aadhaarPaths.map(async (path) => {
+            const dataUrl = await getTauriDocumentDataUrl(path).catch(() => null);
+            return dataUrl ? { path, dataUrl } : null;
+          })
+        ).then(loaded => {
+          setAadhaarDocs(loaded.filter((d): d is { path: string; dataUrl: string } => d !== null));
         });
-      });
+      }
 
       const panPaths = parseDocPaths(account.pan_doc_path);
-      panPaths.forEach(path => {
-        getTauriDocumentDataUrl(path).then(dataUrl => {
-          if (dataUrl) setPanDocs(prev => [...prev, { path, dataUrl }]);
+      if (panPaths.length > 0) {
+        Promise.all(
+          panPaths.map(async (path) => {
+            const dataUrl = await getTauriDocumentDataUrl(path).catch(() => null);
+            return dataUrl ? { path, dataUrl } : null;
+          })
+        ).then(loaded => {
+          setPanDocs(loaded.filter((d): d is { path: string; dataUrl: string } => d !== null));
         });
-      });
+      }
     }
   }, [account, isOpen]);
 
@@ -371,15 +381,18 @@ export const AccountOpeningDetailsModal: React.FC<AccountOpeningDetailsModalProp
                         ) : (
                           <img
                             src={doc.dataUrl}
-                            alt={`Aadhaar ${idx + 1}`}
-                            onClick={() => setZoomDoc({ title: `Aadhaar Card (${idx + 1})`, url: doc.dataUrl, path: doc.path })}
+                            alt={extractFileName(doc.path, `Aadhaar ${idx + 1}`)}
+                            onClick={() => setZoomDoc({ title: `Aadhaar: ${extractFileName(doc.path, `Doc ${idx + 1}`)}`, url: doc.dataUrl, path: doc.path })}
                             className="w-16 h-12 rounded object-cover border border-surface-container cursor-pointer hover:scale-105 transition"
                           />
                         )}
+                        <span className="text-[10px] text-on-surface truncate max-w-[120px]" title={extractFileName(doc.path)}>
+                          {extractFileName(doc.path, `Doc #${idx + 1}`)}
+                        </span>
                         <div className="flex items-center gap-2 mt-0.5">
                           <button
                             type="button"
-                            onClick={() => setZoomDoc({ title: `Aadhaar Card (${idx + 1})`, url: doc.dataUrl, path: doc.path })}
+                            onClick={() => setZoomDoc({ title: `Aadhaar: ${extractFileName(doc.path, `Doc ${idx + 1}`)}`, url: doc.dataUrl, path: doc.path })}
                             className="text-[10px] text-primary hover:underline font-semibold"
                           >
                             Preview
@@ -418,15 +431,18 @@ export const AccountOpeningDetailsModal: React.FC<AccountOpeningDetailsModalProp
                         ) : (
                           <img
                             src={doc.dataUrl}
-                            alt={`PAN ${idx + 1}`}
-                            onClick={() => setZoomDoc({ title: `PAN Card (${idx + 1})`, url: doc.dataUrl, path: doc.path })}
+                            alt={extractFileName(doc.path, `PAN ${idx + 1}`)}
+                            onClick={() => setZoomDoc({ title: `PAN: ${extractFileName(doc.path, `Doc ${idx + 1}`)}`, url: doc.dataUrl, path: doc.path })}
                             className="w-16 h-12 rounded object-cover border border-surface-container cursor-pointer hover:scale-105 transition"
                           />
                         )}
+                        <span className="text-[10px] text-on-surface truncate max-w-[120px]" title={extractFileName(doc.path)}>
+                          {extractFileName(doc.path, `Doc #${idx + 1}`)}
+                        </span>
                         <div className="flex items-center gap-2 mt-0.5">
                           <button
                             type="button"
-                            onClick={() => setZoomDoc({ title: `PAN Card (${idx + 1})`, url: doc.dataUrl, path: doc.path })}
+                            onClick={() => setZoomDoc({ title: `PAN: ${extractFileName(doc.path, `Doc ${idx + 1}`)}`, url: doc.dataUrl, path: doc.path })}
                             className="text-[10px] text-primary hover:underline font-semibold"
                           >
                             Preview
