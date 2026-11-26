@@ -4,6 +4,7 @@ import { rupeesToPaise } from '../utils/currencyUtils';
 import { calculateAge } from '../utils/dateUtils';
 import { saveTauriAccountDocument } from '../api/tauri';
 import { Modal } from './Modal';
+import { lookupCustomerDetails } from '../utils/autofillLookup';
 import {
   ACCOUNT_OPENING_SCHEMES,
   ACCOUNT_OPENING_VISIT_TYPES,
@@ -29,7 +30,23 @@ export const AddAccountOpeningModal: React.FC<AddAccountOpeningModalProps> = ({
   isOpen,
   onClose,
 }) => {
-  const { customers, addAccountOpening, addCustomer, editCustomer, showToast } = useDesk();
+  const {
+    customers,
+    accountOpenings,
+    bankingTransactions,
+    bankSchemes,
+    addAccountOpening,
+    addCustomer,
+    editCustomer,
+    showToast,
+  } = useDesk();
+
+  const activeSchemeList = React.useMemo(() => {
+    if (bankSchemes && bankSchemes.length > 0) {
+      return bankSchemes.map(s => s.name);
+    }
+    return ACCOUNT_OPENING_SCHEMES;
+  }, [bankSchemes]);
 
   // Form State
   const [customerName, setCustomerName] = useState('');
@@ -160,16 +177,23 @@ export const AddAccountOpeningModal: React.FC<AddAccountOpeningModalProps> = ({
     }
   }, [isOpen]);
 
-  // Live Auto-fill from existing customers by Aadhaar or Mobile
+  // Live Auto-fill from existing records by full Aadhaar (12 digits) or Mobile (10 digits)
   const handleAadhaarChange = (val: string) => {
     setAadhaarNumber(val);
     const clean = val.replace(/[\s-]/g, '');
     if (clean.length === 12) {
-      const match = customers.find(c => c.aadhaar_number && c.aadhaar_number.replace(/[\s-]/g, '') === clean);
+      const match = lookupCustomerDetails(clean, { customers, accountOpenings, bankingTransactions });
       if (match) {
-        if (!customerName) setCustomerName(match.name);
-        if (!mobileNumber && match.mobile) setMobileNumber(match.mobile);
-        if (!mailingAddress && match.note) setMailingAddress(match.note);
+        if (!customerName && match.customer_name) setCustomerName(match.customer_name);
+        if (!mobileNumber && match.mobile_number) setMobileNumber(match.mobile_number);
+        if (!panNumber && match.pan_number) setPanNumber(match.pan_number);
+        if (!dob && match.dob) setDob(match.dob);
+        if (!mailingAddress && match.mailing_address) setMailingAddress(match.mailing_address);
+        if (!area && match.area) setArea(match.area);
+        if (!city && match.city) setCity(match.city);
+        if (!state && match.state) setState(match.state);
+        if (!zip && match.zip) setZip(match.zip);
+        showToast('Auto-filled customer details from recent records', 'info');
       }
     }
   };
@@ -178,11 +202,18 @@ export const AddAccountOpeningModal: React.FC<AddAccountOpeningModalProps> = ({
     setMobileNumber(val);
     const clean = val.replace(/[\s-]/g, '');
     if (clean.length === 10) {
-      const match = customers.find(c => c.mobile && c.mobile.replace(/[\s-]/g, '') === clean);
+      const match = lookupCustomerDetails(clean, { customers, accountOpenings, bankingTransactions });
       if (match) {
-        if (!customerName) setCustomerName(match.name);
+        if (!customerName && match.customer_name) setCustomerName(match.customer_name);
         if (!aadhaarNumber && match.aadhaar_number) setAadhaarNumber(match.aadhaar_number);
-        if (!mailingAddress && match.note) setMailingAddress(match.note);
+        if (!panNumber && match.pan_number) setPanNumber(match.pan_number);
+        if (!dob && match.dob) setDob(match.dob);
+        if (!mailingAddress && match.mailing_address) setMailingAddress(match.mailing_address);
+        if (!area && match.area) setArea(match.area);
+        if (!city && match.city) setCity(match.city);
+        if (!state && match.state) setState(match.state);
+        if (!zip && match.zip) setZip(match.zip);
+        showToast('Auto-filled customer details from recent records', 'info');
       }
     }
   };
@@ -327,7 +358,7 @@ export const AddAccountOpeningModal: React.FC<AddAccountOpeningModalProps> = ({
               Select Bank / Scheme <span className="text-red-500 font-bold">*</span>
             </label>
             <div className="flex flex-wrap items-center gap-1.5">
-              {ACCOUNT_OPENING_SCHEMES.slice(0, 7).map((b) => (
+              {activeSchemeList.slice(0, 8).map((b) => (
                 <button
                   key={b}
                   type="button"
@@ -366,7 +397,7 @@ export const AddAccountOpeningModal: React.FC<AddAccountOpeningModalProps> = ({
                   className="w-full px-2.5 py-1.5 rounded-lg bg-surface-container-lowest text-xs font-semibold text-on-surface border border-surface-container focus:outline-none focus:ring-1 focus:ring-primary"
                 />
                 <datalist id="scheme-options">
-                  {ACCOUNT_OPENING_SCHEMES.map(s => <option key={s} value={s} />)}
+                  {activeSchemeList.map(s => <option key={s} value={s} />)}
                 </datalist>
               </div>
 

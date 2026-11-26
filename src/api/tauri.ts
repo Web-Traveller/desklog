@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
-import { Customer, Task, ActivityEvent, Service, Payment, Setting, BankingTransaction, BankAccountOpening } from '../types';
+import { Customer, Task, ActivityEvent, Service, Payment, Setting, BankingTransaction, BankAccountOpening, BankScheme, PaymentMethod } from '../types';
 
 export const isTauriEnv = (): boolean => {
   return typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
@@ -218,6 +218,92 @@ export async function saveTauriSetting(key: string, value: string): Promise<bool
   if (!isTauriEnv()) return true;
   await invoke('save_setting', { key, value });
   return true;
+}
+
+// --- BANK SCHEMES ---
+export async function fetchTauriBankSchemes(): Promise<BankScheme[] | null> {
+  if (!isTauriEnv()) return null;
+  try {
+    return await invoke<BankScheme[]>('get_bank_schemes');
+  } catch (err) {
+    console.warn('Failed to fetch bank schemes:', err);
+    return null;
+  }
+}
+
+export async function addTauriBankScheme(name: string): Promise<BankScheme | null> {
+  if (!isTauriEnv()) return null;
+  try {
+    return await invoke<BankScheme>('add_bank_scheme', { name });
+  } catch (err) {
+    console.warn('Failed to add bank scheme:', err);
+    return null;
+  }
+}
+
+export async function updateTauriBankScheme(id: number, name: string): Promise<boolean> {
+  if (!isTauriEnv()) return true;
+  try {
+    await invoke('update_bank_scheme', { id, name });
+    return true;
+  } catch (err) {
+    console.warn('Failed to update bank scheme:', err);
+    return false;
+  }
+}
+
+export async function deleteTauriBankScheme(id: number): Promise<boolean> {
+  if (!isTauriEnv()) return true;
+  try {
+    await invoke('delete_bank_scheme', { id });
+    return true;
+  } catch (err) {
+    console.warn('Failed to delete bank scheme:', err);
+    return false;
+  }
+}
+
+// --- PAYMENT METHODS ---
+export async function fetchTauriPaymentMethods(): Promise<PaymentMethod[] | null> {
+  if (!isTauriEnv()) return null;
+  try {
+    return await invoke<PaymentMethod[]>('get_payment_methods');
+  } catch (err) {
+    console.warn('Failed to fetch payment methods:', err);
+    return null;
+  }
+}
+
+export async function addTauriPaymentMethod(name: string): Promise<PaymentMethod | null> {
+  if (!isTauriEnv()) return null;
+  try {
+    return await invoke<PaymentMethod>('add_payment_method', { name });
+  } catch (err) {
+    console.warn('Failed to add payment method:', err);
+    return null;
+  }
+}
+
+export async function updateTauriPaymentMethod(id: number, name: string): Promise<boolean> {
+  if (!isTauriEnv()) return true;
+  try {
+    await invoke('update_payment_method', { id, name });
+    return true;
+  } catch (err) {
+    console.warn('Failed to update payment method:', err);
+    return false;
+  }
+}
+
+export async function deleteTauriPaymentMethod(id: number): Promise<boolean> {
+  if (!isTauriEnv()) return true;
+  try {
+    await invoke('delete_payment_method', { id });
+    return true;
+  } catch (err) {
+    console.warn('Failed to delete payment method:', err);
+    return false;
+  }
 }
 
 // --- BACKUP & RESTORE ---

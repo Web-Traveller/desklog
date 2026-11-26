@@ -533,6 +533,44 @@ impl Database {
             tx.commit()?;
         }
 
+        // Migration v8: Bank Schemes, Payment Methods, App Settings tables
+        let current_version: i32 = conn.query_row("PRAGMA user_version;", [], |row| row.get(0))?;
+        if current_version < 8 {
+            let tx = conn.transaction()?;
+            tx.execute_batch(
+                "CREATE TABLE IF NOT EXISTS bank_schemes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL,
+                    is_active INTEGER DEFAULT 1,
+                    created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS payment_methods (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL,
+                    is_active INTEGER DEFAULT 1,
+                    created_at TEXT NOT NULL
+                );
+                PRAGMA user_version = 8;"
+            )?;
+            // Seed default bank schemes (only if empty — fresh install)
+            let scheme_count: i64 = tx.query_row("SELECT COUNT(*) FROM bank_schemes;", [], |r| r.get(0))?;
+            if scheme_count == 0 {
+                let now = chrono::Local::now().to_rfc3339();
+                for scheme in &["FINO", "BARODA", "KOTAK", "AXIS", "Airtel Bank", "PUNJAB", "State Bank of India", "Union Bank of India", "Bank of Maharashtra", "HDFC Bank", "ICICI Bank", "Canara Bank", "Indian Bank"] {
+                    let _ = tx.execute("INSERT OR IGNORE INTO bank_schemes (name, is_active, created_at) VALUES (?1, 1, ?2);", params![scheme, now]);
+                }
+            }
+            // Seed default payment methods (only if empty)
+            let pm_count: i64 = tx.query_row("SELECT COUNT(*) FROM payment_methods;", [], |r| r.get(0))?;
+            if pm_count == 0 {
+                let now = chrono::Local::now().to_rfc3339();
+                for pm in &["Cash", "UPI", "Bank Transfer", "Credit Card", "Debit Card", "Cheque", "NEFT", "RTGS"] {
+                    let _ = tx.execute("INSERT OR IGNORE INTO payment_methods (name, is_active, created_at) VALUES (?1, 1, ?2);", params![pm, now]);
+                }
+            }
+            tx.commit()?;
+        }
+
         self.ensure_general_customer(&conn)?;
         Ok(())
     }
@@ -558,6 +596,86 @@ impl Database {
                 params![general_id, gen_name, gen_notes, gen_date, gen_initials, gen_color],
             )?;
         }
+        Ok(())
+    }
+
+    // -------------------------------------------------------------------------
+    // Bank Schemes CRUD
+    // -------------------------------------------------------------------------
+    pub fn fetch_bank_schemes(&self) -> Result<Vec<(i64, String, bool)>> {
+        let conn = self.get_conn();
+        let mut stmt = conn.prepare_cached(
+            "SELECT id, name, is_active FROM bank_schemes WHERE is_active = 1 ORDER BY name ASC;"
+        )?;
+        let rows = stmt.query_map([], |row| {
+            let active: i64 = row.get(2)?;
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?, active == 1))
+        })?;
+        Ok(rows.flatten().collect())
+    }
+
+    pub fn insert_bank_scheme(&self, name: &str) -> Result<i64> {
+        let conn = self.get_conn();
+        let now = chrono::Local::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO bank_schemes (name, is_active, created_at) VALUES (?1, 1, ?2);",
+            params![name.trim(), now],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn update_bank_scheme(&self, id: i64, name: &str) -> Result<()> {
+        let conn = self.get_conn();
+        conn.execute(
+            "UPDATE bank_schemes SET name = ?1 WHERE id = ?2;",
+            params![name.trim(), id],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_bank_scheme(&self, id: i64) -> Result<()> {
+        let conn = self.get_conn();
+        conn.execute("DELETE FROM bank_schemes WHERE id = ?1;", params![id])?;
+        Ok(())
+    }
+
+    // -------------------------------------------------------------------------
+    // Payment Methods CRUD
+    // -------------------------------------------------------------------------
+    pub fn fetch_payment_methods(&self) -> Result<Vec<(i64, String, bool)>> {
+        let conn = self.get_conn();
+        let mut stmt = conn.prepare_cached(
+            "SELECT id, name, is_active FROM payment_methods WHERE is_active = 1 ORDER BY name ASC;"
+        )?;
+        let rows = stmt.query_map([], |row| {
+            let active: i64 = row.get(2)?;
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?, active == 1))
+        })?;
+        Ok(rows.flatten().collect())
+    }
+
+    pub fn insert_payment_method(&self, name: &str) -> Result<i64> {
+        let conn = self.get_conn();
+        let now = chrono::Local::now().to_rfc3339();
+        conn.execute(
+            "INSERT INTO payment_methods (name, is_active, created_at) VALUES (?1, 1, ?2);",
+            params![name.trim(), now],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn update_payment_method(&self, id: i64, name: &str) -> Result<()> {
+        let conn = self.get_conn();
+        conn.execute(
+            "UPDATE payment_methods SET name = ?1 WHERE id = ?2;",
+            params![name.trim(), id],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_payment_method(&self, id: i64) -> Result<()> {
+        let conn = self.get_conn();
+        conn.execute("DELETE FROM payment_methods WHERE id = ?1;", params![id])?;
         Ok(())
     }
 

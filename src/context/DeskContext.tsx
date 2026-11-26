@@ -1,5 +1,5 @@
 import React from 'react';
-import { Customer, Task, Service, Payment, Setting, BankingTransaction, BankAccountOpening, ActivityEvent, ActivePage, TaskStatus } from '../types';
+import { Customer, Task, Service, Payment, Setting, BankingTransaction, BankAccountOpening, BankScheme, PaymentMethod, ActivityEvent, ActivePage, TaskStatus } from '../types';
 import { UIProvider, useUI, ConfirmOptions } from './UIContext';
 import { CustomerProvider, useCustomers } from './CustomerContext';
 import { TaskProvider, useTasks } from './TaskContext';
@@ -57,6 +57,26 @@ export interface DeskContextType {
   deleteAccountOpening: (id: number) => Promise<void>;
   importAccountOpenings: (items: BankAccountOpening[]) => Promise<number>;
   reloadAccountOpenings: () => Promise<void>;
+
+  bankSchemes: BankScheme[];
+  addBankScheme: (name: string) => Promise<void>;
+  updateBankScheme: (id: number, name: string) => Promise<void>;
+  deleteBankScheme: (id: number) => Promise<void>;
+  reloadBankSchemes: () => Promise<void>;
+
+  paymentMethods: PaymentMethod[];
+  addPaymentMethod: (name: string) => Promise<void>;
+  updatePaymentMethod: (id: number, name: string) => Promise<void>;
+  deletePaymentMethod: (id: number) => Promise<void>;
+  reloadPaymentMethods: () => Promise<void>;
+
+  portals: string[];
+  addPortal: (name: string) => Promise<void>;
+  updatePortal: (oldName: string, newName: string) => Promise<void>;
+  deletePortal: (name: string) => Promise<void>;
+
+  shopName: string;
+  updateShopName: (name: string) => Promise<void>;
 
   addTask: (taskData: Omit<Task, 'id' | 'created_at' | 'updated_at'>, initialPaidAmount?: number) => Promise<Task | null>;
   updateTaskStatus: (taskId: string, newStatus: TaskStatus, cancellationReason?: string) => Promise<void>;

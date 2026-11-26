@@ -825,7 +825,7 @@ dependencies = [
 
 [[package]]
 name = "desklog"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "base64 0.22.1",
  "chrono",

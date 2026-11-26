@@ -234,6 +234,18 @@ export type ActivePage =
   | 'banking'
   | 'profile';
 
+export interface BankScheme {
+  id: number;
+  name: string;
+  is_active: boolean;
+}
+
+export interface PaymentMethod {
+  id: number;
+  name: string;
+  is_active: boolean;
+}
+
 export const GENERAL_CUSTOMER: Customer = {
   id: 'cust-general',
   name: 'General / Walk-in Client',

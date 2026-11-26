@@ -6,6 +6,7 @@ import { rupeesToPaise, paiseToRupees } from '../utils/currencyUtils';
 import { calculateAge } from '../utils/dateUtils';
 import { parseDocPaths, formatDocPathsForStorage, extractFileName } from '../utils/documentUtils';
 import { saveTauriAccountDocument, getTauriDocumentDataUrl } from '../api/tauri';
+import { lookupCustomerDetails } from '../utils/autofillLookup';
 import {
   ACCOUNT_OPENING_SCHEMES,
   ACCOUNT_OPENING_VISIT_TYPES,
@@ -33,7 +34,21 @@ export const EditAccountOpeningModal: React.FC<EditAccountOpeningModalProps> = (
   account,
   onClose,
 }) => {
-  const { updateAccountOpening, showToast } = useDesk();
+  const {
+    updateAccountOpening,
+    showToast,
+    bankSchemes,
+    customers,
+    accountOpenings,
+    bankingTransactions,
+  } = useDesk();
+
+  const activeSchemeList = React.useMemo(() => {
+    if (bankSchemes && bankSchemes.length > 0) {
+      return bankSchemes.map(s => s.name);
+    }
+    return ACCOUNT_OPENING_SCHEMES;
+  }, [bankSchemes]);
 
   // Form State
   const [customerName, setCustomerName] = useState('');
@@ -133,6 +148,46 @@ export const EditAccountOpeningModal: React.FC<EditAccountOpeningModalProps> = (
 
   const removePanDoc = (docId: string) => {
     setPanDocs(prev => prev.filter(d => d.id !== docId));
+  };
+
+  const handleAadhaarChange = (val: string) => {
+    setAadhaarNumber(val);
+    const clean = val.replace(/[\s-]/g, '');
+    if (clean.length === 12) {
+      const match = lookupCustomerDetails(clean, { customers, accountOpenings, bankingTransactions });
+      if (match) {
+        if (!customerName && match.customer_name) setCustomerName(match.customer_name);
+        if (!mobileNumber && match.mobile_number) setMobileNumber(match.mobile_number);
+        if (!panNumber && match.pan_number) setPanNumber(match.pan_number);
+        if (!dob && match.dob) setDob(match.dob);
+        if (!mailingAddress && match.mailing_address) setMailingAddress(match.mailing_address);
+        if (!area && match.area) setArea(match.area);
+        if (!city && match.city) setCity(match.city);
+        if (!state && match.state) setState(match.state);
+        if (!zip && match.zip) setZip(match.zip);
+        showToast('Auto-filled customer details from recent records', 'info');
+      }
+    }
+  };
+
+  const handleMobileChange = (val: string) => {
+    setMobileNumber(val);
+    const clean = val.replace(/[\s-]/g, '');
+    if (clean.length === 10) {
+      const match = lookupCustomerDetails(clean, { customers, accountOpenings, bankingTransactions });
+      if (match) {
+        if (!customerName && match.customer_name) setCustomerName(match.customer_name);
+        if (!aadhaarNumber && match.aadhaar_number) setAadhaarNumber(match.aadhaar_number);
+        if (!panNumber && match.pan_number) setPanNumber(match.pan_number);
+        if (!dob && match.dob) setDob(match.dob);
+        if (!mailingAddress && match.mailing_address) setMailingAddress(match.mailing_address);
+        if (!area && match.area) setArea(match.area);
+        if (!city && match.city) setCity(match.city);
+        if (!state && match.state) setState(match.state);
+        if (!zip && match.zip) setZip(match.zip);
+        showToast('Auto-filled customer details from recent records', 'info');
+      }
+    }
   };
 
   useEffect(() => {
@@ -343,7 +398,7 @@ export const EditAccountOpeningModal: React.FC<EditAccountOpeningModalProps> = (
                   className="w-full px-2.5 py-1.5 rounded-lg bg-surface-container-lowest text-xs font-semibold text-on-surface border border-surface-container focus:outline-none focus:ring-1 focus:ring-primary"
                 />
                 <datalist id="edit-scheme-options">
-                  {ACCOUNT_OPENING_SCHEMES.map(s => <option key={s} value={s} />)}
+                  {activeSchemeList.map(s => <option key={s} value={s} />)}
                 </datalist>
               </div>
 
@@ -444,7 +499,7 @@ export const EditAccountOpeningModal: React.FC<EditAccountOpeningModalProps> = (
                   type="tel"
                   maxLength={10}
                   value={mobileNumber}
-                  onChange={(e) => setMobileNumber(e.target.value)}
+                  onChange={(e) => handleMobileChange(e.target.value)}
                   className="w-full px-2.5 py-1.5 rounded-lg bg-surface-container-lowest text-xs font-mono text-on-surface border border-surface-container focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
@@ -459,7 +514,7 @@ export const EditAccountOpeningModal: React.FC<EditAccountOpeningModalProps> = (
                   type="text"
                   maxLength={14}
                   value={aadhaarNumber}
-                  onChange={(e) => setAadhaarNumber(e.target.value)}
+                  onChange={(e) => handleAadhaarChange(e.target.value)}
                   className="w-full px-2.5 py-1.5 rounded-lg bg-surface-container-lowest text-xs font-mono text-on-surface border border-surface-container focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>

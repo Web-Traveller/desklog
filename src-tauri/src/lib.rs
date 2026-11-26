@@ -5,6 +5,21 @@ use std::sync::Mutex;
 use tauri::{Manager, State};
 use tauri_plugin_notification::NotificationExt;
 
+// ---- Simple response structs for CRUD operations ----
+#[derive(serde::Serialize, serde::Deserialize)]
+struct BankScheme {
+    id: i64,
+    name: String,
+    is_active: bool,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct PaymentMethod {
+    id: i64,
+    name: String,
+    is_active: bool,
+}
+
 pub struct AppState {
     pub db: Mutex<Database>,
 }
@@ -242,6 +257,56 @@ fn open_document_file(file_path: String, app_handle: tauri::AppHandle) -> Result
         .map_err(|e| e.to_string())
 }
 
+// -------------------------------------------------------------------------
+// Bank Schemes Commands
+// -------------------------------------------------------------------------
+#[tauri::command]
+fn get_bank_schemes(state: State<'_, AppState>) -> Result<Vec<BankScheme>, String> {
+    let raw = state.get_db().fetch_bank_schemes().map_err(|e| e.to_string())?;
+    Ok(raw.into_iter().map(|(id, name, is_active)| BankScheme { id, name, is_active }).collect())
+}
+
+#[tauri::command]
+fn add_bank_scheme(name: String, state: State<'_, AppState>) -> Result<BankScheme, String> {
+    let id = state.get_db().insert_bank_scheme(&name).map_err(|e| e.to_string())?;
+    Ok(BankScheme { id, name, is_active: true })
+}
+
+#[tauri::command]
+fn update_bank_scheme(id: i64, name: String, state: State<'_, AppState>) -> Result<(), String> {
+    state.get_db().update_bank_scheme(id, &name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_bank_scheme(id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    state.get_db().delete_bank_scheme(id).map_err(|e| e.to_string())
+}
+
+// -------------------------------------------------------------------------
+// Payment Methods Commands
+// -------------------------------------------------------------------------
+#[tauri::command]
+fn get_payment_methods(state: State<'_, AppState>) -> Result<Vec<PaymentMethod>, String> {
+    let raw = state.get_db().fetch_payment_methods().map_err(|e| e.to_string())?;
+    Ok(raw.into_iter().map(|(id, name, is_active)| PaymentMethod { id, name, is_active }).collect())
+}
+
+#[tauri::command]
+fn add_payment_method(name: String, state: State<'_, AppState>) -> Result<PaymentMethod, String> {
+    let id = state.get_db().insert_payment_method(&name).map_err(|e| e.to_string())?;
+    Ok(PaymentMethod { id, name, is_active: true })
+}
+
+#[tauri::command]
+fn update_payment_method(id: i64, name: String, state: State<'_, AppState>) -> Result<(), String> {
+    state.get_db().update_payment_method(id, &name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_payment_method(id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    state.get_db().delete_payment_method(id).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn send_desktop_notification(title: String, body: String, app_handle: tauri::AppHandle) -> Result<(), String> {
     let _ = app_handle
@@ -400,7 +465,15 @@ pub fn run() {
             open_document_file,
             send_desktop_notification,
             get_workstation_id,
-            send_heartbeat_native
+            send_heartbeat_native,
+            get_bank_schemes,
+            add_bank_scheme,
+            update_bank_scheme,
+            delete_bank_scheme,
+            get_payment_methods,
+            add_payment_method,
+            update_payment_method,
+            delete_payment_method
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

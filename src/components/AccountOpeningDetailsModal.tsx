@@ -5,6 +5,8 @@ import { StatusBadge } from './StatusBadge';
 import { calculateAge } from '../utils/dateUtils';
 import { parseDocPaths, extractFileName } from '../utils/documentUtils';
 import { getTauriDocumentDataUrl, openTauriDocument } from '../api/tauri';
+import { PrintAccountForm } from './PrintAccountForm';
+import { useBanking } from '../context/BankingContext';
 
 interface AccountOpeningDetailsModalProps {
   isOpen: boolean;
@@ -19,11 +21,13 @@ export const AccountOpeningDetailsModal: React.FC<AccountOpeningDetailsModalProp
   account,
   onEdit,
 }) => {
+  const { shopName } = useBanking();
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [aadhaarDocs, setAadhaarDocs] = useState<{ path: string; dataUrl: string }[]>([]);
   const [panDocs, setPanDocs] = useState<{ path: string; dataUrl: string }[]>([]);
   const [zoomDoc, setZoomDoc] = useState<{ title: string; url: string; path?: string } | null>(null);
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   useEffect(() => {
     if (account && isOpen) {
@@ -125,6 +129,15 @@ export const AccountOpeningDetailsModal: React.FC<AccountOpeningDetailsModalProp
         }
         footer={
           <div className="flex items-center justify-end gap-2 w-full">
+            <button
+              type="button"
+              onClick={() => setShowPrintModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-surface-container hover:bg-surface-container-high text-on-surface rounded-xl transition border border-surface-container-high/60"
+              title="Print customer application form filled with account details"
+            >
+              <span className="material-symbols-outlined text-sm text-primary">print</span>
+              <span>Print Form</span>
+            </button>
             {onEdit && (
               <button
                 type="button"
@@ -547,6 +560,14 @@ export const AccountOpeningDetailsModal: React.FC<AccountOpeningDetailsModalProp
           </div>
         </Modal>
       )}
+
+      <PrintAccountForm
+        isOpen={showPrintModal}
+        onClose={() => setShowPrintModal(false)}
+        account={account}
+        shopName={shopName}
+        isBlank={false}
+      />
     </>
   );
 };

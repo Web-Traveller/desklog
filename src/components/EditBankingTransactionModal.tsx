@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useDesk } from '../context/DeskContext';
 import { BankingTransaction } from '../types';
 import { Modal } from './Modal';
+import { lookupCustomerDetails } from '../utils/autofillLookup';
 import { rupeesToPaise, paiseToRupees } from '../utils/currencyUtils';
 import {
   validateMobileNumber,
@@ -12,6 +13,7 @@ import {
   BankingModeId,
   BANKING_MODES,
   BANKING_MODE_KEYS,
+  COMMON_COMPANIES,
   getLearnedBanks,
   saveLearnedBank,
   getLearnedCompanies,
@@ -29,7 +31,29 @@ export const EditBankingTransactionModal: React.FC<EditBankingTransactionModalPr
   transaction,
   onClose,
 }) => {
-  const { updateBankingTransaction, showToast, customers } = useDesk();
+  const {
+    updateBankingTransaction,
+    showToast,
+    customers,
+    accountOpenings,
+    bankingTransactions,
+    paymentMethods,
+    portals,
+  } = useDesk();
+
+  const availableModes = React.useMemo(() => {
+    if (paymentMethods && paymentMethods.length > 0) {
+      return paymentMethods.map(m => m.name);
+    }
+    return BANKING_MODE_KEYS;
+  }, [paymentMethods]);
+
+  const availablePortals = React.useMemo(() => {
+    if (portals && portals.length > 0) {
+      return portals;
+    }
+    return COMMON_COMPANIES;
+  }, [portals]);
 
   const [activeMode, setActiveMode] = useState<BankingModeId>('DMT');
   const [transactionDate, setTransactionDate] = useState<string>('');
@@ -130,6 +154,47 @@ export const EditBankingTransactionModal: React.FC<EditBankingTransactionModalPr
     }
   };
 
+  const handleCustomerMobileChange = (val: string) => {
+    setCustomerMobile(val);
+    if (fieldErrors.customerMobile) {
+      setFieldErrors(prev => {
+        const copy = { ...prev };
+        delete copy.customerMobile;
+        return copy;
+      });
+    }
+    const clean = val.replace(/[\s-]/g, '');
+    if (clean.length === 10) {
+      const match = lookupCustomerDetails(clean, { customers, accountOpenings, bankingTransactions });
+      if (match) {
+        if (!customerName || customerName === 'Walk-in Customer' || customerName === 'Customer') {
+          setCustomerName(match.customer_name || '');
+        }
+        if (!accountOrAadhaar && match.aadhaar_number && (activeMode === 'AEPS' || activeMode === 'DMT')) {
+          setAccountOrAadhaar(match.aadhaar_number);
+        }
+        showToast('Auto-filled customer details from recent records', 'info');
+      }
+    }
+  };
+
+  const handleAccountOrAadhaarChange = (val: string) => {
+    setAccountOrAadhaar(val);
+    const clean = val.replace(/[\s-]/g, '');
+    if (clean.length === 12) {
+      const match = lookupCustomerDetails(clean, { customers, accountOpenings, bankingTransactions });
+      if (match) {
+        if (!customerName || customerName === 'Walk-in Customer' || customerName === 'Customer') {
+          setCustomerName(match.customer_name || '');
+        }
+        if (!customerMobile && match.mobile_number) {
+          setCustomerMobile(match.mobile_number);
+        }
+        showToast('Auto-filled customer details from recent records', 'info');
+      }
+    }
+  };
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (providerWrapperRef.current && !providerWrapperRef.current.contains(event.target as Node)) {
@@ -153,7 +218,7 @@ export const EditBankingTransactionModal: React.FC<EditBankingTransactionModalPr
     ? availableProviders.filter((p) => p.toLowerCase().includes(bankOrProvider.toLowerCase()))
     : availableProviders;
 
-  const availableCompanies = getLearnedCompanies();
+  const availableCompanies = Array.from(new Set([...availablePortals, ...getLearnedCompanies()]));
   const filteredCompanies = companyName.trim()
     ? availableCompanies.filter((c) => c.toLowerCase().includes(companyName.toLowerCase()))
     : availableCompanies;
@@ -269,13 +334,13 @@ export const EditBankingTransactionModal: React.FC<EditBankingTransactionModalPr
               Transaction Mode
             </label>
             <div className="grid grid-cols-5 sm:grid-cols-9 gap-1 bg-surface-container-low p-1 rounded-xl border border-surface-container/50">
-              {BANKING_MODE_KEYS.map((modeKey) => {
+              {availableModes.map((modeKey) => {
                 const isSelected = activeMode === modeKey;
                 return (
                   <button
                     key={modeKey}
                     type="button"
-                    onClick={() => setActiveMode(modeKey)}
+                    onClick={() => setActiveMode(modeKey as BankingModeId)}
                     className={`py-1.5 px-1 rounded-lg text-[11px] font-bold text-center transition-all truncate ${
                       isSelected
                         ? 'bg-surface-container-lowest text-primary shadow-xs border border-surface-container'
@@ -340,16 +405,7 @@ export const EditBankingTransactionModal: React.FC<EditBankingTransactionModalPr
                 type="tel"
                 maxLength={10}
                 value={customerMobile}
-                onChange={(e) => {
-                  setCustomerMobile(e.target.value);
-                  if (fieldErrors.customerMobile) {
-                    setFieldErrors(prev => {
-                      const copy = { ...prev };
-                      delete copy.customerMobile;
-                      return copy;
-                    });
-                  }
-                }}
+                onChange={(e) => handleCustomerMobileChange(e.target.value)}
                 placeholder="10-digit mobile"
                 className={`w-full px-2.5 py-1.5 rounded-xl bg-surface-container text-on-surface font-mono text-xs border focus:outline-none focus:ring-2 ${
                   fieldErrors.customerMobile
@@ -374,7 +430,7 @@ export const EditBankingTransactionModal: React.FC<EditBankingTransactionModalPr
             <input
               type="text"
               value={accountOrAadhaar}
-              onChange={(e) => setAccountOrAadhaar(e.target.value)}
+              onChange={(e) => handleAccountOrAadhaarChange(e.target.value)}
               placeholder={modeConfig.idFieldPlaceholder}
               className="w-full px-2.5 py-1.5 rounded-xl bg-surface-container text-on-surface font-mono text-xs border border-surface-container focus:outline-none focus:ring-2 focus:ring-primary/20"
             />

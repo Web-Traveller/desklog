@@ -19,6 +19,20 @@ export const SettingsPage: React.FC<SettingsPageProps> = () => {
     restoreDatabaseBackup,
     showConfirm,
     showToast,
+    bankSchemes,
+    addBankScheme,
+    updateBankScheme,
+    deleteBankScheme,
+    paymentMethods,
+    addPaymentMethod,
+    updatePaymentMethod,
+    deletePaymentMethod,
+    portals,
+    addPortal,
+    updatePortal,
+    deletePortal,
+    shopName,
+    updateShopName,
   } = useDesk();
 
   const [restorePathInput, setRestorePathInput] = useState("");
@@ -29,6 +43,69 @@ export const SettingsPage: React.FC<SettingsPageProps> = () => {
       return 'DD MMM YYYY';
     }
   });
+
+  // Shop / Portal Name state
+  const [shopNameInput, setShopNameInput] = useState(shopName);
+
+  // New item inputs
+  const [newSchemeInput, setNewSchemeInput] = useState("");
+  const [editingSchemeId, setEditingSchemeId] = useState<number | null>(null);
+  const [editingSchemeName, setEditingSchemeName] = useState("");
+
+  const [newPaymentMethodInput, setNewPaymentMethodInput] = useState("");
+  const [editingPaymentMethodId, setEditingPaymentMethodId] = useState<number | null>(null);
+  const [editingPaymentMethodName, setEditingPaymentMethodName] = useState("");
+
+  const [newPortalInput, setNewPortalInput] = useState("");
+  const [editingPortalOld, setEditingPortalOld] = useState<string | null>(null);
+  const [editingPortalNew, setEditingPortalNew] = useState("");
+
+  const handleSaveShopName = async () => {
+    if (!shopNameInput.trim()) {
+      showToast("Shop / Business name cannot be empty", "warning");
+      return;
+    }
+    await updateShopName(shopNameInput.trim());
+  };
+
+  const handleAddScheme = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSchemeInput.trim()) return;
+    await addBankScheme(newSchemeInput.trim());
+    setNewSchemeInput("");
+  };
+
+  const handleSaveEditScheme = async (id: number) => {
+    if (!editingSchemeName.trim()) return;
+    await updateBankScheme(id, editingSchemeName.trim());
+    setEditingSchemeId(null);
+  };
+
+  const handleAddPaymentMethod = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPaymentMethodInput.trim()) return;
+    await addPaymentMethod(newPaymentMethodInput.trim());
+    setNewPaymentMethodInput("");
+  };
+
+  const handleSaveEditPaymentMethod = async (id: number) => {
+    if (!editingPaymentMethodName.trim()) return;
+    await updatePaymentMethod(id, editingPaymentMethodName.trim());
+    setEditingPaymentMethodId(null);
+  };
+
+  const handleAddPortal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPortalInput.trim()) return;
+    await addPortal(newPortalInput.trim());
+    setNewPortalInput("");
+  };
+
+  const handleSaveEditPortal = async (oldName: string) => {
+    if (!editingPortalNew.trim()) return;
+    await updatePortal(oldName, editingPortalNew.trim());
+    setEditingPortalOld(null);
+  };
 
   const handleDateFormatChange = (newFormat: string) => {
     setDateFormat(newFormat);
@@ -111,7 +188,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = () => {
   const cleanCSVCell = (val: string | number | undefined | null): string => {
     if (val === undefined || val === null) return '""';
     const str = String(val).replace(/"/g, '""');
-    // Sanitization for formula injection characters (=, +, -, @)
     if (/^[=+\-@]/.test(str)) {
       return `"'${str}"`;
     }
@@ -251,32 +327,149 @@ export const SettingsPage: React.FC<SettingsPageProps> = () => {
           Settings & System Configuration
         </h1>
         <p className="font-body text-body text-on-surface-variant max-w-2xl">
-          Manage system preferences, keyboard shortcuts, database backups, and data exports.
+          Manage shop branding, bank schemes, payment methods, counter portals, database backups, and exports.
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-start">
         {/* Left Column */}
         <div className="lg:col-span-6 flex flex-col gap-space-lg">
-          {/* General Preferences */}
+          
+          {/* Shop / Portal Branding & General Preferences */}
           <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-xs border border-surface-container/60 flex flex-col gap-space-md">
             <div className="flex items-center gap-space-xs border-b border-surface-container/40 pb-space-xs">
-              <span className="material-symbols-outlined text-primary text-xl">tune</span>
-              <h2 className="font-tagline text-tagline text-on-surface font-semibold">General Preferences</h2>
+              <span className="material-symbols-outlined text-primary text-xl">storefront</span>
+              <h2 className="font-tagline text-tagline text-on-surface font-semibold">Shop & Portal Branding</h2>
             </div>
 
-            <div className="grid grid-cols-1 gap-space-md pt-2">
+            <div className="flex flex-col gap-space-sm pt-1">
               <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant">
+                Shop / Company / Kiosk Name (Appears on printouts & header)
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    value={shopNameInput}
+                    onChange={(e) => setShopNameInput(e.target.value)}
+                    placeholder="e.g. IRSHAD COMMUNICATION"
+                    className="flex-1 px-3 py-2 rounded-xl bg-surface-container-low text-on-surface focus:outline-none border border-surface-container-high/40 text-xs font-semibold"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveShopName}
+                    className="px-4 py-2 rounded-xl bg-primary text-on-primary hover:bg-primary/90 font-button-utility text-xs font-semibold transition"
+                  >
+                    Save Name
+                  </button>
+                </div>
+              </label>
+
+              <label className="flex flex-col gap-1 font-fine-print text-fine-print text-on-surface-variant pt-2">
                 Date Display Format
                 <select
                   value={dateFormat}
                   onChange={(e) => handleDateFormatChange(e.target.value)}
-                  className="px-space-md py-2.5 rounded-xl bg-surface-container-low text-on-surface focus:outline-none border border-surface-container-high/40"
+                  className="px-space-md py-2.5 rounded-xl bg-surface-container-low text-on-surface focus:outline-none border border-surface-container-high/40 text-xs"
                 >
                   <option value="DD MMM YYYY">DD MMM YYYY (e.g. 12 Oct 2026)</option>
                   <option value="YYYY-MM-DD">YYYY-MM-DD (e.g. 2026-10-12)</option>
                 </select>
               </label>
+            </div>
+          </div>
+
+          {/* Bank Schemes / Partner Banks CRUD */}
+          <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-xs border border-surface-container/60 flex flex-col gap-space-md">
+            <div className="flex items-center justify-between border-b border-surface-container/40 pb-space-xs">
+              <div className="flex items-center gap-space-xs">
+                <span className="material-symbols-outlined text-primary text-xl">account_balance</span>
+                <h2 className="font-tagline text-tagline text-on-surface font-semibold">
+                  Bank Schemes ({bankSchemes.length})
+                </h2>
+              </div>
+              <span className="text-[10px] text-outline">Used in Account Opening</span>
+            </div>
+
+            <form onSubmit={handleAddScheme} className="flex gap-2">
+              <input
+                type="text"
+                value={newSchemeInput}
+                onChange={(e) => setNewSchemeInput(e.target.value)}
+                placeholder="Add new bank scheme (e.g. SBI, HDFC)..."
+                className="flex-1 px-3 py-2 rounded-xl bg-surface-container-low text-on-surface text-xs border border-surface-container-high/40 focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={!newSchemeInput.trim()}
+                className="px-3.5 py-2 rounded-xl bg-primary text-on-primary disabled:opacity-40 font-button-utility text-xs font-bold transition flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-sm">add</span>
+                <span>Add</span>
+              </button>
+            </form>
+
+            <div className="max-h-56 overflow-y-auto flex flex-col gap-1.5 pr-1 divide-y divide-surface-container/40">
+              {bankSchemes.map((s) => (
+                <div key={s.id} className="pt-1.5 first:pt-0 flex items-center justify-between text-xs py-1">
+                  {editingSchemeId === s.id ? (
+                    <div className="flex items-center gap-2 flex-1 mr-2">
+                      <input
+                        type="text"
+                        value={editingSchemeName}
+                        onChange={(e) => setEditingSchemeName(e.target.value)}
+                        className="flex-1 px-2 py-1 bg-surface-container rounded-lg text-xs font-semibold"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSaveEditScheme(s.id)}
+                        className="text-primary hover:underline font-bold text-xs"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingSchemeId(null)}
+                        className="text-outline hover:underline text-xs"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="font-medium text-on-surface">{s.name}</span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingSchemeId(s.id);
+                            setEditingSchemeName(s.name);
+                          }}
+                          className="p-1 hover:bg-surface-container rounded text-outline hover:text-on-surface"
+                          title="Edit Scheme Name"
+                        >
+                          <span className="material-symbols-outlined text-sm">edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            showConfirm({
+                              title: `Delete scheme "${s.name}"?`,
+                              message: "Existing customer accounts with this scheme will remain safe in database.",
+                              confirmText: "Delete",
+                              variant: "danger",
+                              onConfirm: () => deleteBankScheme(s.id),
+                            });
+                          }}
+                          className="p-1 hover:bg-error/10 rounded text-outline hover:text-error"
+                          title="Delete Scheme"
+                        >
+                          <span className="material-symbols-outlined text-sm">delete</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 
@@ -332,6 +525,199 @@ export const SettingsPage: React.FC<SettingsPageProps> = () => {
 
         {/* Right Column */}
         <div className="lg:col-span-6 flex flex-col gap-space-lg">
+
+          {/* Payment Methods & Transaction Modes CRUD */}
+          <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-xs border border-surface-container/60 flex flex-col gap-space-md">
+            <div className="flex items-center justify-between border-b border-surface-container/40 pb-space-xs">
+              <div className="flex items-center gap-space-xs">
+                <span className="material-symbols-outlined text-primary text-xl">payments</span>
+                <h2 className="font-tagline text-tagline text-on-surface font-semibold">
+                  Payment Modes / Methods ({paymentMethods.length})
+                </h2>
+              </div>
+              <span className="text-[10px] text-outline">DMT, AEPS, UPI, etc.</span>
+            </div>
+
+            <form onSubmit={handleAddPaymentMethod} className="flex gap-2">
+              <input
+                type="text"
+                value={newPaymentMethodInput}
+                onChange={(e) => setNewPaymentMethodInput(e.target.value)}
+                placeholder="Add custom mode (e.g. FASTAG, QR CASH)..."
+                className="flex-1 px-3 py-2 rounded-xl bg-surface-container-low text-on-surface text-xs border border-surface-container-high/40 focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={!newPaymentMethodInput.trim()}
+                className="px-3.5 py-2 rounded-xl bg-primary text-on-primary disabled:opacity-40 font-button-utility text-xs font-bold transition flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-sm">add</span>
+                <span>Add</span>
+              </button>
+            </form>
+
+            <div className="max-h-48 overflow-y-auto flex flex-col gap-1.5 pr-1 divide-y divide-surface-container/40">
+              {paymentMethods.map((m) => (
+                <div key={m.id} className="pt-1.5 first:pt-0 flex items-center justify-between text-xs py-1">
+                  {editingPaymentMethodId === m.id ? (
+                    <div className="flex items-center gap-2 flex-1 mr-2">
+                      <input
+                        type="text"
+                        value={editingPaymentMethodName}
+                        onChange={(e) => setEditingPaymentMethodName(e.target.value)}
+                        className="flex-1 px-2 py-1 bg-surface-container rounded-lg text-xs font-semibold"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSaveEditPaymentMethod(m.id)}
+                        className="text-primary hover:underline font-bold text-xs"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingPaymentMethodId(null)}
+                        className="text-outline hover:underline text-xs"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="font-medium text-on-surface">{m.name}</span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingPaymentMethodId(m.id);
+                            setEditingPaymentMethodName(m.name);
+                          }}
+                          className="p-1 hover:bg-surface-container rounded text-outline hover:text-on-surface"
+                          title="Edit Mode Name"
+                        >
+                          <span className="material-symbols-outlined text-sm">edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            showConfirm({
+                              title: `Delete payment mode "${m.name}"?`,
+                              message: "Existing ledger transactions using this mode will remain untouched.",
+                              confirmText: "Delete",
+                              variant: "danger",
+                              onConfirm: () => deletePaymentMethod(m.id),
+                            });
+                          }}
+                          className="p-1 hover:bg-error/10 rounded text-outline hover:text-error"
+                          title="Delete Mode"
+                        >
+                          <span className="material-symbols-outlined text-sm">delete</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Counter Portals / Companies CRUD */}
+          <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-xs border border-surface-container/60 flex flex-col gap-space-md">
+            <div className="flex items-center justify-between border-b border-surface-container/40 pb-space-xs">
+              <div className="flex items-center gap-space-xs">
+                <span className="material-symbols-outlined text-primary text-xl">hub</span>
+                <h2 className="font-tagline text-tagline text-on-surface font-semibold">
+                  Counter Portals & Companies ({portals.length})
+                </h2>
+              </div>
+              <span className="text-[10px] text-outline">SAFEPAY, PAYBINGO, etc.</span>
+            </div>
+
+            <form onSubmit={handleAddPortal} className="flex gap-2">
+              <input
+                type="text"
+                value={newPortalInput}
+                onChange={(e) => setNewPortalInput(e.target.value)}
+                placeholder="Add portal (e.g. SPICE MONEY, RNFI)..."
+                className="flex-1 px-3 py-2 rounded-xl bg-surface-container-low text-on-surface text-xs border border-surface-container-high/40 focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={!newPortalInput.trim()}
+                className="px-3.5 py-2 rounded-xl bg-primary text-on-primary disabled:opacity-40 font-button-utility text-xs font-bold transition flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-sm">add</span>
+                <span>Add</span>
+              </button>
+            </form>
+
+            <div className="max-h-48 overflow-y-auto flex flex-col gap-1.5 pr-1 divide-y divide-surface-container/40">
+              {portals.map((p) => (
+                <div key={p} className="pt-1.5 first:pt-0 flex items-center justify-between text-xs py-1">
+                  {editingPortalOld === p ? (
+                    <div className="flex items-center gap-2 flex-1 mr-2">
+                      <input
+                        type="text"
+                        value={editingPortalNew}
+                        onChange={(e) => setEditingPortalNew(e.target.value)}
+                        className="flex-1 px-2 py-1 bg-surface-container rounded-lg text-xs font-semibold"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSaveEditPortal(p)}
+                        className="text-primary hover:underline font-bold text-xs"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingPortalOld(null)}
+                        className="text-outline hover:underline text-xs"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="font-medium text-on-surface">{p}</span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingPortalOld(p);
+                            setEditingPortalNew(p);
+                          }}
+                          className="p-1 hover:bg-surface-container rounded text-outline hover:text-on-surface"
+                          title="Edit Portal Name"
+                        >
+                          <span className="material-symbols-outlined text-sm">edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            showConfirm({
+                              title: `Delete portal "${p}"?`,
+                              message: "Existing transactions with this portal will remain saved.",
+                              confirmText: "Delete",
+                              variant: "danger",
+                              onConfirm: () => deletePortal(p),
+                            });
+                          }}
+                          className="p-1 hover:bg-error/10 rounded text-outline hover:text-error"
+                          title="Delete Portal"
+                        >
+                          <span className="material-symbols-outlined text-sm">delete</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Native SQLite Database Backup & Restore */}
           <div className="bg-surface-container-lowest rounded-2xl p-space-lg shadow-xs border border-surface-container/60 flex flex-col gap-space-md">
             <div className="flex items-center gap-space-xs border-b border-surface-container/40 pb-space-xs">
@@ -404,7 +790,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = () => {
             </div>
           </div>
 
-          {/* Minimal Version & Update Status (Unobtrusive 1-line strip) */}
+          {/* Minimal Version & Update Status */}
           <div className="bg-surface-container-lowest rounded-2xl p-3.5 shadow-xs border border-surface-container/60 flex flex-col gap-2">
             <div className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-2">
@@ -444,7 +830,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = () => {
             )}
           </div>
 
-          {/* Developer Contact Card (Similar to Update Card) */}
+          {/* Developer Contact Card */}
           <div className="bg-surface-container-lowest rounded-2xl p-3.5 shadow-xs border border-surface-container/60 flex flex-col gap-2">
             <div className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-2">

@@ -8,11 +8,14 @@ import { StatusBadge } from './StatusBadge';
 import { calculateAge } from '../utils/dateUtils';
 import { parseDocPaths } from '../utils/documentUtils';
 import { ACCOUNT_OPENING_SCHEMES, ACCOUNT_OPENING_VISIT_TYPES, ACCOUNT_OPENING_KYC_STATUSES } from '../constants/bankingData';
+import { PrintAccountForm } from './PrintAccountForm';
 
 export const AccountOpeningsView: React.FC = () => {
   const { 
     accountOpenings, 
     deleteAccountOpening, 
+    bankSchemes,
+    shopName,
   } = useBanking();
   const { 
     showToast, 
@@ -29,7 +32,15 @@ export const AccountOpeningsView: React.FC = () => {
   const [kycFilter, setKycFilter] = useState('All');
   const [dateFilter, setDateFilter] = useState('All Time');
   const [page, setPage] = useState(0);
+  const [showBlankPrintModal, setShowBlankPrintModal] = useState(false);
   const PAGE_SIZE = 15;
+
+  const activeSchemeList = useMemo(() => {
+    if (bankSchemes && bankSchemes.length > 0) {
+      return bankSchemes.map(s => s.name);
+    }
+    return ACCOUNT_OPENING_SCHEMES;
+  }, [bankSchemes]);
 
   // Instant Customer & KYC lookup (Matching Excel Dashbord sheet)
   const quickLookupResult = useMemo(() => {
@@ -405,7 +416,7 @@ export const AccountOpeningsView: React.FC = () => {
             className="px-2.5 py-1.5 rounded-xl bg-surface-container border border-surface-container-high text-xs text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
           >
             <option value="All">All Banks / Schemes</option>
-            {ACCOUNT_OPENING_SCHEMES.map(s => (
+            {activeSchemeList.map(s => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
@@ -454,6 +465,16 @@ export const AccountOpeningsView: React.FC = () => {
 
           {/* Action Buttons */}
           <div className="flex items-center gap-1.5 ml-auto">
+            <button
+              type="button"
+              onClick={() => setShowBlankPrintModal(true)}
+              className="p-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-medium transition border border-surface-container-high flex items-center gap-1 px-2.5"
+              title="Print blank customer account opening application form"
+            >
+              <span className="material-symbols-outlined text-sm text-primary">print</span>
+              <span>Blank Form</span>
+            </button>
+
             <button
               type="button"
               onClick={handleExportCSV}
@@ -792,6 +813,13 @@ export const AccountOpeningsView: React.FC = () => {
           setSelectedAccountForSlip(null);
           setEditingAccount(acct);
         }}
+      />
+
+      <PrintAccountForm
+        isOpen={showBlankPrintModal}
+        onClose={() => setShowBlankPrintModal(false)}
+        isBlank={true}
+        shopName={shopName}
       />
     </div>
   );

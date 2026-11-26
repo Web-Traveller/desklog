@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useDesk } from '../context/DeskContext';
 import { rupeesToPaise } from '../utils/currencyUtils';
 import { Modal } from './Modal';
+import { lookupCustomerDetails } from '../utils/autofillLookup';
 import {
   validateMobileNumber,
   validateTransactionAmountRupees,
@@ -11,6 +12,7 @@ import {
   BankingModeId,
   BANKING_MODES,
   BANKING_MODE_KEYS,
+  COMMON_COMPANIES,
   getLearnedBanks,
   saveLearnedBank,
   getLearnedCompanies,
@@ -26,9 +28,33 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
   isOpen: propIsOpen,
   onClose: propOnClose,
 }) => {
-  const { isAddBankingOpen, setIsAddBankingOpen, addBankingTransaction, showToast, customers } = useDesk();
+  const {
+    isAddBankingOpen,
+    setIsAddBankingOpen,
+    addBankingTransaction,
+    showToast,
+    customers,
+    accountOpenings,
+    bankingTransactions,
+    paymentMethods,
+    portals,
+  } = useDesk();
   const isOpen = propIsOpen !== undefined ? propIsOpen : isAddBankingOpen;
   const onClose = propOnClose || (() => setIsAddBankingOpen(false));
+
+  const availableModes = React.useMemo(() => {
+    if (paymentMethods && paymentMethods.length > 0) {
+      return paymentMethods.map(m => m.name);
+    }
+    return BANKING_MODE_KEYS;
+  }, [paymentMethods]);
+
+  const availablePortals = React.useMemo(() => {
+    if (portals && portals.length > 0) {
+      return portals;
+    }
+    return COMMON_COMPANIES;
+  }, [portals]);
 
   // Active Mode (DMT, AEPS, UPI, UPI CASH, BILL, CREDIT, CSC)
   const [activeMode, setActiveMode] = useState<BankingModeId>('DMT');
@@ -75,9 +101,15 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
     }
     const clean = val.replace(/[\s-]/g, '');
     if (clean.length === 10) {
-      const matched = customers.find(c => c.id !== 'cust-general' && c.mobile && c.mobile.replace(/[\s-]/g, '') === clean);
-      if (matched && (!customerName || customerName === 'Walk-in Customer' || customerName === 'Customer')) {
-        setCustomerName(matched.name);
+      const match = lookupCustomerDetails(clean, { customers, accountOpenings, bankingTransactions });
+      if (match) {
+        if (!customerName || customerName === 'Walk-in Customer' || customerName === 'Customer') {
+          setCustomerName(match.customer_name || '');
+        }
+        if (!accountOrAadhaar && match.aadhaar_number && (activeMode === 'AEPS' || activeMode === 'DMT')) {
+          setAccountOrAadhaar(match.aadhaar_number);
+        }
+        showToast('Auto-filled customer name from recent records', 'info');
       }
     }
   };
@@ -86,14 +118,15 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
     setAccountOrAadhaar(val);
     const clean = val.replace(/[\s-]/g, '');
     if (clean.length === 12) {
-      const matched = customers.find(c => c.id !== 'cust-general' && c.aadhaar_number && c.aadhaar_number.replace(/[\s-]/g, '') === clean);
-      if (matched) {
+      const match = lookupCustomerDetails(clean, { customers, accountOpenings, bankingTransactions });
+      if (match) {
         if (!customerName || customerName === 'Walk-in Customer' || customerName === 'Customer') {
-          setCustomerName(matched.name);
+          setCustomerName(match.customer_name || '');
         }
-        if (!customerMobile && matched.mobile) {
-          setCustomerMobile(matched.mobile);
+        if (!customerMobile && match.mobile_number) {
+          setCustomerMobile(match.mobile_number);
         }
+        showToast('Auto-filled customer details from recent records', 'info');
       }
     }
   };
@@ -186,8 +219,8 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
     ? availableProviders.filter((p) => p.toLowerCase().includes(bankOrProvider.toLowerCase()))
     : availableProviders;
 
-  // Companies / Portals list (All 17 portals from operational ledger)
-  const availableCompanies = getLearnedCompanies();
+  // Companies / Portals list (dynamic portals + learned portals)
+  const availableCompanies = Array.from(new Set([...availablePortals, ...getLearnedCompanies()]));
   const filteredCompanies = companyName.trim()
     ? availableCompanies.filter((c) => c.toLowerCase().includes(companyName.toLowerCase()))
     : availableCompanies;
@@ -295,13 +328,13 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
       <div className="flex flex-col gap-3.5">
         {/* Mode Selector Tabs (Clean, Horizontal Strip) */}
         <div className="flex items-center gap-1 overflow-x-auto pb-1">
-          {BANKING_MODE_KEYS.map((modeKey) => {
+          {availableModes.map((modeKey) => {
             const isSelected = activeMode === modeKey;
             return (
               <button
                 key={modeKey}
                 type="button"
-                onClick={() => handleSelectMode(modeKey)}
+                onClick={() => handleSelectMode(modeKey as BankingModeId)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
                   isSelected
                     ? 'bg-primary text-on-primary shadow-xs font-bold'
