@@ -1,5 +1,6 @@
 import React from 'react';
 import { Customer, Task, Service, Payment, Setting, BankingTransaction, BankAccountOpening, BankScheme, PaymentMethod, ActivityEvent, ActivePage, TaskStatus } from '../types';
+import { BankingModeConfig } from '../constants/bankingData';
 import { UIProvider, useUI, ConfirmOptions } from './UIContext';
 import { CustomerProvider, useCustomers } from './CustomerContext';
 import { TaskProvider, useTasks } from './TaskContext';
@@ -77,6 +78,7 @@ export interface DeskContextType {
 
   shopName: string;
   updateShopName: (name: string) => Promise<void>;
+  getModeConfig: (mode?: string | null) => BankingModeConfig;
 
   addTask: (taskData: Omit<Task, 'id' | 'created_at' | 'updated_at'>, initialPaidAmount?: number) => Promise<Task | null>;
   updateTaskStatus: (taskId: string, newStatus: TaskStatus, cancellationReason?: string) => Promise<void>;

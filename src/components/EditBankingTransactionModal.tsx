@@ -10,10 +10,9 @@ import {
   validateCompanyChargeAgainstFee,
 } from '../utils/validationUtils';
 import {
-  BankingModeId,
-  BANKING_MODES,
   BANKING_MODE_KEYS,
   COMMON_COMPANIES,
+  getBankingModeConfig,
   getLearnedBanks,
   saveLearnedBank,
   getLearnedCompanies,
@@ -55,7 +54,7 @@ export const EditBankingTransactionModal: React.FC<EditBankingTransactionModalPr
     return COMMON_COMPANIES;
   }, [portals]);
 
-  const [activeMode, setActiveMode] = useState<BankingModeId>('DMT');
+  const [activeMode, setActiveMode] = useState<string>('DMT');
   const [transactionDate, setTransactionDate] = useState<string>('');
   const [companyName, setCompanyName] = useState<string>('');
   const [customerName, setCustomerName] = useState<string>('');
@@ -77,13 +76,11 @@ export const EditBankingTransactionModal: React.FC<EditBankingTransactionModalPr
   const providerWrapperRef = useRef<HTMLDivElement>(null);
   const companyWrapperRef = useRef<HTMLDivElement>(null);
 
-  const modeConfig = BANKING_MODES[activeMode] || BANKING_MODES.DMT;
+  const modeConfig = getBankingModeConfig(activeMode);
 
   useEffect(() => {
     if (transaction && isOpen) {
-      const mode = (BANKING_MODE_KEYS.includes(transaction.transaction_type as BankingModeId)
-        ? transaction.transaction_type
-        : 'DMT') as BankingModeId;
+      const mode = transaction.transaction_type || 'DMT';
       setActiveMode(mode);
 
       // format date for datetime-local or text
@@ -340,7 +337,7 @@ export const EditBankingTransactionModal: React.FC<EditBankingTransactionModalPr
                   <button
                     key={modeKey}
                     type="button"
-                    onClick={() => setActiveMode(modeKey as BankingModeId)}
+                    onClick={() => setActiveMode(modeKey)}
                     className={`py-1.5 px-1 rounded-lg text-[11px] font-bold text-center transition-all truncate ${
                       isSelected
                         ? 'bg-surface-container-lowest text-primary shadow-xs border border-surface-container'

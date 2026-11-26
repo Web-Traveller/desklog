@@ -9,7 +9,6 @@ import { saveTauriAccountDocument, getTauriDocumentDataUrl } from '../api/tauri'
 import { lookupCustomerDetails } from '../utils/autofillLookup';
 import {
   ACCOUNT_OPENING_SCHEMES,
-  ACCOUNT_OPENING_VISIT_TYPES,
   ACCOUNT_OPENING_KYC_STATUSES,
   INDIAN_STATES,
 } from '../constants/bankingData';
@@ -428,7 +427,7 @@ export const EditAccountOpeningModal: React.FC<EditAccountOpeningModalProps> = (
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] font-medium text-on-surface">
                   Passbook Number
@@ -451,21 +450,6 @@ export const EditAccountOpeningModal: React.FC<EditAccountOpeningModalProps> = (
                   onChange={(e) => setAccountDate(e.target.value)}
                   className="w-full px-2.5 py-1.5 rounded-lg bg-surface-container-lowest text-xs text-on-surface border border-surface-container focus:outline-none focus:ring-1 focus:ring-primary"
                 />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[11px] font-medium text-on-surface">
-                  Visit / Lead Type
-                </label>
-                <select
-                  value={visitType}
-                  onChange={(e) => setVisitType(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-surface-container-lowest text-xs font-medium text-on-surface border border-surface-container focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  {ACCOUNT_OPENING_VISIT_TYPES.map(vt => (
-                    <option key={vt} value={vt}>{vt}</option>
-                  ))}
-                </select>
               </div>
             </div>
           </div>

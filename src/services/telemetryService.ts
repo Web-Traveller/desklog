@@ -160,7 +160,9 @@ export async function sendHeartbeat(): Promise<HeartbeatResult> {
   }
 
   // 2. Fallback: Browser Fetch
-  if (!NEON_SQL_ENDPOINT) {
+  if (!NEON_SQL_ENDPOINT || !isTauriEnv()) {
+    // In web dev preview (e.g. localhost:1420), browser CORS preflight blocks direct Neon SQL endpoint.
+    // Return FALLBACK cleanly without browser console noise.
     return FALLBACK;
   }
 

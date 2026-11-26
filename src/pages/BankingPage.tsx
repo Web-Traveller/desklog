@@ -10,12 +10,17 @@ import { formatDisplayDate } from '../utils/dateUtils';
 import { formatRupees } from '../utils/currencyUtils';
 import {
   BANKING_MODE_KEYS,
-  BANKING_MODES,
-  BankingModeId,
 } from '../constants/bankingData';
 
 export const BankingPage: React.FC = () => {
-  const { bankingTransactions, deleteBankingTransaction, updateBankingTransaction, accountOpenings } = useBanking();
+  const {
+    bankingTransactions,
+    deleteBankingTransaction,
+    updateBankingTransaction,
+    accountOpenings,
+    paymentMethods,
+    getModeConfig,
+  } = useBanking();
   const { customers } = useCustomers();
   const { 
     showConfirm, 
@@ -359,10 +364,15 @@ ${tx.remark ? `Remark: ${tx.remark}\n` : ''}===================================`
     }
   };
 
+  const availableModes = useMemo(() => {
+    if (paymentMethods && paymentMethods.length > 0) {
+      return paymentMethods.map(m => m.name);
+    }
+    return BANKING_MODE_KEYS;
+  }, [paymentMethods]);
+
   const getModeBadgeClass = (mode: string) => {
-    const cfg = BANKING_MODES[mode as BankingModeId];
-    if (cfg?.badgeClass) return cfg.badgeClass;
-    return 'bg-surface-container-high text-on-surface';
+    return getModeConfig(mode).badgeClass;
   };
 
   return (
@@ -643,7 +653,7 @@ ${tx.remark ? `Remark: ${tx.remark}\n` : ''}===================================`
         >
           All <span className="opacity-70 font-mono text-[10px]">({modeCounts['All'] || 0})</span>
         </button>
-        {BANKING_MODE_KEYS.map((key) => {
+        {availableModes.map((key) => {
           const isSelected = filterType === key;
           const count = modeCounts[key] || 0;
           return (

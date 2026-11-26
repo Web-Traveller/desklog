@@ -9,10 +9,9 @@ import {
   validateCompanyChargeAgainstFee,
 } from '../utils/validationUtils';
 import {
-  BankingModeId,
-  BANKING_MODES,
   BANKING_MODE_KEYS,
   COMMON_COMPANIES,
+  getBankingModeConfig,
   getLearnedBanks,
   saveLearnedBank,
   getLearnedCompanies,
@@ -56,9 +55,9 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
     return COMMON_COMPANIES;
   }, [portals]);
 
-  // Active Mode (DMT, AEPS, UPI, UPI CASH, BILL, CREDIT, CSC)
-  const [activeMode, setActiveMode] = useState<BankingModeId>('DMT');
-  const modeConfig = BANKING_MODES[activeMode];
+  // Active Mode (DMT, AEPS, UPI, UPI CASH, BILL, CREDIT, CSC, or custom user-defined modes)
+  const [activeMode, setActiveMode] = useState<string>('DMT');
+  const modeConfig = getBankingModeConfig(activeMode);
 
   // Form fields
   const [transactionDate, setTransactionDate] = useState<string>('');
@@ -132,7 +131,7 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
   };
 
   // Switch mode handler
-  const handleSelectMode = (newMode: BankingModeId) => {
+  const handleSelectMode = (newMode: string) => {
     setActiveMode(newMode);
     setAccountOrAadhaar('');
     setBankOrProvider('');
@@ -334,7 +333,7 @@ export const AddBankingTransactionModal: React.FC<AddBankingTransactionModalProp
               <button
                 key={modeKey}
                 type="button"
-                onClick={() => handleSelectMode(modeKey as BankingModeId)}
+                onClick={() => handleSelectMode(modeKey)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
                   isSelected
                     ? 'bg-primary text-on-primary shadow-xs font-bold'

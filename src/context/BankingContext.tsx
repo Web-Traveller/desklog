@@ -27,7 +27,7 @@ import {
 import { createActivityEvent } from '../services/activityService';
 import { formatRupees } from '../utils/currencyUtils';
 import { useUI } from './UIContext';
-import { ACCOUNT_OPENING_SCHEMES, COMMON_COMPANIES, BANKING_MODE_KEYS } from '../constants/bankingData';
+import { ACCOUNT_OPENING_SCHEMES, COMMON_COMPANIES, BANKING_MODE_KEYS, getBankingModeConfig, BankingModeConfig } from '../constants/bankingData';
 
 interface BankingContextType {
   bankingTransactions: BankingTransaction[];
@@ -66,6 +66,9 @@ interface BankingContextType {
   // Shop / Business Name
   shopName: string;
   updateShopName: (name: string) => Promise<void>;
+
+  // Unified Mode Config Resolver
+  getModeConfig: (mode?: string | null) => BankingModeConfig;
 }
 
 const BankingContext = createContext<BankingContextType | undefined>(undefined);
@@ -637,6 +640,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deletePortal,
         shopName,
         updateShopName,
+        getModeConfig: getBankingModeConfig,
       }}
     >
       {children}
@@ -676,6 +680,7 @@ export const useBanking = (): BankingContextType => {
       deletePortal: async () => {},
       shopName: 'IRSHAD COMMUNICATION',
       updateShopName: async () => {},
+      getModeConfig: getBankingModeConfig,
     };
   }
   return context;

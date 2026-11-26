@@ -213,6 +213,37 @@ export const BANKING_MODES: Record<BankingModeId, BankingModeConfig> = {
 export const BANKING_MODE_KEYS: BankingModeId[] = ['DMT', 'AEPS', 'UPI', 'UPI CASH', 'BILL', 'CREDIT', 'CSC', 'NEPAL', 'SIM'];
 
 /**
+ * Universal Mode Config Resolver - Modular Architecture
+ * Returns full configuration for standard modes or dynamically synthesized
+ * configuration for any user-added custom payment method / service mode.
+ */
+export function getBankingModeConfig(mode?: string | null): BankingModeConfig {
+  if (!mode) return BANKING_MODES.DMT;
+  const key = mode.trim();
+  if (BANKING_MODES[key as BankingModeId]) {
+    return BANKING_MODES[key as BankingModeId];
+  }
+  // Safe dynamic fallback for user-created custom payment methods
+  return {
+    id: key as any,
+    label: key,
+    shortDesc: `${key} Service / Payment`,
+    icon: 'payments',
+    badgeClass: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
+    idFieldLabel: `${key} Account / Ref / Mobile`,
+    idFieldPlaceholder: `Enter ${key} account, reference, or identifier`,
+    idFieldHelper: `Reference or number for ${key}`,
+    idFieldType: 'text',
+    providerLabel: `${key} Partner / Bank / Operator`,
+    providerPlaceholder: `Select or type bank or provider`,
+    providerHelper: `Provider or service operator for ${key}`,
+    defaultProviders: [],
+    suggestedPortals: ['SAFEPAY', 'PAYBINGO', 'FINO BANK', 'BOB BC'],
+    remarkPlaceholder: `e.g. ${key} reference or notes`,
+  };
+}
+
+/**
  * Client Data Book Work Types for Citizen & Documentation Tasks (Work Manager)
  */
 export const CLIENT_WORK_TYPES = [
